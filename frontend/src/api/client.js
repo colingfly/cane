@@ -162,3 +162,4 @@ export async function adminUpdateUser(tenantId, userId, email, name = '') {
 export async function adminDeleteUser(tenantId, userId) {
   return request(`/admin/tenants/${tenantId}/users/${userId}`, { method: 'DELETE' })
 }
+// v2
