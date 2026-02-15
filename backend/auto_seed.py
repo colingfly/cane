@@ -48,11 +48,11 @@ def auto_seed():
         db.add(platform_tenant)
         db.flush()
 
-        # Create admin user
+        # Create admin user (bcrypt has 72-byte limit)
         admin = User(
             tenant_id=platform_tenant.id,
             email=email.lower().strip(),
-            password_hash=hash_password(password),
+            password_hash=hash_password(password[:72]),
             name=name,
             role="admin",
         )
