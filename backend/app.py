@@ -214,6 +214,65 @@ def create_workspace(
     return {"id": ws.id, "name": ws.name}
 
 
+
+@app.put("/api/workspaces/{workspace_id}")
+def rename_workspace(
+    workspace_id: str,
+    name: str = Form(...),
+    description: str = Form(""),
+    user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+):
+    """Rename a workspace (owner only)."""
+    ws = db.query(Workspace).filter(
+        Workspace.id == workspace_id,
+        Workspace.tenant_id == user.tenant_id,
+    ).first()
+    if not ws:
+        raise HTTPException(404, "Workspace not found")
+
+    existing = db.query(Workspace).filter(
+        Workspace.tenant_id == user.tenant_id,
+        Workspace.name == name,
+        Workspace.id != workspace_id,
+    ).first()
+    if existing:
+        raise HTTPException(400, f"Workspace '{name}' already exists")
+
+    ws.name = name
+    if description:
+        ws.description = description
+    db.commit()
+
+    return {"id": ws.id, "name": ws.name, "description": ws.description}
+
+
+@app.delete("/api/workspaces/{workspace_id}")
+def delete_workspace(
+    workspace_id: str,
+    user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+):
+    """Delete a workspace (owner only). Cannot delete the default workspace."""
+    ws = db.query(Workspace).filter(
+        Workspace.id == workspace_id,
+        Workspace.tenant_id == user.tenant_id,
+    ).first()
+    if not ws:
+        raise HTTPException(404, "Workspace not found")
+    if ws.is_default:
+        raise HTTPException(400, "Cannot delete the default workspace")
+
+    doc_count = db.query(Document).filter(Document.workspace_id == workspace_id).count()
+    if doc_count > 0:
+        raise HTTPException(400, f"Workspace has {doc_count} documents. Delete them first.")
+
+    db.delete(ws)
+    db.commit()
+
+    return {"status": "deleted", "name": ws.name}
+
+
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 #  DOCUMENT ENDPOINTS
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•

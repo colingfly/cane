@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { getTeam, inviteMember, getWorkspaces, createWorkspace } from '../api/client'
-import { UserPlus, FolderPlus, Users, Folders } from 'lucide-react'
+import { getTeam, inviteMember, getWorkspaces, createWorkspace, renameWorkspace, deleteWorkspace } from '../api/client'
+import { UserPlus, FolderPlus, Users, Folders, Pencil, Trash2, Check, X } from 'lucide-react'
 
 export default function SettingsPage() {
   const { isOwner, tenant, updateWorkspaces } = useAuth()
@@ -10,6 +10,10 @@ export default function SettingsPage() {
   const [showInvite, setShowInvite] = useState(false)
   const [showNewWs, setShowNewWs] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [editingWs, setEditingWs] = useState(null)
+  const [editName, setEditName] = useState('')
+  const [editDesc, setEditDesc] = useState('')
+  const [wsError, setWsError] = useState('')
 
   useEffect(() => {
     Promise.all([
@@ -20,6 +24,48 @@ export default function SettingsPage() {
       setWorkspaces(wsData.workspaces || [])
     }).finally(() => setLoading(false))
   }, [isOwner])
+
+  async function refreshWorkspaces() {
+    const data = await getWorkspaces()
+    setWorkspaces(data.workspaces || [])
+    updateWorkspaces(data.workspaces || [])
+  }
+
+  function startEditing(ws) {
+    setEditingWs(ws.id)
+    setEditName(ws.name)
+    setEditDesc(ws.description || '')
+    setWsError('')
+  }
+
+  function cancelEditing() {
+    setEditingWs(null)
+    setEditName('')
+    setEditDesc('')
+    setWsError('')
+  }
+
+  async function saveRename(wsId) {
+    if (!editName.trim()) return
+    setWsError('')
+    try {
+      await renameWorkspace(wsId, editName.trim(), editDesc.trim())
+      await refreshWorkspaces()
+      setEditingWs(null)
+    } catch (err) {
+      setWsError(err.message)
+    }
+  }
+
+  async function handleDeleteWs(ws) {
+    if (!confirm(`Delete workspace "${ws.name}"? This cannot be undone.`)) return
+    try {
+      await deleteWorkspace(ws.id)
+      await refreshWorkspaces()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
 
   if (loading) return <div className="loading-center"><div className="spinner" /></div>
 
@@ -42,9 +88,7 @@ export default function SettingsPage() {
         </div>
 
         {showNewWs && <NewWorkspaceForm onCreated={async () => {
-          const data = await getWorkspaces()
-          setWorkspaces(data.workspaces || [])
-          updateWorkspaces(data.workspaces || [])
+          await refreshWorkspaces()
           setShowNewWs(false)
         }} />}
 
@@ -58,18 +102,95 @@ export default function SettingsPage() {
               background: 'var(--cane-50)',
               borderRadius: 'var(--radius-sm)',
             }}>
-              <div>
-                <strong style={{ fontSize: '0.875rem' }}>{w.name}</strong>
-                {w.is_default && (
-                  <span className="badge badge-ready" style={{ marginLeft: 8 }}>default</span>
-                )}
-                {w.description && (
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>{w.description}</p>
-                )}
-              </div>
-              <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-                {w.document_count} docs
-              </span>
+              {editingWs === w.id ? (
+                /* Editing mode */
+                <div style={{ flex: 1, marginRight: 12 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      className="form-input"
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') saveRename(w.id)
+                        if (e.key === 'Escape') cancelEditing()
+                      }}
+                      autoFocus
+                      style={{ fontSize: '0.875rem', padding: '6px 10px', flex: 1 }}
+                      placeholder="Workspace name"
+                    />
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => saveRename(w.id)}
+                      title="Save"
+                      style={{ color: 'var(--success)' }}
+                    >
+                      <Check size={14} />
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={cancelEditing}
+                      title="Cancel"
+                      style={{ color: 'var(--text-muted)' }}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <input
+                    className="form-input"
+                    value={editDesc}
+                    onChange={e => setEditDesc(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') saveRename(w.id)
+                      if (e.key === 'Escape') cancelEditing()
+                    }}
+                    style={{ fontSize: '0.75rem', padding: '4px 10px', marginTop: 6, width: '100%' }}
+                    placeholder="Description (optional)"
+                  />
+                  {wsError && (
+                    <p style={{ fontSize: '0.75rem', color: 'var(--error)', marginTop: 4 }}>{wsError}</p>
+                  )}
+                </div>
+              ) : (
+                /* Display mode */
+                <div>
+                  <strong style={{ fontSize: '0.875rem' }}>{w.name}</strong>
+                  {w.is_default && (
+                    <span className="badge badge-ready" style={{ marginLeft: 8 }}>default</span>
+                  )}
+                  {w.description && (
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>{w.description}</p>
+                  )}
+                </div>
+              )}
+
+              {editingWs !== w.id && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                    {w.document_count} docs
+                  </span>
+                  {isOwner && (
+                    <>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => startEditing(w)}
+                        title="Rename"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      {!w.is_default && (
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => handleDeleteWs(w)}
+                          title="Delete workspace"
+                          style={{ color: 'var(--error)' }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>

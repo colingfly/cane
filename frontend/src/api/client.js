@@ -45,7 +45,7 @@ async function request(path, options = {}) {
   return res.json()
 }
 
-// ── Auth ──
+// — Auth —
 export async function login(email, password) {
   const form = new FormData()
   form.append('email', email)
@@ -57,7 +57,7 @@ export async function getMe() {
   return request('/auth/me')
 }
 
-// ── Workspaces ──
+// — Workspaces —
 export async function getWorkspaces() {
   return request('/workspaces')
 }
@@ -69,7 +69,18 @@ export async function createWorkspace(name, description = '') {
   return request('/workspaces', { method: 'POST', body: form })
 }
 
-// ── Documents ──
+export async function renameWorkspace(workspaceId, name, description = '') {
+  const form = new FormData()
+  form.append('name', name)
+  form.append('description', description)
+  return request(`/workspaces/${workspaceId}`, { method: 'PUT', body: form })
+}
+
+export async function deleteWorkspace(workspaceId) {
+  return request(`/workspaces/${workspaceId}`, { method: 'DELETE' })
+}
+
+// — Documents —
 export async function getDocuments(workspaceId = '') {
   const params = workspaceId ? `?workspace_id=${workspaceId}` : ''
   return request(`/documents${params}`)
@@ -86,7 +97,7 @@ export async function deleteDocument(documentId) {
   return request(`/documents/${documentId}`, { method: 'DELETE' })
 }
 
-// ── Search ──
+// — Search —
 export async function search(query, mode = 'text', n = 10, workspaceId = '') {
   const params = new URLSearchParams({ q: query, mode, n, workspace_id: workspaceId })
   return request(`/search?${params}`)
@@ -97,12 +108,12 @@ export async function ask(query, n = 5, workspaceId = '') {
   return request(`/ask?${params}`)
 }
 
-// ── Stats ──
+// — Stats —
 export async function getStats() {
   return request('/stats')
 }
 
-// ── Team ──
+// — Team —
 export async function getTeam() {
   return request('/team')
 }
@@ -116,7 +127,7 @@ export async function inviteMember(email, name, password, role = 'member') {
   return request('/team/invite', { method: 'POST', body: form })
 }
 
-// ── Admin ──
+// — Admin —
 export async function adminGetTenants() {
   return request('/admin/tenants')
 }
