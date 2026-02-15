@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { getDocuments, uploadDocument, deleteDocument, getWorkspaces } from '../api/client'
-import { Upload, Trash2, FileText, AlertCircle } from 'lucide-react'
+import { Upload, Trash2, FileText, AlertCircle, ChevronDown } from 'lucide-react'
 
 export default function Documents() {
   const { workspaces, isOwner, updateWorkspaces } = useAuth()
@@ -10,11 +10,26 @@ export default function Documents() {
   const [uploading, setUploading] = useState(false)
   const [uploadStatus, setUploadStatus] = useState('')
   const [dragover, setDragover] = useState(false)
+  const [showWsPicker, setShowWsPicker] = useState(false)
+  const [pendingFiles, setPendingFiles] = useState(null)
   const fileRef = useRef()
+  const pickerRef = useRef()
 
   useEffect(() => {
     loadDocs()
   }, [activeWs])
+
+  // Close workspace picker on outside click
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target)) {
+        setShowWsPicker(false)
+        setPendingFiles(null)
+      }
+    }
+    if (showWsPicker) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showWsPicker])
 
   async function loadDocs() {
     try {
@@ -25,22 +40,55 @@ export default function Documents() {
     }
   }
 
-  async function handleUpload(files) {
+  function getUploadTargetName() {
+    if (activeWs) {
+      const ws = workspaces.find(w => w.id === activeWs)
+      return ws?.name || 'Selected workspace'
+    }
+    return null
+  }
+
+  function initiateUpload(files) {
     if (!files?.length) return
 
-    const wsId = activeWs || workspaces.find(w => w.is_default)?.id || workspaces[0]?.id
-    if (!wsId) {
-      setUploadStatus('No workspace available. Create one first.')
+    // If user is on a specific workspace tab, upload directly there
+    if (activeWs) {
+      handleUpload(files, activeWs)
       return
     }
+
+    // If on "All" tab, show workspace picker
+    if (workspaces.length === 1) {
+      // Only one workspace — skip picker
+      handleUpload(files, workspaces[0].id)
+      return
+    }
+
+    // Multiple workspaces — ask user to pick
+    setPendingFiles(files)
+    setShowWsPicker(true)
+  }
+
+  function selectWorkspaceAndUpload(wsId) {
+    setShowWsPicker(false)
+    if (pendingFiles) {
+      handleUpload(pendingFiles, wsId)
+      setPendingFiles(null)
+    }
+  }
+
+  async function handleUpload(files, wsId) {
+    if (!files?.length || !wsId) return
 
     setUploading(true)
     setUploadStatus('')
 
+    const wsName = workspaces.find(w => w.id === wsId)?.name || ''
+
     let successCount = 0
     for (const file of files) {
       try {
-        setUploadStatus(`Processing ${file.name}...`)
+        setUploadStatus(`Uploading ${file.name} to ${wsName}...`)
         await uploadDocument(file, wsId)
         successCount++
       } catch (err) {
@@ -50,9 +98,8 @@ export default function Documents() {
 
     setUploading(false)
     if (successCount > 0) {
-      setUploadStatus(`${successCount} file${successCount > 1 ? 's' : ''} uploaded successfully`)
+      setUploadStatus(`${successCount} file${successCount > 1 ? 's' : ''} uploaded to ${wsName}`)
       loadDocs()
-      // Refresh workspace counts
       const wsData = await getWorkspaces()
       updateWorkspaces(wsData.workspaces || [])
     }
@@ -71,8 +118,10 @@ export default function Documents() {
   function onDrop(e) {
     e.preventDefault()
     setDragover(false)
-    handleUpload(e.dataTransfer.files)
+    initiateUpload(e.dataTransfer.files)
   }
+
+  const uploadTarget = getUploadTargetName()
 
   return (
     <div className="fade-in">
@@ -97,34 +146,142 @@ export default function Documents() {
               onClick={() => setActiveWs(w.id)}
             >
               {w.name}
+              <span style={{
+                marginLeft: 6,
+                fontSize: '0.7rem',
+                opacity: 0.6,
+              }}>
+                {w.document_count || 0}
+              </span>
             </button>
           ))}
         </div>
       )}
 
       {/* Upload zone */}
-      <div
-        className={`upload-zone ${dragover ? 'dragover' : ''}`}
-        onDragOver={e => { e.preventDefault(); setDragover(true) }}
-        onDragLeave={() => setDragover(false)}
-        onDrop={onDrop}
-        onClick={() => fileRef.current?.click()}
-        style={{ marginBottom: 24 }}
-      >
-        <Upload size={24} style={{ color: 'var(--accent)', marginBottom: 8 }} />
-        <p>
-          <span className="upload-label">Click to upload</span> or drag and drop
-        </p>
-        <p style={{ fontSize: '0.75rem', marginTop: 4 }}>
-          PDF, DOCX, XLSX, CSV, images, audio, video
-        </p>
-        <input
-          ref={fileRef}
-          type="file"
-          multiple
-          style={{ display: 'none' }}
-          onChange={e => handleUpload(e.target.files)}
-        />
+      <div style={{ position: 'relative', marginBottom: 24 }}>
+        <div
+          className={`upload-zone ${dragover ? 'dragover' : ''}`}
+          onDragOver={e => { e.preventDefault(); setDragover(true) }}
+          onDragLeave={() => setDragover(false)}
+          onDrop={onDrop}
+          onClick={() => fileRef.current?.click()}
+        >
+          <Upload size={24} style={{ color: 'var(--accent)', marginBottom: 8 }} />
+          <p>
+            <span className="upload-label">Click to upload</span> or drag and drop
+          </p>
+          <p style={{ fontSize: '0.75rem', marginTop: 4, color: 'var(--text-muted)' }}>
+            PDF, DOCX, XLSX, CSV, images, audio, video
+          </p>
+          {uploadTarget && (
+            <p style={{
+              fontSize: '0.75rem',
+              marginTop: 8,
+              color: 'var(--accent)',
+              fontWeight: 500,
+            }}>
+              Uploading to: {uploadTarget}
+            </p>
+          )}
+          {!uploadTarget && workspaces.length > 1 && (
+            <p style={{
+              fontSize: '0.75rem',
+              marginTop: 8,
+              color: 'var(--text-muted)',
+              fontStyle: 'italic',
+            }}>
+              Select a workspace tab above, or you'll choose on upload
+            </p>
+          )}
+          <input
+            ref={fileRef}
+            type="file"
+            multiple
+            style={{ display: 'none' }}
+            onChange={e => {
+              initiateUpload(e.target.files)
+              e.target.value = ''
+            }}
+          />
+        </div>
+
+        {/* Workspace picker modal */}
+        {showWsPicker && (
+          <div
+            ref={pickerRef}
+            style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: 'var(--bg-card, #fff)',
+              border: '1px solid var(--border, #e2e2e2)',
+              borderRadius: 12,
+              padding: '20px 24px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+              zIndex: 100,
+              minWidth: 280,
+            }}
+          >
+            <p style={{
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              marginBottom: 12,
+              color: 'var(--text)',
+            }}>
+              Upload to which workspace?
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {workspaces.map(w => (
+                <button
+                  key={w.id}
+                  onClick={() => selectWorkspaceAndUpload(w.id)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 14px',
+                    border: '1px solid var(--border, #e2e2e2)',
+                    borderRadius: 8,
+                    background: 'var(--bg, #fff)',
+                    cursor: 'pointer',
+                    fontSize: '0.8125rem',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.borderColor = 'var(--accent)'
+                    e.currentTarget.style.background = 'var(--bg-hover, #f9f7f4)'
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.borderColor = 'var(--border, #e2e2e2)'
+                    e.currentTarget.style.background = 'var(--bg, #fff)'
+                  }}
+                >
+                  <span>{w.name}</span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                    {w.document_count || 0} docs
+                  </span>
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => { setShowWsPicker(false); setPendingFiles(null) }}
+              style={{
+                marginTop: 12,
+                width: '100%',
+                padding: '8px',
+                border: 'none',
+                background: 'none',
+                color: 'var(--text-muted)',
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
       </div>
 
       {uploadStatus && (
@@ -149,43 +306,50 @@ export default function Documents() {
                 <th>File</th>
                 <th>Type</th>
                 <th>Chunks</th>
+                <th>Workspace</th>
                 <th>Status</th>
                 <th>Uploaded</th>
                 {isOwner && <th style={{ width: 60 }}></th>}
               </tr>
             </thead>
             <tbody>
-              {documents.map(doc => (
-                <tr key={doc.id}>
-                  <td>
-                    <span className="filename">
-                      <FileText size={14} style={{ verticalAlign: 'middle', marginRight: 6, color: 'var(--accent)' }} />
-                      {doc.filename}
-                    </span>
-                  </td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
-                    {doc.file_type}
-                  </td>
-                  <td>{doc.chunk_count}</td>
-                  <td>
-                    <span className={`badge badge-${doc.status}`}>{doc.status}</span>
-                  </td>
-                  <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    {new Date(doc.created_at).toLocaleDateString()}
-                  </td>
-                  {isOwner && (
+              {documents.map(doc => {
+                const ws = workspaces.find(w => w.id === doc.workspace_id)
+                return (
+                  <tr key={doc.id}>
                     <td>
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => handleDelete(doc.id, doc.filename)}
-                        title="Delete"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      <span className="filename">
+                        <FileText size={14} style={{ verticalAlign: 'middle', marginRight: 6, color: 'var(--accent)' }} />
+                        {doc.filename}
+                      </span>
                     </td>
-                  )}
-                </tr>
-              ))}
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
+                      {doc.file_type}
+                    </td>
+                    <td>{doc.chunk_count}</td>
+                    <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      {ws?.name || '—'}
+                    </td>
+                    <td>
+                      <span className={`badge badge-${doc.status}`}>{doc.status}</span>
+                    </td>
+                    <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      {new Date(doc.created_at).toLocaleDateString()}
+                    </td>
+                    {isOwner && (
+                      <td>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => handleDelete(doc.id, doc.filename)}
+                          title="Delete"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

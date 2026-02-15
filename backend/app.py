@@ -1017,7 +1017,7 @@ def admin_create_tenant(
     db.flush()
 
     # Default workspace
-    ws = Workspace(tenant_id=tenant.id, name="General", description="Default workspace", is_default=True)
+    ws = Workspace(tenant_id=tenant.id, name=f"{name} Docs", description=f"Default workspace for {name}", is_default=True)
     db.add(ws)
 
     # Owner account
