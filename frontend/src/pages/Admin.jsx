@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { adminGetTenants, adminGetTenantDetail, adminCreateTenant } from '../api/client'
-import { Building2, Users, FileText, Search, AlertTriangle, Plus, ArrowLeft, TrendingUp } from 'lucide-react'
+import { adminGetTenants, adminGetTenantDetail, adminCreateTenant, adminUpdateTenant, adminDeleteTenant, adminUpdateUser, adminDeleteUser } from '../api/client'
+import { Building2, Users, FileText, Search, AlertTriangle, Plus, ArrowLeft, TrendingUp, Pencil, Trash2, Check, X } from 'lucide-react'
 
 export default function Admin() {
   const [tenants, setTenants] = useState([])
@@ -8,6 +8,9 @@ export default function Admin() {
   const [detail, setDetail] = useState(null)
   const [showCreate, setShowCreate] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [editingTenant, setEditingTenant] = useState(false)
+  const [tenantName, setTenantName] = useState('')
+  const [tenantSlug, setTenantSlug] = useState('')
 
   useEffect(() => {
     loadTenants()
@@ -34,155 +37,60 @@ export default function Admin() {
     }
   }
 
+  async function handleRenameTenant() {
+    if (!tenantName.trim()) return
+    try {
+      await adminUpdateTenant(selectedTenant.id, tenantName.trim(), tenantSlug.trim())
+      setEditingTenant(false)
+      // Refresh
+      const data = await adminGetTenantDetail(selectedTenant.id)
+      setDetail(data)
+      setSelectedTenant({ ...selectedTenant, name: tenantName.trim() })
+      loadTenants()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  async function handleDeleteTenant() {
+    if (!confirm(`Delete "${detail.tenant.name}" and ALL its data? This cannot be undone.`)) return
+    if (!confirm(`Are you absolutely sure? This will delete all users, documents, and search history for this tenant.`)) return
+    try {
+      await adminDeleteTenant(selectedTenant.id)
+      setSelectedTenant(null)
+      setDetail(null)
+      loadTenants()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
   if (loading) return <div className="loading-center"><div className="spinner" /></div>
 
-  // ── Tenant detail view ──
+  // — Tenant detail view —
   if (selectedTenant && detail) {
     return (
-      <div className="fade-in">
-        <div className="page-header">
-          <button className="btn btn-ghost" onClick={() => { setSelectedTenant(null); setDetail(null) }} style={{ marginBottom: 8 }}>
-            <ArrowLeft size={16} /> Back to clients
-          </button>
-          <h2>{detail.tenant.name}</h2>
-          <p>Client intelligence — use this to prep for consulting calls</p>
-        </div>
-
-        <div className="stat-grid">
-          <div className="stat-card">
-            <div className="stat-value">{detail.users?.length || 0}</div>
-            <div className="stat-label"><Users size={13} style={{ verticalAlign: 'middle' }} /> Users</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value">{detail.documents?.length || 0}</div>
-            <div className="stat-label"><FileText size={13} style={{ verticalAlign: 'middle' }} /> Documents</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value">{detail.search_volume || 0}</div>
-            <div className="stat-label"><Search size={13} style={{ verticalAlign: 'middle' }} /> Total searches</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value" style={{ color: detail.zero_result_queries?.length > 0 ? 'var(--error)' : 'var(--success)' }}>
-              {detail.zero_result_queries?.length || 0}
-            </div>
-            <div className="stat-label"><AlertTriangle size={13} style={{ verticalAlign: 'middle' }} /> Failed searches</div>
-          </div>
-        </div>
-
-        {/* Zero-result queries — the goldmine */}
-        {detail.zero_result_queries?.length > 0 && (
-          <div className="card" style={{ marginBottom: 24, borderColor: 'rgba(196, 78, 63, 0.2)' }}>
-            <div className="card-header">
-              <h3 style={{ color: 'var(--error)' }}>
-                <AlertTriangle size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} />
-                Failed Searches — Upsell Opportunities
-              </h3>
-            </div>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 12 }}>
-              Queries that returned zero results. These represent knowledge gaps — potential consulting opportunities.
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {detail.zero_result_queries.map((s, i) => (
-                <div key={i} style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  padding: '8px 12px',
-                  background: 'rgba(196, 78, 63, 0.04)',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '0.875rem',
-                }}>
-                  <span>"{s.query}"</span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                    {new Date(s.time).toLocaleString()}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Top queries */}
-        {detail.top_queries?.length > 0 && (
-          <div className="card" style={{ marginBottom: 24 }}>
-            <div className="card-header">
-              <h3><TrendingUp size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} /> Top Queries</h3>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {detail.top_queries.map((q, i) => (
-                <div key={i} style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  padding: '8px 12px',
-                  background: 'var(--cane-50)',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '0.875rem',
-                }}>
-                  <span>{q.query}</span>
-                  <span style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '0.8rem',
-                    color: 'var(--accent)',
-                    fontWeight: 600,
-                  }}>
-                    {q.count}×
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Users */}
-        <div className="card" style={{ marginBottom: 24 }}>
-          <div className="card-header"><h3>Users</h3></div>
-          {detail.users?.map((u, i) => (
-            <div key={i} style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '8px 0',
-              borderBottom: i < detail.users.length - 1 ? '1px solid var(--cane-100)' : 'none',
-              fontSize: '0.875rem',
-            }}>
-              <div>
-                <strong>{u.name || u.email}</strong>
-                <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>{u.email}</span>
-              </div>
-              <div>
-                <span className="badge badge-ready">{u.role}</span>
-                {u.last_login && (
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: 8 }}>
-                    Last: {new Date(u.last_login).toLocaleDateString()}
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Documents */}
-        <div className="card">
-          <div className="card-header"><h3>Documents</h3></div>
-          {detail.documents?.map((d, i) => (
-            <div key={i} style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '8px 0',
-              borderBottom: i < detail.documents.length - 1 ? '1px solid var(--cane-100)' : 'none',
-              fontSize: '0.875rem',
-            }}>
-              <span className="filename">{d.filename}</span>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{d.chunks} chunks</span>
-                <span className={`badge badge-${d.status}`}>{d.status}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      <TenantDetail
+        detail={detail}
+        selectedTenant={selectedTenant}
+        editingTenant={editingTenant}
+        tenantName={tenantName}
+        tenantSlug={tenantSlug}
+        setEditingTenant={setEditingTenant}
+        setTenantName={setTenantName}
+        setTenantSlug={setTenantSlug}
+        handleRenameTenant={handleRenameTenant}
+        handleDeleteTenant={handleDeleteTenant}
+        onBack={() => { setSelectedTenant(null); setDetail(null) }}
+        onRefresh={async () => {
+          const data = await adminGetTenantDetail(selectedTenant.id)
+          setDetail(data)
+        }}
+      />
     )
   }
 
-  // ── Tenant list view ──
+  // — Tenant list view —
   return (
     <div className="fade-in">
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -241,6 +149,268 @@ export default function Admin() {
 }
 
 
+function TenantDetail({ detail, selectedTenant, editingTenant, tenantName, tenantSlug, setEditingTenant, setTenantName, setTenantSlug, handleRenameTenant, handleDeleteTenant, onBack, onRefresh }) {
+  const [editingUser, setEditingUser] = useState(null)
+  const [editEmail, setEditEmail] = useState('')
+  const [editName, setEditName] = useState('')
+  const [userError, setUserError] = useState('')
+
+  function startEditUser(u) {
+    setEditingUser(u.id)
+    setEditEmail(u.email)
+    setEditName(u.name || '')
+    setUserError('')
+  }
+
+  async function saveUser(userId) {
+    if (!editEmail.trim()) return
+    setUserError('')
+    try {
+      await adminUpdateUser(selectedTenant.id, userId, editEmail.trim(), editName.trim())
+      setEditingUser(null)
+      await onRefresh()
+    } catch (err) {
+      setUserError(err.message)
+    }
+  }
+
+  async function handleDeleteUser(u) {
+    if (u.role === 'owner') {
+      alert('Cannot delete the owner. Transfer ownership first.')
+      return
+    }
+    if (!confirm(`Delete user "${u.name || u.email}"?`)) return
+    try {
+      await adminDeleteUser(selectedTenant.id, u.id)
+      await onRefresh()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <button className="btn btn-ghost" onClick={onBack} style={{ marginBottom: 8 }}>
+          <ArrowLeft size={16} /> Back to clients
+        </button>
+
+        {editingTenant ? (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+            <input
+              className="form-input"
+              value={tenantName}
+              onChange={e => setTenantName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleRenameTenant(); if (e.key === 'Escape') setEditingTenant(false) }}
+              autoFocus
+              style={{ fontSize: '1.25rem', fontWeight: 700, padding: '6px 12px', maxWidth: 300 }}
+              placeholder="Company name"
+            />
+            <button className="btn btn-ghost btn-sm" onClick={handleRenameTenant} style={{ color: 'var(--success)' }}>
+              <Check size={16} />
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setEditingTenant(false)} style={{ color: 'var(--text-muted)' }}>
+              <X size={16} />
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <h2>{detail.tenant.name}</h2>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => { setTenantName(detail.tenant.name); setTenantSlug(detail.tenant.slug); setEditingTenant(true) }}
+              title="Rename"
+            >
+              <Pencil size={14} />
+            </button>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={handleDeleteTenant}
+              title="Delete tenant"
+              style={{ color: 'var(--error)' }}
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="stat-grid">
+        <div className="stat-card">
+          <div className="stat-value">{detail.users?.length || 0}</div>
+          <div className="stat-label"><Users size={13} style={{ verticalAlign: 'middle' }} /> Users</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value">{detail.documents?.length || 0}</div>
+          <div className="stat-label"><FileText size={13} style={{ verticalAlign: 'middle' }} /> Documents</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value">{detail.search_volume || 0}</div>
+          <div className="stat-label"><Search size={13} style={{ verticalAlign: 'middle' }} /> Total searches</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value" style={{ color: detail.zero_result_queries?.length > 0 ? 'var(--error)' : 'var(--success)' }}>
+            {detail.zero_result_queries?.length || 0}
+          </div>
+          <div className="stat-label"><AlertTriangle size={13} style={{ verticalAlign: 'middle' }} /> Failed searches</div>
+        </div>
+      </div>
+
+      {/* Zero-result queries */}
+      {detail.zero_result_queries?.length > 0 && (
+        <div className="card" style={{ marginBottom: 24, borderColor: 'rgba(196, 78, 63, 0.2)' }}>
+          <div className="card-header">
+            <h3 style={{ color: 'var(--error)' }}>
+              <AlertTriangle size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} />
+              Failed Searches
+            </h3>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {detail.zero_result_queries.map((s, i) => (
+              <div key={i} style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                padding: '8px 12px',
+                background: 'rgba(196, 78, 63, 0.04)',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '0.875rem',
+              }}>
+                <span>"{s.query}"</span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                  {new Date(s.time).toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Top queries */}
+      {detail.top_queries?.length > 0 && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <div className="card-header">
+            <h3><TrendingUp size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} /> Top Queries</h3>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {detail.top_queries.map((q, i) => (
+              <div key={i} style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                padding: '8px 12px',
+                background: 'var(--cane-50)',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '0.875rem',
+              }}>
+                <span>{q.query}</span>
+                <span style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.8rem',
+                  color: 'var(--accent)',
+                  fontWeight: 600,
+                }}>
+                  {q.count}×
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Users */}
+      <div className="card" style={{ marginBottom: 24 }}>
+        <div className="card-header"><h3>Users</h3></div>
+        {detail.users?.map((u, i) => (
+          <div key={u.id || i} style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '10px 0',
+            borderBottom: i < detail.users.length - 1 ? '1px solid var(--cane-100)' : 'none',
+            fontSize: '0.875rem',
+          }}>
+            {editingUser === u.id ? (
+              <div style={{ flex: 1, marginRight: 12 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    className="form-input"
+                    value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') saveUser(u.id); if (e.key === 'Escape') setEditingUser(null) }}
+                    placeholder="Name"
+                    style={{ fontSize: '0.875rem', padding: '5px 10px', flex: 1 }}
+                  />
+                  <input
+                    className="form-input"
+                    value={editEmail}
+                    onChange={e => setEditEmail(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') saveUser(u.id); if (e.key === 'Escape') setEditingUser(null) }}
+                    placeholder="Email"
+                    autoFocus
+                    style={{ fontSize: '0.875rem', padding: '5px 10px', flex: 1.5 }}
+                  />
+                  <button className="btn btn-ghost btn-sm" onClick={() => saveUser(u.id)} style={{ color: 'var(--success)' }}>
+                    <Check size={14} />
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setEditingUser(null)} style={{ color: 'var(--text-muted)' }}>
+                    <X size={14} />
+                  </button>
+                </div>
+                {userError && <p style={{ fontSize: '0.75rem', color: 'var(--error)', marginTop: 4 }}>{userError}</p>}
+              </div>
+            ) : (
+              <>
+                <div>
+                  <strong>{u.name || u.email}</strong>
+                  <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>{u.email}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className="badge badge-ready">{u.role}</span>
+                  {u.last_login && (
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                      Last: {new Date(u.last_login).toLocaleDateString()}
+                    </span>
+                  )}
+                  <button className="btn btn-ghost btn-sm" onClick={() => startEditUser(u)} title="Edit user">
+                    <Pencil size={13} />
+                  </button>
+                  {u.role !== 'owner' && (
+                    <button className="btn btn-ghost btn-sm" onClick={() => handleDeleteUser(u)} title="Delete user" style={{ color: 'var(--error)' }}>
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Documents */}
+      <div className="card">
+        <div className="card-header"><h3>Documents</h3></div>
+        {detail.documents?.length > 0 ? detail.documents.map((d, i) => (
+          <div key={i} style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            padding: '8px 0',
+            borderBottom: i < detail.documents.length - 1 ? '1px solid var(--cane-100)' : 'none',
+            fontSize: '0.875rem',
+          }}>
+            <span className="filename">{d.filename}</span>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{d.chunks} chunks</span>
+              <span className={`badge badge-${d.status}`}>{d.status}</span>
+            </div>
+          </div>
+        )) : (
+          <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', padding: '12px 0' }}>No documents uploaded yet</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+
 function CreateTenantForm({ onCreated }) {
   const [form, setForm] = useState({
     name: '', slug: '', owner_email: '', owner_password: '', owner_name: '',
@@ -251,7 +421,6 @@ function CreateTenantForm({ onCreated }) {
   function update(key, value) {
     setForm(f => {
       const updated = { ...f, [key]: value }
-      // Auto-generate slug from name
       if (key === 'name') {
         updated.slug = value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
       }

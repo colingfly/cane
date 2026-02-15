@@ -1026,7 +1026,7 @@ def admin_tenant_detail(
 
     return {
         "tenant": {"id": tenant.id, "name": tenant.name, "slug": tenant.slug, "created_at": tenant.created_at.isoformat()},
-        "users": [{"email": u.email, "name": u.name, "role": u.role, "last_login": u.last_login.isoformat() if u.last_login else None} for u in users],
+        "users": [{"id": u.id, "email": u.email, "name": u.name, "role": u.role, "last_login": u.last_login.isoformat() if u.last_login else None} for u in users],
         "documents": [{"filename": d.filename, "status": d.status, "chunks": d.chunk_count, "created_at": d.created_at.isoformat()} for d in documents],
         "search_volume": len(searches),
         "zero_result_queries": [{"query": s.query, "time": s.created_at.isoformat()} for s in zero_results],
@@ -1091,69 +1091,89 @@ def admin_create_tenant(
     return {"tenant_id": tenant.id, "owner_id": owner.id, "workspace_id": ws.id}
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-#  FILE SERVING
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-
-def _frame_path_to_url(fp: str) -> str:
-    if not fp:
-        return ""
-    fp = fp.replace("\\", "/")
-    if "extracted/" in fp:
-        return "/files/" + fp[fp.index("extracted/"):]
-    return ""
-
-
-@app.get("/files/extracted/{path:path}")
-def serve_extracted(path: str, user: User = Depends(get_current_user)):
-    """Serve extracted files (frames, images). Auth-gated."""
-    fp = EXTRACTED_DIR / path
-    if fp.exists():
-        return FileResponse(fp)
-    raise HTTPException(404)
+@app.put("/api/admin/tenants/{tenant_id}")
+def admin_update_tenant(
+    tenant_id: str,
+    name: str = Form(...),
+    slug: str = Form(""),
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Rename a tenant (admin only)."""
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(404, "Tenant not found")
+    tenant.name = name
+    if slug:
+        tenant.slug = slug
+    db.commit()
+    return {"id": tenant.id, "name": tenant.name, "slug": tenant.slug}
 
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-#  HEALTH
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+@app.delete("/api/admin/tenants/{tenant_id}")
+def admin_delete_tenant(
+    tenant_id: str,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Delete a tenant and all associated data (admin only)."""
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(404, "Tenant not found")
 
-@app.get("/api/health")
-def health():
-    return {"status": "ok", "service": "cane"}
+    # Delete in order: search logs, documents, workspaces, users, tenant
+    db.query(SearchLog).filter(SearchLog.tenant_id == tenant_id).delete()
+    db.query(Document).filter(Document.tenant_id == tenant_id).delete()
+    db.query(Workspace).filter(Workspace.tenant_id == tenant_id).delete()
+    db.query(User).filter(User.tenant_id == tenant_id).delete()
+    db.delete(tenant)
+    db.commit()
 
-
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-#  STATIC FRONTEND (production only)
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-
-from config import STATIC_DIR
-
-if STATIC_DIR.exists() and (STATIC_DIR / "index.html").exists():
-    from fastapi.staticfiles import StaticFiles
-
-    # Serve static assets (JS, CSS, images)
-    if (STATIC_DIR / "assets").exists():
-        app.mount("/assets", StaticFiles(directory=str(STATIC_DIR / "assets")), name="assets")
-
-    # Catch-all: serve index.html for any non-API route (SPA routing)
-    @app.get("/{path:path}")
-    def serve_frontend(path: str):
-        # Don't serve frontend for API or file routes
-        if path.startswith("api/") or path.startswith("files/"):
-            raise HTTPException(404)
-        # Try to serve the exact file first (favicon.ico, etc.)
-        file_path = STATIC_DIR / path
-        if path and file_path.exists() and file_path.is_file():
-            return FileResponse(file_path)
-        # Otherwise serve index.html (React handles routing)
-        return FileResponse(STATIC_DIR / "index.html")
-
-    print(f"  [Static] Serving frontend from {STATIC_DIR}")
-else:
-    print(f"  [Static] No frontend build found at {STATIC_DIR}")
-    print(f"           Run 'npm run build' in frontend/ to create it")
+    return {"status": "deleted", "name": tenant.name}
 
 
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", "8000"))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+@app.put("/api/admin/tenants/{tenant_id}/users/{user_id}")
+def admin_update_user(
+    tenant_id: str,
+    user_id: str,
+    email: str = Form(...),
+    name: str = Form(""),
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Edit a user's email or name (admin only)."""
+    target = db.query(User).filter(User.id == user_id, User.tenant_id == tenant_id).first()
+    if not target:
+        raise HTTPException(404, "User not found")
+
+    # Check for duplicate email
+    if email != target.email:
+        existing = db.query(User).filter(User.email == email).first()
+        if existing:
+            raise HTTPException(400, f"Email '{email}' is already in use")
+
+    target.email = email
+    target.name = name
+    db.commit()
+
+    return {"id": target.id, "email": target.email, "name": target.name}
+
+
+@app.delete("/api/admin/tenants/{tenant_id}/users/{user_id}")
+def admin_delete_user(
+    tenant_id: str,
+    user_id: str,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Delete a user (admin only). Cannot delete owners."""
+    target = db.query(User).filter(User.id == user_id, User.tenant_id == tenant_id).first()
+    if not target:
+        raise HTTPException(404, "User not found")
+    if target.role == "owner":
+        raise HTTPException(400, "Cannot delete the tenant owner")
+
+    db.delete(target)
+    db.commit()
+
+    return {"status": "deleted", "email": target.email}
