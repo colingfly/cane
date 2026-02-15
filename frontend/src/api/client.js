@@ -141,3 +141,25 @@ export async function adminCreateTenant(data) {
   Object.entries(data).forEach(([k, v]) => form.append(k, v))
   return request('/admin/tenants', { method: 'POST', body: form })
 }
+
+export async function adminUpdateTenant(tenantId, name, slug = '') {
+  const form = new FormData()
+  form.append('name', name)
+  if (slug) form.append('slug', slug)
+  return request(/admin/tenants/, { method: 'PUT', body: form })
+}
+
+export async function adminDeleteTenant(tenantId) {
+  return request(/admin/tenants/, { method: 'DELETE' })
+}
+
+export async function adminUpdateUser(tenantId, userId, email, name = '') {
+  const form = new FormData()
+  form.append('email', email)
+  form.append('name', name)
+  return request(/admin/tenants//users/, { method: 'PUT', body: form })
+}
+
+export async function adminDeleteUser(tenantId, userId) {
+  return request(/admin/tenants//users/, { method: 'DELETE' })
+}
