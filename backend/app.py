@@ -749,7 +749,7 @@ def ask(
         return {"status": "no_llm", "error": "Anthropic API key not configured. Set ANTHROPIC_API_KEY."}
 
     where = _build_tenant_where(user.tenant_id, workspace_id)
-    search_results = _search_fusion(q, n, where)
+    search_results = _search_text(q, n, where)
     results = search_results.get("results", [])
 
     if not results:
