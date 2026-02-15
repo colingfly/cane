@@ -1,13 +1,13 @@
 """
-app.py — Cane API Server.
+app.py â€” Cane API Server.
 
 Multi-tenant document search API with auth.
 Frontend is a separate React app.
 
 Usage:
     python app.py
-    → API at http://localhost:8000
-    → Frontend at http://localhost:5173 (Vite dev server)
+    â†’ API at http://localhost:8000
+    â†’ Frontend at http://localhost:5173 (Vite dev server)
 """
 import os
 import sys
@@ -49,7 +49,7 @@ from security import (
     MAX_FILE_SIZE,
 )
 
-# ── Boot ──
+# â”€â”€ Boot â”€â”€
 ensure_dirs()
 init_db()
 
@@ -59,7 +59,7 @@ auto_seed()
 
 print(f"""
 {'='*60}
-  Cane — Document Intelligence API
+  Cane â€” Document Intelligence API
 {'='*60}
   BASE:      {BASE_DIR}
   DB:        {DB_PATH}
@@ -77,9 +77,9 @@ except Exception:
 
 print(f"  Chunks: {text_col.count()}")
 print(f"  Images: {image_col.count() if image_col else 0}")
-print(f"\n  → http://localhost:8000\n{'='*60}\n")
+print(f"\n  â†’ http://localhost:8000\n{'='*60}\n")
 
-# ── App ──
+# â”€â”€ App â”€â”€
 app = FastAPI(title="Cane", version="1.0.0", docs_url=None if IS_PRODUCTION else "/docs")
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestIDMiddleware)
@@ -91,18 +91,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Score thresholds ──
+# â”€â”€ Score thresholds â”€â”€
 TEXT_SCORE_THRESHOLD = 0.70
 FUSION_SCORE_THRESHOLD = 0.30
 
-# ── Quality filter ──
+# â”€â”€ Quality filter â”€â”€
 import re as _re
 from chunk_quality import is_quality_chunk as _is_quality_chunk
 
 
-# ═══════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 #  AUTH ENDPOINTS
-# ═══════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 @app.post("/api/auth/login")
 def login(request: Request, email: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
@@ -171,9 +171,9 @@ def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     }
 
 
-# ═══════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 #  WORKSPACE ENDPOINTS
-# ═══════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 @app.get("/api/workspaces")
 def list_workspaces(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -214,9 +214,9 @@ def create_workspace(
     return {"id": ws.id, "name": ws.name}
 
 
-# ═══════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 #  DOCUMENT ENDPOINTS
-# ═══════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 @app.get("/api/documents")
 def list_documents(
@@ -287,7 +287,7 @@ async def upload_and_ingest(
     if content_err:
         raise HTTPException(400, content_err)
 
-    # Sanitize filename — strip path components, limit length
+    # Sanitize filename â€” strip path components, limit length
     safe_filename = Path(file.filename).name[:200]
 
     # Save file to tenant-specific upload dir
@@ -393,11 +393,11 @@ def delete_document(
     return {"status": "deleted", "filename": doc.filename}
 
 
-# ═══════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 #  SEARCH ENDPOINTS
-# ═══════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-# ── Cross-Encoder (lazy-loaded) ──
+# â”€â”€ Cross-Encoder (lazy-loaded) â”€â”€
 _cross_encoder = None
 _cross_encoder_failed = False
 
@@ -476,7 +476,7 @@ def _build_tenant_where(tenant_id: str, workspace_id: str = "") -> dict:
     return conditions[0]
 
 
-# ── Transcript cleanup ──
+# â”€â”€ Transcript cleanup â”€â”€
 import re as _re_mod
 _TRANSCRIPT_FIXES = [
     (r'(?i)\boutcall\s+chains?\b', 'alkyl chain'),
@@ -671,7 +671,7 @@ def _search_fusion(q, n, where):
                 "location": f"p.{page}" if page else "",
                 "start_sec": 0, "end_sec": 0,
                 "score": r.get("score", 0),
-                "text": f"[Visual match — p.{page}]" if page else f"[Visual match at {ts:.0f}s]",
+                "text": f"[Visual match â€” p.{page}]" if page else f"[Visual match at {ts:.0f}s]",
             }
 
     ranked = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)[:n * 2]
@@ -689,9 +689,9 @@ def _search_fusion(q, n, where):
     return {"results": results[:n], "mode": "fusion"}
 
 
-# ── Summarize (Ask mode) ──
+# â”€â”€ Summarize (Ask mode) â”€â”€
 
-# ── LLM (Claude API) ──
+# â”€â”€ LLM (Claude API) â”€â”€
 from config import ANTHROPIC_API_KEY, CLAUDE_MODEL
 
 
@@ -802,9 +802,9 @@ Rules:
         return {"status": "error", "error": f"LLM call failed: {str(e)}"}
 
 
-# ═══════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 #  TEAM MANAGEMENT (owner only)
-# ═══════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 @app.get("/api/team")
 def list_team(user: User = Depends(require_owner), db: Session = Depends(get_db)):
@@ -866,9 +866,9 @@ def invite_member(
     return {"id": new_user.id, "email": new_user.email, "role": new_user.role}
 
 
-# ═══════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 #  STATS
-# ═══════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 @app.get("/api/stats")
 def stats(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -913,9 +913,9 @@ def stats(user: User = Depends(get_current_user), db: Session = Depends(get_db))
     }
 
 
-# ═══════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 #  ADMIN ENDPOINTS (your consulting dashboard)
-# ═══════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 @app.get("/api/admin/tenants")
 def admin_list_tenants(user: User = Depends(require_admin), db: Session = Depends(get_db)):
@@ -946,7 +946,7 @@ def admin_tenant_detail(
     user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """Deep dive on a single tenant — your consulting prep tool."""
+    """Deep dive on a single tenant â€” your consulting prep tool."""
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(404, "Tenant not found")
@@ -957,7 +957,7 @@ def admin_tenant_detail(
         SearchLog.tenant_id == tenant_id
     ).order_by(SearchLog.created_at.desc()).limit(100).all()
 
-    # Zero-result queries — goldmine
+    # Zero-result queries â€” goldmine
     zero_results = [s for s in searches if s.result_count == 0]
 
     # Most common queries
@@ -1032,9 +1032,9 @@ def admin_create_tenant(
     return {"tenant_id": tenant.id, "owner_id": owner.id, "workspace_id": ws.id}
 
 
-# ═══════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 #  FILE SERVING
-# ═══════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 def _frame_path_to_url(fp: str) -> str:
     if not fp:
@@ -1054,18 +1054,18 @@ def serve_extracted(path: str, user: User = Depends(get_current_user)):
     raise HTTPException(404)
 
 
-# ═══════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 #  HEALTH
-# ═══════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 @app.get("/api/health")
 def health():
     return {"status": "ok", "service": "cane"}
 
 
-# ═══════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 #  STATIC FRONTEND (production only)
-# ═══════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 from config import STATIC_DIR
 
