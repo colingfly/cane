@@ -73,7 +73,7 @@ export default function SettingsPage() {
     <div className="fade-in">
       <div className="page-header">
         <h2>Settings</h2>
-        <p>{tenant?.name}</p>
+        
       </div>
 
       {/* Workspaces */}

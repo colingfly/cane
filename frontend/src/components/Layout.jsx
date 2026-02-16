@@ -10,7 +10,7 @@ export default function Layout({ children }) {
       <aside className="sidebar">
         <div className="sidebar-brand">
           <h1>Cane</h1>
-          <div className="tenant-name">{tenant?.name}</div>
+
         </div>
 
         <nav className="sidebar-nav">

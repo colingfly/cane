@@ -19,6 +19,15 @@ export default function Documents() {
     loadDocs()
   }, [activeWs])
 
+  // Fetch workspaces if auth context has none
+  useEffect(() => {
+    if (workspaces.length === 0) {
+      getWorkspaces().then(data => {
+        updateWorkspaces(data.workspaces || [])
+      }).catch(console.error)
+    }
+  }, [])
+
   // Close workspace picker on outside click
   useEffect(() => {
     function handleClickOutside(e) {
