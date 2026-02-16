@@ -1195,7 +1195,7 @@ def admin_delete_user(
 def change_password(
     current_password: str = Form(...),
     new_password: str = Form(...),
-    user: User = Depends(require_user),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Change the current user's password."""
