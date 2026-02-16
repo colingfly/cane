@@ -1191,7 +1191,7 @@ def admin_delete_user(
 
 
 
-@app.put("/api/auth/password")
+@app.post("/api/auth/password")
 def change_password(
     current_password: str = Form(...),
     new_password: str = Form(...),
