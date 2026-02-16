@@ -6,7 +6,7 @@ import { Upload, Trash2, FileText, AlertCircle, ChevronDown } from 'lucide-react
 export default function Documents() {
   const { workspaces, isOwner, updateWorkspaces } = useAuth()
   const [documents, setDocuments] = useState([])
-  const [activeWs, setActiveWs] = useState('')
+  const [activeWs, setActiveWs] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [uploadStatus, setUploadStatus] = useState('')
   const [dragover, setDragover] = useState(false)
@@ -23,10 +23,14 @@ export default function Documents() {
   useEffect(() => {
     if (workspaces.length === 0) {
       getWorkspaces().then(data => {
-        updateWorkspaces(data.workspaces || [])
+        const ws = data.workspaces || []
+        updateWorkspaces(ws)
+        if (!activeWs && ws.length > 0) setActiveWs(ws[0].id)
       }).catch(console.error)
+    } else if (!activeWs && workspaces.length > 0) {
+      setActiveWs(workspaces[0].id)
     }
-  }, [])
+  }, [workspaces])
 
   // Close workspace picker on outside click
   useEffect(() => {
