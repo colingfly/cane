@@ -259,6 +259,9 @@ class Ingestor:
                 )
             print(f"  [Index] {len(ids)} images → CLIP index")
 
+        # Free CLIP from memory after indexing to save RAM
+        self._unload_clip()
+
     def _ensure_clip(self):
         if self._clip_model is not None:
             return
@@ -275,3 +278,20 @@ class Ingestor:
             IMAGE_COLLECTION,
             metadata={"hnsw:space": "cosine"},
         )
+
+    def _unload_clip(self):
+        """Free CLIP model from memory after indexing to save ~600MB RAM."""
+        import gc
+        if self._clip_model is not None:
+            del self._clip_model
+            del self._clip_processor
+            self._clip_model = None
+            self._clip_processor = None
+            self._device = None
+            gc.collect()
+            try:
+                import torch
+                torch.cuda.empty_cache()
+            except Exception:
+                pass
+            print("  [CLIP] Model unloaded to free memory")

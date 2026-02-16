@@ -1,4 +1,4 @@
-# cache-bust-v6
+# cache-bust-v7
 # ═══════════════════════════════════════════════════════════
 #  Cane — Multi-stage Docker build for Railway
 # ═══════════════════════════════════════════════════════════
@@ -18,6 +18,8 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    tesseract-ocr \
+    tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/*
 
 # Install CPU-only PyTorch first (saves ~1.5GB vs CUDA version)

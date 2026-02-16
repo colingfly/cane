@@ -66,7 +66,7 @@ IMAGE_COLLECTION = "cane_images"
 
 # ── Models ──
 TEXT_EMBED_MODEL = "BAAI/bge-base-en-v1.5"
-CLIP_MODEL = "openai/clip-vit-large-patch14"
+CLIP_MODEL = "openai/clip-vit-base-patch32"
 WHISPER_MODEL = "medium"
 
 # ── Chunking ──

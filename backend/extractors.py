@@ -122,6 +122,15 @@ def _extract_pdf(path: Path, extracted_dir: str) -> ExtractionResult:
             except Exception:
                 continue
 
+    # OCR fallback: if no text was extracted but PDF has pages, it's likely scanned
+    if not page_texts and doc.page_count > 0:
+        print(f"  [OCR] No text found in {path.name}, running OCR on {doc.page_count} pages...")
+        page_texts = _ocr_pdf_pages(doc, path.name)
+        if page_texts:
+            print(f"  [OCR] Extracted text from {len(page_texts)} pages")
+        else:
+            print(f"  [OCR] No text recovered from OCR")
+
     doc.close()
 
     # Chunk the text with page awareness
@@ -341,3 +350,44 @@ def _split_to_chunks(text: str, source_file: str, source_type: str,
         ))
 
     return chunks
+
+
+def _ocr_pdf_pages(doc, filename: str) -> dict:
+    """
+    OCR fallback for scanned PDFs.
+    Renders each page to an image, then runs Tesseract OCR to extract text.
+    Returns a dict of {page_num: text}.
+    """
+    try:
+        import pytesseract
+        from PIL import Image as PILImage
+        import io
+    except ImportError:
+        print(f"  [OCR] pytesseract not installed, skipping OCR for {filename}")
+        return {}
+
+    page_texts = {}
+
+    for page_num in range(doc.page_count):
+        try:
+            page = doc[page_num]
+            # Render page at 200 DPI (good balance of quality vs speed)
+            import fitz as _fitz
+            mat = _fitz.Matrix(200 / 72, 200 / 72)
+            pix = page.get_pixmap(matrix=mat)
+
+            # Convert to PIL Image
+            img_bytes = pix.tobytes("png")
+            pil_img = PILImage.open(io.BytesIO(img_bytes))
+
+            # Run OCR
+            text = pytesseract.image_to_string(pil_img).strip()
+
+            if text and len(text) > 20:  # Skip pages with trivial OCR output
+                page_texts[page_num + 1] = text
+
+        except Exception as e:
+            print(f"  [OCR] Failed on page {page_num + 1} of {filename}: {e}")
+            continue
+
+    return page_texts
