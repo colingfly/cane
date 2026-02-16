@@ -10,7 +10,9 @@ export default function Layout({ children }) {
       <aside className="sidebar">
         <div className="sidebar-brand">
           <h1>Cane</h1>
-
+          <p style={{ fontSize: '0.7rem', color: 'var(--cane-300, #b8a99a)', marginTop: 2, letterSpacing: '0.05em' }}>
+            Operational Intelligence
+          </p>
         </div>
 
         <nav className="sidebar-nav">

@@ -32,7 +32,7 @@ export default function Login() {
       <div className="login-card">
         <div className="login-brand">
           <h1>Cane</h1>
-          <p>Document intelligence for your team</p>
+          <p>Operational Intelligence</p>
         </div>
 
         <form onSubmit={onSubmit}>
