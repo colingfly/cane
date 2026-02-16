@@ -91,7 +91,8 @@ export default function Documents() {
   }
 
   async function handleUpload(files, wsId) {
-    if (!files?.length || !wsId) return
+    const fileArray = Array.from(files)
+    if (!fileArray.length || !wsId) return
 
     setUploading(true)
     setUploadStatus('')
@@ -99,7 +100,7 @@ export default function Documents() {
     const wsName = workspaces.find(w => w.id === wsId)?.name || ''
 
     let successCount = 0
-    for (const file of files) {
+    for (const file of fileArray) {
       try {
         setUploadStatus(`Uploading ${file.name} to ${wsName}...`)
         await uploadDocument(file, wsId)
