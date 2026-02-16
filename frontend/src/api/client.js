@@ -167,5 +167,5 @@ export async function changePassword(currentPassword, newPassword) {
   const form = new FormData()
   form.append('current_password', currentPassword)
   form.append('new_password', newPassword)
-  return request('/api/auth/password', { method: 'POST', body: form })
+  return request('/auth/password', { method: 'POST', body: form })
 }
