@@ -1,31 +1,29 @@
-import sys
+﻿import os
 
-p = 'backend/app.py'
-c = open(p, encoding='utf-8').read()
+code = '''
 
-# Fix duplicate: remove second copy of admin_update_tenant
-first = c.find('def admin_update_tenant(')
-second = c.find('def admin_update_tenant(', first + 1)
-if second > 0:
-    # Find the decorator before the second copy
-    dec_pos = c.rfind('@app.put', 0, second)
-    if dec_pos > first:
-        c = c[:dec_pos].rstrip() + '\n'
-        print(f"Removed duplicate endpoints starting at position {dec_pos}")
-    else:
-        c = c[:second - 1].rstrip() + '\n'
-        print(f"Removed duplicate from position {second}")
-else:
-    print("No duplicate found")
+# ── Health check ──────────────────────────────────────────
+@app.get("/api/health")
+def health_check():
+    return {"status": "ok", "service": "cane"}
 
-# Fix user ID in tenant detail response
-old = '{"email": u.email, "name": u.name, "role": u.role,'
-new = '{"id": u.id, "email": u.email, "name": u.name, "role": u.role,'
-if old in c:
-    c = c.replace(old, new)
-    print("Added user ID to tenant detail response")
-else:
-    print("User ID pattern not found (may already be fixed)")
+# ── Serve React SPA ──────────────────────────────────────
+from fastapi.staticfiles import StaticFiles
+import pathlib
 
-open(p, 'w', encoding='utf-8').write(c)
-print("Done")
+_static = pathlib.Path(__file__).parent / "static"
+if _static.is_dir():
+    app.mount("/assets", StaticFiles(directory=str(_static / "assets")), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        file = _static / full_path
+        if file.is_file():
+            return FileResponse(str(file))
+        return FileResponse(str(_static / "index.html"))
+'''
+
+with open('backend/app.py', 'a', encoding='utf-8') as f:
+    f.write(code)
+
+print("Added health + static serving to app.py")
