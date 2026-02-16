@@ -162,3 +162,10 @@ export async function adminUpdateUser(tenantId, userId, email, name = '') {
 export async function adminDeleteUser(tenantId, userId) {
   return request(`/admin/tenants/${tenantId}/users/${userId}`, { method: 'DELETE' })
 }
+
+export async function changePassword(currentPassword, newPassword) {
+  const form = new FormData()
+  form.append('current_password', currentPassword)
+  form.append('new_password', newPassword)
+  return request('/api/auth/password', { method: 'PUT', body: form })
+}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { getTeam, inviteMember, getWorkspaces, createWorkspace, renameWorkspace, deleteWorkspace } from '../api/client'
-import { UserPlus, FolderPlus, Users, Folders, Pencil, Trash2, Check, X } from 'lucide-react'
+import { getTeam, inviteMember, getWorkspaces, createWorkspace, renameWorkspace, deleteWorkspace, changePassword } from '../api/client'
+import { UserPlus, FolderPlus, Users, Folders, Pencil, Trash2, Check, X, Lock } from 'lucide-react'
 
 export default function SettingsPage() {
   const { isOwner, tenant, updateWorkspaces } = useAuth()
@@ -196,6 +196,14 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* Change Password */}
+      <div className="card" style={{ marginBottom: 24 }}>
+        <div className="card-header">
+          <h3><Lock size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} /> Change Password</h3>
+        </div>
+        <ChangePasswordForm />
+      </div>
+
       {/* Team */}
       {isOwner && (
         <div className="card">
@@ -240,6 +248,66 @@ export default function SettingsPage() {
         </div>
       )}
     </div>
+  )
+}
+
+
+function ChangePasswordForm() {
+  const [currentPw, setCurrentPw] = useState('')
+  const [newPw, setNewPw] = useState('')
+  const [confirmPw, setConfirmPw] = useState('')
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setError('')
+    setSuccess('')
+    if (newPw !== confirmPw) {
+      setError('New passwords do not match')
+      return
+    }
+    if (newPw.length < 8) {
+      setError('Password must be at least 8 characters')
+      return
+    }
+    setLoading(true)
+    try {
+      await changePassword(currentPw, newPw)
+      setSuccess('Password updated successfully')
+      setCurrentPw('')
+      setNewPw('')
+      setConfirmPw('')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} style={{ padding: '16px 0' }}>
+      {error && <div style={{ color: 'var(--error)', fontSize: '0.8125rem', marginBottom: 8 }}>{error}</div>}
+      {success && <div style={{ color: 'var(--success)', fontSize: '0.8125rem', marginBottom: 8 }}>{success}</div>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 360 }}>
+        <div className="form-group">
+          <label>Current password</label>
+          <input className="form-input" type="password" value={currentPw} onChange={e => setCurrentPw(e.target.value)} required />
+        </div>
+        <div className="form-group">
+          <label>New password</label>
+          <input className="form-input" type="password" value={newPw} onChange={e => setNewPw(e.target.value)} required />
+        </div>
+        <div className="form-group">
+          <label>Confirm new password</label>
+          <input className="form-input" type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} required />
+        </div>
+      </div>
+      <button type="submit" className="btn btn-primary btn-sm" disabled={loading} style={{ marginTop: 12 }}>
+        {loading ? 'Updating...' : 'Update password'}
+      </button>
+    </form>
   )
 }
 

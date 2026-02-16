@@ -1189,6 +1189,25 @@ def admin_delete_user(
     return {"status": "deleted", "email": target.email}
 
 
+
+
+@app.put("/api/auth/password")
+def change_password(
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    """Change the current user's password."""
+    if not verify_password(current_password, user.password_hash):
+        raise HTTPException(400, "Current password is incorrect")
+    pwd_err = validate_password(new_password)
+    if pwd_err:
+        raise HTTPException(400, pwd_err)
+    user.password_hash = hash_password(new_password)
+    db.commit()
+    return {"status": "ok", "message": "Password updated"}
+
 # ── Health check ──────────────────────────────────────────
 @app.get("/api/health")
 def health_check():
