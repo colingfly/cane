@@ -42,7 +42,6 @@ export default function Admin() {
     try {
       await adminUpdateTenant(selectedTenant.id, tenantName.trim(), tenantSlug.trim())
       setEditingTenant(false)
-      // Refresh
       const data = await adminGetTenantDetail(selectedTenant.id)
       setDetail(data)
       setSelectedTenant({ ...selectedTenant, name: tenantName.trim() })
@@ -67,7 +66,6 @@ export default function Admin() {
 
   if (loading) return <div className="loading-center"><div className="spinner" /></div>
 
-  // — Tenant detail view —
   if (selectedTenant && detail) {
     return (
       <TenantDetail
@@ -90,7 +88,6 @@ export default function Admin() {
     )
   }
 
-  // — Tenant list view —
   return (
     <div className="fade-in">
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -256,7 +253,6 @@ function TenantDetail({ detail, selectedTenant, editingTenant, tenantName, tenan
         </div>
       </div>
 
-      {/* Zero-result queries */}
       {detail.zero_result_queries?.length > 0 && (
         <div className="card" style={{ marginBottom: 24, borderColor: 'rgba(196, 78, 63, 0.2)' }}>
           <div className="card-header">
@@ -285,7 +281,6 @@ function TenantDetail({ detail, selectedTenant, editingTenant, tenantName, tenan
         </div>
       )}
 
-      {/* Top queries */}
       {detail.top_queries?.length > 0 && (
         <div className="card" style={{ marginBottom: 24 }}>
           <div className="card-header">
@@ -316,7 +311,6 @@ function TenantDetail({ detail, selectedTenant, editingTenant, tenantName, tenan
         </div>
       )}
 
-      {/* Users */}
       <div className="card" style={{ marginBottom: 24 }}>
         <div className="card-header"><h3>Users</h3></div>
         {detail.users?.map((u, i) => (
@@ -385,7 +379,6 @@ function TenantDetail({ detail, selectedTenant, editingTenant, tenantName, tenan
         ))}
       </div>
 
-      {/* Documents */}
       <div className="card">
         <div className="card-header"><h3>Documents</h3></div>
         {detail.documents?.length > 0 ? detail.documents.map((d, i) => (
