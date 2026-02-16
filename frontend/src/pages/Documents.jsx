@@ -61,8 +61,9 @@ export default function Documents() {
     return null
   }
 
-  function initiateUpload(files) {
-    if (!files?.length) return
+  function initiateUpload(rawFiles) {
+    const files = Array.from(rawFiles)
+    if (!files.length) return
 
     // If user is on a specific workspace tab, upload directly there
     if (activeWs) {
