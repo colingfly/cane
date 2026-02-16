@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { search, ask } from '../api/client'
 import { Search as SearchIcon, Sparkles, FileText, Clock } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
 
 export default function SearchPage() {
   const { workspaces } = useAuth()
@@ -116,7 +117,7 @@ export default function SearchPage() {
           ) : (
             <>
               <h4><Sparkles size={14} /> AI Answer</h4>
-              <div className="summary-text">{summary.summary}</div>
+              <div className="summary-text"><ReactMarkdown>{summary.summary}</ReactMarkdown></div>
               {summary.sources?.length > 0 && (
                 <div className="summary-sources">
                   Sources: {summary.sources.join(' · ')}
