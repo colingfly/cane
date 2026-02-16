@@ -72,7 +72,7 @@ export async function renameWorkspace(workspaceId, name, description = '') {
   const form = new FormData()
   form.append('name', name)
   form.append('description', description)
-  return request(`/workspaces/${workspaceId}`, { method: 'POST', body: form })
+  return request(`/workspaces/${workspaceId}`, { method: 'PUT', body: form })
 }
 
 export async function deleteWorkspace(workspaceId) {
@@ -145,7 +145,7 @@ export async function adminUpdateTenant(tenantId, name, slug = '') {
   const form = new FormData()
   form.append('name', name)
   if (slug) form.append('slug', slug)
-  return request(`/admin/tenants/${tenantId}`, { method: 'POST', body: form })
+  return request(`/admin/tenants/${tenantId}`, { method: 'PUT', body: form })
 }
 
 export async function adminDeleteTenant(tenantId) {
@@ -156,7 +156,7 @@ export async function adminUpdateUser(tenantId, userId, email, name = '') {
   const form = new FormData()
   form.append('email', email)
   form.append('name', name)
-  return request(`/admin/tenants/${tenantId}/users/${userId}`, { method: 'POST', body: form })
+  return request(`/admin/tenants/${tenantId}/users/${userId}`, { method: 'PUT', body: form })
 }
 
 export async function adminDeleteUser(tenantId, userId) {
