@@ -728,9 +728,22 @@ def _frame_path_to_url(frame_path: str) -> str:
 @app.get("/api/images/{file_path:path}")
 def serve_image(
     file_path: str,
-    user: User = Depends(get_current_user),
+    token: str = Query(""),
+    db: Session = Depends(get_db),
 ):
-    """Serve extracted images (keyframes, PDF images) with auth."""
+    """Serve extracted images (keyframes, PDF images) with token auth."""
+    # Authenticate via query param token (img tags can't send headers)
+    if not token:
+        raise HTTPException(401, "Token required")
+    from auth import decode_token
+    payload = decode_token(token)
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(401, "Invalid token")
+    user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
+    if not user:
+        raise HTTPException(401, "Unauthorized")
+
     # Sanitize: prevent path traversal
     from pathlib import Path
     safe = Path(str(EXTRACTED_DIR)) / file_path
@@ -855,7 +868,8 @@ def ask(
         return {"status": "no_llm", "error": "Anthropic API key not configured. Set ANTHROPIC_API_KEY."}
 
     where = _build_tenant_where(user.tenant_id, workspace_id)
-    search_results = _search_text(q, n, where)
+    # Use fusion search (text + visual) for better recall, then extract text chunks
+    search_results = _search_fusion(q, n * 2, where)
     results = search_results.get("results", [])
 
     if not results:

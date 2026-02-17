@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { search, ask } from '../api/client'
+import { search, ask, getToken } from '../api/client'
 import { Search as SearchIcon, Sparkles, FileText, Clock, Image } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 
@@ -12,6 +12,8 @@ export default function SearchPage() {
   const [results, setResults] = useState(null)
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(false)
+
+  const authImg = (url) => url ? `${url}${url.includes('?') ? '&' : '?'}token=${getToken()}` : ''
 
   async function runSearch(searchMode) {
     if (!query.trim()) return
@@ -127,7 +129,7 @@ export default function SearchPage() {
                     {summary.images.map((img, i) => (
                       <div key={i} className="image-result-thumb">
                         <img
-                          src={img.url}
+                          src={authImg(img.url)}
                           alt={`${img.source_file} ${img.page ? `p.${img.page}` : `${Math.floor(img.timestamp_sec / 60)}:${String(Math.floor(img.timestamp_sec % 60)).padStart(2, '0')}`}`}
                           loading="lazy"
                         />
@@ -178,7 +180,7 @@ export default function SearchPage() {
                 </div>
                 {r.frame_url ? (
                   <div className="result-image">
-                    <img src={r.frame_url} alt={r.source_file} loading="lazy" />
+                    <img src={authImg(r.frame_url)} alt={r.source_file} loading="lazy" />
                   </div>
                 ) : (
                   <div className="result-text">{r.text}</div>

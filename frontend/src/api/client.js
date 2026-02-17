@@ -4,7 +4,7 @@
 
 const API_BASE = '/api'
 
-function getToken() {
+export function getToken() {
   return localStorage.getItem('cane_token')
 }
 
