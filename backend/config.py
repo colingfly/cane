@@ -67,7 +67,7 @@ IMAGE_COLLECTION = "cane_images"
 # ── Models ──
 TEXT_EMBED_MODEL = "BAAI/bge-base-en-v1.5"
 CLIP_MODEL = "openai/clip-vit-base-patch32"
-WHISPER_MODEL = "medium"
+WHISPER_MODEL = os.getenv("CANE_WHISPER_MODEL", "base")  # base=fast/light, medium=better accuracy
 
 # ── Chunking ──
 CHUNK_SIZE = 1500

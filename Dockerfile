@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     tesseract-ocr \
     tesseract-ocr-eng \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Install CPU-only PyTorch first (saves ~1.5GB vs CUDA version)

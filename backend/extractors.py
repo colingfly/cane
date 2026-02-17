@@ -6,6 +6,7 @@ Supported formats:
   - DOCX (via python-docx)
   - XLSX / CSV (via openpyxl / csv)
   - Images (OCR placeholder — stores as image for CLIP)
+  - Audio / Video (faster-whisper transcription + ffmpeg keyframes)
 
 Each extractor returns an ExtractionResult with chunks and/or images.
 """
@@ -15,8 +16,8 @@ from pathlib import Path
 from typing import Optional
 
 from models import ExtractionResult, Chunk, Image, make_slug
-from smart_chunker import smart_chunk_text
-from config import CHUNK_SIZE, CHUNK_OVERLAP, EXT_MAP
+from smart_chunker import smart_chunk_text, smart_chunk_transcript
+from config import CHUNK_SIZE, CHUNK_OVERLAP, EXT_MAP, WHISPER_MODEL, MIN_FRAME_GAP_SEC
 
 
 def extract(filepath: str, extracted_dir: str) -> ExtractionResult:
@@ -50,10 +51,7 @@ def extract(filepath: str, extracted_dir: str) -> ExtractionResult:
         elif file_type == "image":
             return _extract_image(path, extracted_dir)
         elif file_type in ("audio", "video"):
-            return ExtractionResult(
-                source_file=path.name, source_type=file_type,
-                error="Audio/video extraction disabled for MVP. Install whisper to enable."
-            )
+            return _extract_audio_video(path, file_type, extracted_dir)
         else:
             return ExtractionResult(
                 source_file=path.name, source_type=ext,
@@ -279,6 +277,218 @@ def _extract_image(path: Path, extracted_dir: str) -> ExtractionResult:
         source_type="image",
         images=images,
     )
+
+
+# ═══════════════════════════════════════════════════════════
+#  Audio / Video Extractor (faster-whisper + ffmpeg)
+# ═══════════════════════════════════════════════════════════
+
+def _extract_audio_video(path: Path, file_type: str, extracted_dir: str) -> ExtractionResult:
+    """
+    Transcribe audio/video with faster-whisper, extract keyframes from video.
+    """
+    import subprocess
+    import tempfile
+
+    source_file = path.name
+    slug = make_slug(source_file)
+
+    # ── Step 1: Get audio path (extract from video if needed) ──
+    audio_path = str(path)
+    tmp_audio = None
+
+    if file_type == "video":
+        # Extract audio track to temp WAV for whisper
+        tmp_audio = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        tmp_audio.close()
+        audio_path = tmp_audio.name
+
+        print(f"  [AV] Extracting audio from {source_file}...")
+        try:
+            subprocess.run(
+                ["ffmpeg", "-i", str(path), "-vn", "-acodec", "pcm_s16le",
+                 "-ar", "16000", "-ac", "1", audio_path, "-y"],
+                capture_output=True, check=True, timeout=120,
+            )
+        except subprocess.CalledProcessError as e:
+            _cleanup_tmp(tmp_audio)
+            return ExtractionResult(
+                source_file=source_file, source_type=file_type,
+                error=f"ffmpeg audio extraction failed: {e.stderr.decode()[:200]}",
+            )
+        except FileNotFoundError:
+            _cleanup_tmp(tmp_audio)
+            return ExtractionResult(
+                source_file=source_file, source_type=file_type,
+                error="ffmpeg not installed — required for video processing",
+            )
+
+    # ── Step 2: Transcribe with faster-whisper ──
+    print(f"  [AV] Transcribing with whisper ({WHISPER_MODEL})...")
+    try:
+        from faster_whisper import WhisperModel
+
+        model = WhisperModel(WHISPER_MODEL, device="cpu", compute_type="int8")
+        segments_iter, info = model.transcribe(audio_path, beam_size=5)
+
+        # Collect segments
+        whisper_segments = []
+        for seg in segments_iter:
+            whisper_segments.append({
+                "text": seg.text.strip(),
+                "start": seg.start,
+                "end": seg.end,
+            })
+
+        # Free model memory
+        del model
+
+        print(f"  [AV] Transcribed: {len(whisper_segments)} segments, "
+              f"language={info.language} ({info.language_probability:.0%})")
+
+    except ImportError:
+        _cleanup_tmp(tmp_audio)
+        return ExtractionResult(
+            source_file=source_file, source_type=file_type,
+            error="faster-whisper not installed — required for audio/video processing",
+        )
+    except Exception as e:
+        _cleanup_tmp(tmp_audio)
+        return ExtractionResult(
+            source_file=source_file, source_type=file_type,
+            error=f"Transcription failed: {str(e)[:200]}",
+        )
+    finally:
+        _cleanup_tmp(tmp_audio)
+
+    if not whisper_segments:
+        return ExtractionResult(
+            source_file=source_file, source_type=file_type,
+            error="No speech detected in file",
+        )
+
+    # ── Step 3: Chunk the transcript ──
+    smart_chunks = smart_chunk_transcript(
+        whisper_segments,
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
+    )
+
+    chunks = []
+    for i, sc in enumerate(smart_chunks):
+        if not sc.text.strip():
+            continue
+
+        start = sc.meta.timestamp_start or 0.0
+        end = sc.meta.timestamp_end or 0.0
+        location = f"{_fmt_time(start)} → {_fmt_time(end)}"
+
+        chunks.append(Chunk(
+            text=sc.text,
+            source_file=source_file,
+            source_type=file_type,
+            chunk_index=i,
+            start_sec=start,
+            end_sec=end,
+            location=location,
+        ))
+
+    print(f"  [AV] {len(chunks)} chunks from transcript")
+
+    # ── Step 4: Extract keyframes from video ──
+    images = []
+    if file_type == "video":
+        images = _extract_keyframes(path, slug, extracted_dir)
+
+    return ExtractionResult(
+        source_file=source_file,
+        source_type=file_type,
+        chunks=chunks,
+        images=images,
+    )
+
+
+def _extract_keyframes(path: Path, slug: str, extracted_dir: str) -> list:
+    """Extract keyframes from video at regular intervals using ffmpeg."""
+    import subprocess
+
+    img_dir = Path(extracted_dir) / slug / "images"
+    img_dir.mkdir(parents=True, exist_ok=True)
+
+    # Get video duration
+    try:
+        probe = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-print_format", "json",
+             "-show_format", str(path)],
+            capture_output=True, check=True, timeout=30,
+        )
+        import json
+        duration = float(json.loads(probe.stdout).get("format", {}).get("duration", 0))
+    except Exception:
+        duration = 0
+
+    if duration <= 0:
+        print(f"  [AV] Could not determine video duration, skipping keyframes")
+        return []
+
+    # Extract one frame every MIN_FRAME_GAP_SEC seconds
+    interval = max(MIN_FRAME_GAP_SEC, 1)
+    frame_pattern = str(img_dir / f"frame_%04d.jpg")
+
+    print(f"  [AV] Extracting keyframes every {interval}s from {duration:.0f}s video...")
+    try:
+        subprocess.run(
+            ["ffmpeg", "-i", str(path), "-vf", f"fps=1/{interval}",
+             "-qscale:v", "3", frame_pattern, "-y"],
+            capture_output=True, check=True, timeout=300,
+        )
+    except Exception as e:
+        print(f"  [AV] Keyframe extraction failed: {e}")
+        return []
+
+    # Collect extracted frames
+    images = []
+    for frame_path in sorted(img_dir.glob("frame_*.jpg")):
+        # Parse frame number to get timestamp
+        try:
+            frame_num = int(frame_path.stem.split("_")[1])
+            timestamp = (frame_num - 1) * interval  # ffmpeg starts at 1
+
+            from PIL import Image as PILImage
+            img = PILImage.open(str(frame_path))
+            w, h = img.size
+            img.close()
+
+            images.append(Image(
+                path=str(frame_path),
+                source_file=path.name,
+                source_type="video",
+                timestamp_sec=float(timestamp),
+                width=w,
+                height=h,
+            ))
+        except Exception as e:
+            print(f"  [AV] Failed reading frame {frame_path}: {e}")
+            continue
+
+    print(f"  [AV] {len(images)} keyframes extracted")
+    return images
+
+
+def _fmt_time(seconds: float) -> str:
+    """Format seconds as MM:SS."""
+    m, s = divmod(int(seconds), 60)
+    return f"{m}:{s:02d}"
+
+
+def _cleanup_tmp(tmp_file):
+    """Safely remove a temp file."""
+    if tmp_file is not None:
+        try:
+            import os
+            os.unlink(tmp_file.name)
+        except Exception:
+            pass
 
 
 # ═══════════════════════════════════════════════════════════
