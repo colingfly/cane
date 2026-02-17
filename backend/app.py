@@ -885,7 +885,7 @@ def ask(
         context_parts.append(text)
         sources.append(source_label)
 
-    # 1) Direct text search
+    # 1) Direct text search — ranked results
     text_results = _search_text(q, n, where)
     for r in text_results.get("results", []):
         text = r.get("text", "")
@@ -893,41 +893,25 @@ def ask(
         page = r.get("page", 0)
         _add_context(text, f"{src} p.{page}" if page else src)
 
-    # 2) Visual search → look up transcript text near matched timestamps
+    # 2) Also include ALL text chunks as supplementary context
+    #    (for small corpora this ensures visual-only matches still get transcript context)
     try:
-        visual_results = _search_visual(q, 6, where)
-        visual_hits = visual_results.get("results", [])
-        print(f"  [Ask] Visual hits: {len(visual_hits)}")
-        if visual_hits and text_col.count() > 0:
-            # Fetch all text chunks to match by timestamp
+        total_chunks = text_col.count()
+        print(f"  [Ask] text_col.count()={total_chunks}")
+        if total_chunks > 0 and total_chunks <= 50:
             get_kwargs = {"include": ["documents", "metadatas"]}
             if where:
                 get_kwargs["where"] = where
             all_chunks = text_col.get(**get_kwargs)
             docs = all_chunks.get("documents", [])
             metas = all_chunks.get("metadatas", [])
-            print(f"  [Ask] Total text chunks: {len(docs)}")
-
-            for vr in visual_hits:
-                ts = vr.get("timestamp_sec", 0)
-                v_src = vr.get("source_file", "")
-                if ts <= 0 or not v_src:
-                    continue
-                print(f"  [Ask] Looking for text near ts={ts} in {v_src}")
-                for doc, meta in zip(docs, metas):
-                    if not meta or meta.get("source_file") != v_src:
-                        continue
-                    s = float(meta.get("start_sec", 0) or 0)
-                    e = float(meta.get("end_sec", 0) or 0)
-                    print(f"  [Ask]   chunk: start={s} end={e}")
-                    if s <= 0 and e <= 0:
-                        continue
-                    if s - 15 <= ts <= e + 15:
-                        display = meta.get("display_text", doc) or doc
-                        _add_context(display, v_src)
-                        print(f"  [Ask]   MATCH! Added {len(display)} chars")
+            print(f"  [Ask] Fetched {len(docs)} chunks, adding all as context")
+            for doc, meta in zip(docs, metas):
+                src = (meta or {}).get("source_file", "")
+                display = (meta or {}).get("display_text", doc) or doc
+                _add_context(display, src)
     except Exception as ex:
-        print(f"  [Ask] Visual text lookup error: {ex}")
+        print(f"  [Ask] Supplementary context error: {ex}")
         import traceback; traceback.print_exc()
 
     if not context_parts:
