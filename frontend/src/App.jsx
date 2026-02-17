@@ -8,6 +8,8 @@ import Documents from './pages/Documents'
 import Dashboard from './pages/Dashboard'
 import SettingsPage from './pages/Settings'
 import Admin from './pages/Admin'
+import AgentBuilder from './pages/AgentBuilder'
+import AgentDetail from './pages/AgentDetail'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -49,6 +51,18 @@ export default function App() {
       <Route path="/documents" element={
         <ProtectedRoute>
           <Layout><Documents /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/agents" element={
+        <ProtectedRoute>
+          <Layout><AgentBuilder /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/agents/:agentId" element={
+        <ProtectedRoute>
+          <Layout><AgentDetail /></Layout>
         </ProtectedRoute>
       } />
 

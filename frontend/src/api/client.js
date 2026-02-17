@@ -191,6 +191,39 @@ export async function getStats() {
   return request('/stats')
 }
 
+// -- Agents --
+export async function getAgentTemplates() {
+  return request('/agents/templates')
+}
+
+export async function getAgents() {
+  return request('/agents')
+}
+
+export async function getAgent(agentId) {
+  return request(`/agents/${agentId}`)
+}
+
+export async function createAgent(data) {
+  const form = new FormData()
+  Object.entries(data).forEach(([k, v]) => { if (v !== undefined && v !== null) form.append(k, v) })
+  return request('/agents', { method: 'POST', body: form })
+}
+
+export async function updateAgent(agentId, data) {
+  const form = new FormData()
+  Object.entries(data).forEach(([k, v]) => { if (v !== undefined && v !== null) form.append(k, String(v)) })
+  return request(`/agents/${agentId}`, { method: 'PUT', body: form })
+}
+
+export async function deleteAgent(agentId) {
+  return request(`/agents/${agentId}`, { method: 'DELETE' })
+}
+
+export async function generateAgentPrompt(agentId) {
+  return request(`/agents/${agentId}/generate-prompt`, { method: 'POST' })
+}
+
 // -- Team --
 export async function getTeam() {
   return request('/team')

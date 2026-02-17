@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { Search, FileText, Settings, BarChart3, Shield } from 'lucide-react'
+import { Search, FileText, Settings, BarChart3, Shield, Bot } from 'lucide-react'
 
 export default function Layout({ children }) {
   const { user, tenant, handleLogout, isAdmin } = useAuth()
@@ -21,6 +21,16 @@ export default function Layout({ children }) {
           </NavLink>
           <NavLink to="/documents">
             <FileText /> Documents
+          </NavLink>
+          <NavLink to="/agents">
+            <Bot />
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              Agent Builder
+              <span style={{
+                fontSize: '0.5rem', fontWeight: 700, background: 'var(--accent)', color: 'white',
+                padding: '1px 5px', borderRadius: 6, letterSpacing: '0.04em', lineHeight: 1.4,
+              }}>BETA</span>
+            </span>
           </NavLink>
           <NavLink to="/dashboard">
             <BarChart3 /> Dashboard

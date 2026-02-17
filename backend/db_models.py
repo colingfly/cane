@@ -85,6 +85,13 @@ class Workspace(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Agent fields
+    agent_type = Column(String(50), nullable=True)              # "hr_rep", "admin_assistant", "academic_tutor", "custom", or None
+    system_prompt = Column(Text, nullable=True)                 # Agent system prompt
+    agent_icon = Column(String(10), default="")                 # Emoji icon
+    agent_description = Column(Text, default="")                # Short description
+    show_on_homepage = Column(Boolean, default=False)           # Show in search page workspace dropdown
+
     # Relationships
     tenant = relationship("Tenant", back_populates="workspaces")
     documents = relationship("Document", back_populates="workspace", cascade="all, delete-orphan")

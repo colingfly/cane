@@ -43,6 +43,7 @@ from auth import (
     get_current_user, require_owner, require_admin,
     hash_password, verify_password, create_token,
 )
+from agent_prompts import get_template, list_templates, auto_generate_prompt, AGENT_TEMPLATES
 from security import (
     login_limiter, validate_password, validate_file_content,
     sanitize_query, sanitize_form_field, validate_email,
@@ -53,6 +54,30 @@ from security import (
 # â”€â”€ Boot â”€â”€
 ensure_dirs()
 init_db()
+
+# Migrate: add agent columns to workspaces table if missing
+def _migrate_agent_columns():
+    from sqlalchemy import inspect, text
+    from database import engine
+    insp = inspect(engine)
+    cols = {c["name"] for c in insp.get_columns("workspaces")}
+    with engine.begin() as conn:
+        if "agent_type" not in cols:
+            conn.execute(text("ALTER TABLE workspaces ADD COLUMN agent_type VARCHAR(50)"))
+        if "system_prompt" not in cols:
+            conn.execute(text("ALTER TABLE workspaces ADD COLUMN system_prompt TEXT"))
+        if "agent_icon" not in cols:
+            conn.execute(text("ALTER TABLE workspaces ADD COLUMN agent_icon VARCHAR(10) DEFAULT ''"))
+        if "agent_description" not in cols:
+            conn.execute(text("ALTER TABLE workspaces ADD COLUMN agent_description TEXT DEFAULT ''"))
+        if "show_on_homepage" not in cols:
+            conn.execute(text("ALTER TABLE workspaces ADD COLUMN show_on_homepage BOOLEAN DEFAULT 0"))
+    print("  [DB] Agent columns migrated")
+
+try:
+    _migrate_agent_columns()
+except Exception as e:
+    print(f"  [DB] Migration skipped: {e}")
 
 # Auto-seed admin on first deploy
 from auto_seed import auto_seed
@@ -175,7 +200,11 @@ def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
             "slug": tenant.slug,
         },
         "workspaces": [
-            {"id": w.id, "name": w.name, "is_default": w.is_default}
+            {
+                "id": w.id, "name": w.name, "is_default": w.is_default,
+                "agent_type": w.agent_type, "agent_icon": w.agent_icon or "",
+                "show_on_homepage": w.show_on_homepage or False,
+            }
             for w in workspaces
         ],
     }
@@ -1212,7 +1241,17 @@ def ask(
 
     context = "\n\n\n".join(context_parts)
 
-    system_prompt = """You are a helpful assistant. Answer the question using ONLY the provided document excerpts.
+    # Load agent system prompt if workspace has one
+    agent_prompt = ""
+    if workspace_id:
+        ws = db.query(Workspace).filter(
+            Workspace.id == workspace_id,
+            Workspace.tenant_id == user.tenant_id,
+        ).first()
+        if ws and ws.system_prompt:
+            agent_prompt = ws.system_prompt
+
+    base_rules = """
 Rules:
 - Excerpts marked "HIGHLY RELEVANT" were identified by visual/slide analysis as directly related to the question. Pay special attention to these.
 - Some excerpts contain [Slide text] (OCR'd from slides — accurate terminology) and [Spoken] (audio transcript — may have spelling errors). Trust slide text for exact terms and names.
@@ -1221,6 +1260,11 @@ Rules:
 - Answer strictly based on the provided content.
 - Give a clear, concise explanation.
 - If the excerpts don't contain enough info, say what you can and note the gap."""
+
+    if agent_prompt:
+        system_prompt = agent_prompt + "\n\nAdditional retrieval rules:" + base_rules
+    else:
+        system_prompt = "You are a helpful assistant. Answer the question using ONLY the provided document excerpts." + base_rules
 
     user_prompt = f"Question: {q}\n\nDocument Excerpts:\n{context}\n\nProvide a clear answer based on the above."
 
@@ -1410,7 +1454,17 @@ def ask_stream(
 
     context = "\n\n\n".join(context_parts)
 
-    system_prompt = """You are a helpful assistant. Answer the question using ONLY the provided document excerpts.
+    # Load agent system prompt if workspace has one
+    agent_prompt = ""
+    if workspace_id:
+        ws = db.query(Workspace).filter(
+            Workspace.id == workspace_id,
+            Workspace.tenant_id == user.tenant_id,
+        ).first()
+        if ws and ws.system_prompt:
+            agent_prompt = ws.system_prompt
+
+    base_rules = """
 Rules:
 - Excerpts marked "HIGHLY RELEVANT" were identified by visual/slide analysis as directly related to the question. Pay special attention to these.
 - Some excerpts contain [Slide text] (OCR'd from slides) and [Spoken] (audio transcript). Trust slide text for exact terms.
@@ -1418,6 +1472,11 @@ Rules:
 - Answer strictly based on the provided content.
 - Give a clear, concise explanation.
 - If the excerpts don't contain enough info, say what you can and note the gap."""
+
+    if agent_prompt:
+        system_prompt = agent_prompt + "\n\nAdditional retrieval rules:" + base_rules
+    else:
+        system_prompt = "You are a helpful assistant. Answer the question using ONLY the provided document excerpts." + base_rules
 
     # Build messages with conversation history
     messages = get_conversation_history(session_id)
@@ -1589,6 +1648,248 @@ def stats(user: User = Depends(get_current_user), db: Session = Depends(get_db))
         ],
     }
 
+
+
+
+# ===============================================================
+#  AGENT ENDPOINTS (beta)
+# ===============================================================
+
+@app.get("/api/agents/templates")
+def get_agent_templates(user: User = Depends(get_current_user)):
+    """List available pre-built agent templates."""
+    return {"templates": list_templates()}
+
+
+@app.get("/api/agents")
+def list_agents(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List all agent workspaces for the current tenant."""
+    agents = db.query(Workspace).filter(
+        Workspace.tenant_id == user.tenant_id,
+        Workspace.agent_type.isnot(None),
+    ).order_by(Workspace.created_at.desc()).all()
+
+    result = []
+    for a in agents:
+        doc_count = db.query(Document).filter(Document.workspace_id == a.id).count()
+        result.append({
+            "id": a.id,
+            "name": a.name,
+            "agent_type": a.agent_type,
+            "agent_icon": a.agent_icon or "",
+            "agent_description": a.agent_description or "",
+            "system_prompt": a.system_prompt or "",
+            "show_on_homepage": getattr(a, "show_on_homepage", False) or False,
+            "document_count": doc_count,
+            "created_at": a.created_at.isoformat() if a.created_at else "",
+        })
+
+    return {"agents": result}
+
+
+@app.post("/api/agents")
+def create_agent(
+    agent_type: str = Form("custom"),
+    name: str = Form(""),
+    description: str = Form(""),
+    icon: str = Form(""),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create a new agent workspace from a template or custom."""
+    template = get_template(agent_type)
+    if template:
+        name = name or template["name"]
+        icon = icon or template.get("icon", "")
+        description = description or template.get("description", "")
+        system_prompt = template.get("system_prompt", "")
+    else:
+        agent_type = "custom"
+        icon = icon or "\U0001F916"
+        system_prompt = ""
+
+    if not name:
+        return JSONResponse({"error": "Agent name is required"}, status_code=400)
+
+    workspace = Workspace(
+        tenant_id=user.tenant_id,
+        name=name,
+        description=description,
+        agent_type=agent_type,
+        agent_icon=icon,
+        agent_description=description,
+        system_prompt=system_prompt,
+        show_on_homepage=False,
+        is_default=False,
+    )
+    db.add(workspace)
+    db.commit()
+    db.refresh(workspace)
+
+    return {
+        "id": workspace.id,
+        "name": workspace.name,
+        "agent_type": workspace.agent_type,
+        "agent_icon": workspace.agent_icon or "",
+        "agent_description": workspace.agent_description or "",
+        "system_prompt": workspace.system_prompt or "",
+        "show_on_homepage": getattr(workspace, "show_on_homepage", False) or False,
+    }
+
+
+@app.get("/api/agents/{agent_id}")
+def get_agent(
+    agent_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get a single agent's details."""
+    ws = db.query(Workspace).filter(
+        Workspace.id == agent_id,
+        Workspace.tenant_id == user.tenant_id,
+        Workspace.agent_type.isnot(None),
+    ).first()
+
+    if not ws:
+        return JSONResponse({"error": "Agent not found"}, status_code=404)
+
+    doc_count = db.query(Document).filter(Document.workspace_id == ws.id).count()
+
+    return {
+        "id": ws.id,
+        "name": ws.name,
+        "agent_type": ws.agent_type,
+        "agent_icon": ws.agent_icon or "",
+        "agent_description": ws.agent_description or "",
+        "system_prompt": ws.system_prompt or "",
+        "show_on_homepage": getattr(ws, "show_on_homepage", False) or False,
+        "document_count": doc_count,
+        "created_at": ws.created_at.isoformat() if ws.created_at else "",
+    }
+
+
+@app.put("/api/agents/{agent_id}")
+def update_agent(
+    agent_id: str,
+    name: str = Form(None),
+    system_prompt: str = Form(None),
+    agent_description: str = Form(None),
+    agent_icon: str = Form(None),
+    show_on_homepage: str = Form(None),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update agent settings."""
+    ws = db.query(Workspace).filter(
+        Workspace.id == agent_id,
+        Workspace.tenant_id == user.tenant_id,
+        Workspace.agent_type.isnot(None),
+    ).first()
+
+    if not ws:
+        return JSONResponse({"error": "Agent not found"}, status_code=404)
+
+    if name is not None:
+        ws.name = sanitize_form_field(name)
+    if system_prompt is not None:
+        ws.system_prompt = system_prompt
+    if agent_description is not None:
+        ws.agent_description = sanitize_form_field(agent_description)
+    if agent_icon is not None:
+        ws.agent_icon = agent_icon
+    if show_on_homepage is not None:
+        ws.show_on_homepage = show_on_homepage.lower() in ("true", "1", "yes")
+
+    db.commit()
+    db.refresh(ws)
+
+    return {
+        "id": ws.id,
+        "name": ws.name,
+        "agent_type": ws.agent_type,
+        "agent_icon": ws.agent_icon or "",
+        "agent_description": ws.agent_description or "",
+        "system_prompt": ws.system_prompt or "",
+        "show_on_homepage": getattr(ws, "show_on_homepage", False) or False,
+    }
+
+
+@app.delete("/api/agents/{agent_id}")
+def delete_agent(
+    agent_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete an agent and its workspace."""
+    ws = db.query(Workspace).filter(
+        Workspace.id == agent_id,
+        Workspace.tenant_id == user.tenant_id,
+        Workspace.agent_type.isnot(None),
+    ).first()
+
+    if not ws:
+        return JSONResponse({"error": "Agent not found"}, status_code=404)
+
+    db.delete(ws)
+    db.commit()
+    return {"status": "deleted"}
+
+
+@app.post("/api/agents/{agent_id}/generate-prompt")
+def generate_agent_prompt(
+    agent_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Auto-generate a system prompt from the agent's documents (beta)."""
+    ws = db.query(Workspace).filter(
+        Workspace.id == agent_id,
+        Workspace.tenant_id == user.tenant_id,
+        Workspace.agent_type.isnot(None),
+    ).first()
+
+    if not ws:
+        return JSONResponse({"error": "Agent not found"}, status_code=404)
+
+    try:
+        where = {"$and": [{"tenant_id": user.tenant_id}, {"workspace_id": agent_id}]}
+        chunks = text_col.get(where=where, include=["documents", "metadatas"])
+        docs = chunks.get("documents", [])
+        metas = chunks.get("metadatas", [])
+    except Exception:
+        docs, metas = [], []
+
+    if not docs:
+        return JSONResponse(
+            {"error": "Upload documents to this agent first, then generate a prompt."},
+            status_code=400,
+        )
+
+    file_previews = {}
+    for doc, meta in zip(docs, metas):
+        src = (meta or {}).get("source_file", "unknown")
+        if src not in file_previews:
+            display = (meta or {}).get("display_text", doc) or doc
+            file_previews[src] = {"filename": src, "preview": display[:2000]}
+
+    prompt = auto_generate_prompt(list(file_previews.values()))
+
+    if not prompt:
+        return JSONResponse(
+            {"error": "Failed to generate prompt. Try again or write one manually."},
+            status_code=500,
+        )
+
+    ws.system_prompt = prompt
+    db.commit()
+
+    return {
+        "system_prompt": prompt,
+        "documents_analyzed": len(file_previews),
+    }
 
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 #  ADMIN ENDPOINTS (your consulting dashboard)
