@@ -61,18 +61,26 @@ def _migrate_agent_columns():
     from database import engine
     insp = inspect(engine)
     cols = {c["name"] for c in insp.get_columns("workspaces")}
-    with engine.begin() as conn:
-        if "agent_type" not in cols:
-            conn.execute(text("ALTER TABLE workspaces ADD COLUMN agent_type VARCHAR(50)"))
-        if "system_prompt" not in cols:
-            conn.execute(text("ALTER TABLE workspaces ADD COLUMN system_prompt TEXT"))
-        if "agent_icon" not in cols:
-            conn.execute(text("ALTER TABLE workspaces ADD COLUMN agent_icon VARCHAR(10) DEFAULT ''"))
-        if "agent_description" not in cols:
-            conn.execute(text("ALTER TABLE workspaces ADD COLUMN agent_description TEXT DEFAULT ''"))
-        if "show_on_homepage" not in cols:
-            conn.execute(text("ALTER TABLE workspaces ADD COLUMN show_on_homepage BOOLEAN DEFAULT 0"))
-    print("  [DB] Agent columns migrated")
+    migrations = {
+        "agent_type": "ALTER TABLE workspaces ADD COLUMN agent_type VARCHAR(50) NULL",
+        "system_prompt": "ALTER TABLE workspaces ADD COLUMN system_prompt TEXT NULL",
+        "agent_icon": "ALTER TABLE workspaces ADD COLUMN agent_icon VARCHAR(10) NULL",
+        "agent_description": "ALTER TABLE workspaces ADD COLUMN agent_description TEXT NULL",
+        "show_on_homepage": "ALTER TABLE workspaces ADD COLUMN show_on_homepage TINYINT(1) DEFAULT 0",
+    }
+    added = []
+    for col_name, sql in migrations.items():
+        if col_name not in cols:
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text(sql))
+                added.append(col_name)
+            except Exception as e:
+                print(f"  [DB] Failed to add {col_name}: {e}")
+    if added:
+        print(f"  [DB] Agent columns added: {', '.join(added)}")
+    else:
+        print("  [DB] Agent columns already present")
 
 try:
     _migrate_agent_columns()
@@ -202,8 +210,9 @@ def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
         "workspaces": [
             {
                 "id": w.id, "name": w.name, "is_default": w.is_default,
-                "agent_type": w.agent_type, "agent_icon": w.agent_icon or "",
-                "show_on_homepage": w.show_on_homepage or False,
+                "agent_type": getattr(w, "agent_type", None),
+                "agent_icon": getattr(w, "agent_icon", "") or "",
+                "show_on_homepage": getattr(w, "show_on_homepage", False) or False,
             }
             for w in workspaces
         ],
