@@ -4,7 +4,7 @@ import { getDocuments, uploadDocument, deleteDocument, getWorkspaces } from '../
 import { Upload, Trash2, FileText, AlertCircle, ChevronDown } from 'lucide-react'
 
 export default function Documents() {
-  const { workspaces, isOwner, updateWorkspaces } = useAuth()
+  const { workspaces, updateWorkspaces } = useAuth()
   const [documents, setDocuments] = useState([])
   const [activeWs, setActiveWs] = useState(null)
   const [uploading, setUploading] = useState(false)
@@ -324,7 +324,7 @@ export default function Documents() {
                 <th>Workspace</th>
                 <th>Status</th>
                 <th>Uploaded</th>
-                {isOwner && <th style={{ width: 60 }}></th>}
+                <th style={{ width: 60 }}></th>
               </tr>
             </thead>
             <tbody>
@@ -351,17 +351,15 @@ export default function Documents() {
                     <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                       {new Date(doc.created_at).toLocaleDateString()}
                     </td>
-                    {isOwner && (
-                      <td>
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          onClick={() => handleDelete(doc.id, doc.filename)}
-                          title="Delete"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </td>
-                    )}
+                    <td>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => handleDelete(doc.id, doc.filename)}
+                        title="Delete"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
                   </tr>
                 )
               })}

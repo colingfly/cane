@@ -673,9 +673,12 @@ def _search_visual(q, n, where):
         _search_visual._proc = CLIPProcessor.from_pretrained(CLIP_MODEL)
         _search_visual._device = device
 
-    inputs = _search_visual._proc(text=[q], return_tensors="pt").to(_search_visual._device)
+    inputs = _search_visual._proc(text=[q], return_tensors="pt")
+    input_ids = inputs["input_ids"].to(_search_visual._device)
+    attention_mask = inputs["attention_mask"].to(_search_visual._device)
     with torch.no_grad():
-        emb = _search_visual._model.get_text_features(**inputs)
+        text_out = _search_visual._model.text_model(input_ids=input_ids, attention_mask=attention_mask)
+        emb = _search_visual._model.text_projection(text_out.pooler_output)
         emb = emb / emb.norm(dim=-1, keepdim=True)
 
     kwargs = {

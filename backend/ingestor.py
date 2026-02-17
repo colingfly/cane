@@ -226,9 +226,11 @@ class Ingestor:
         for img in result.images:
             try:
                 pil = PILImage.open(img.path).convert("RGB")
-                inputs = self._clip_processor(images=pil, return_tensors="pt").to(self._device)
+                inputs = self._clip_processor(images=pil, return_tensors="pt")
+                pixel_values = inputs["pixel_values"].to(self._device)
                 with torch.no_grad():
-                    emb = self._clip_model.get_image_features(**inputs)
+                    vision_out = self._clip_model.vision_model(pixel_values=pixel_values)
+                    emb = self._clip_model.visual_projection(vision_out.pooler_output)
                     emb = emb / emb.norm(dim=-1, keepdim=True)
 
                 ids.append(img.image_id)
