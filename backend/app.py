@@ -713,6 +713,40 @@ def _search_visual(q, n, where):
     return {"results": results, "mode": "visual", "total": image_col.count()}
 
 
+def _frame_path_to_url(frame_path: str) -> str:
+    """Convert absolute frame path to API URL."""
+    if not frame_path:
+        return ""
+    # /data/cane/extracted/slug/images/frame_0001.jpg → slug/images/frame_0001.jpg
+    extracted = str(EXTRACTED_DIR)
+    if frame_path.startswith(extracted):
+        relative = frame_path[len(extracted):].lstrip("/")
+        return f"/api/images/{relative}"
+    return ""
+
+
+@app.get("/api/images/{file_path:path}")
+def serve_image(
+    file_path: str,
+    user: User = Depends(get_current_user),
+):
+    """Serve extracted images (keyframes, PDF images) with auth."""
+    # Sanitize: prevent path traversal
+    from pathlib import Path
+    safe = Path(str(EXTRACTED_DIR)) / file_path
+    try:
+        safe = safe.resolve()
+        if not str(safe).startswith(str(Path(str(EXTRACTED_DIR)).resolve())):
+            raise HTTPException(403, "Access denied")
+    except Exception:
+        raise HTTPException(403, "Invalid path")
+
+    if not safe.is_file():
+        raise HTTPException(404, "Image not found")
+
+    return FileResponse(str(safe), media_type="image/jpeg")
+
+
 def _search_fusion(q, n, where):
     text_r = _search_text(q, n * 2, where)
     visual_r = _search_visual(q, n * 2, where)
@@ -855,6 +889,22 @@ Rules:
     try:
         summary = _call_claude(user_prompt, system=system_prompt)
 
+        # Also fetch relevant images to show alongside the answer
+        images = []
+        try:
+            visual_results = _search_visual(q, 4, where)
+            for vr in visual_results.get("results", []):
+                if vr.get("frame_url") and vr.get("score", 0) > 0.15:
+                    images.append({
+                        "url": vr["frame_url"],
+                        "source_file": vr.get("source_file", ""),
+                        "timestamp_sec": vr.get("timestamp_sec", 0),
+                        "page": vr.get("page", 0),
+                        "score": vr.get("score", 0),
+                    })
+        except Exception:
+            pass  # Don't fail the whole response if image search breaks
+
         # Log as search
         log = SearchLog(
             tenant_id=user.tenant_id, user_id=user.id, query=q, mode="ask",
@@ -869,6 +919,7 @@ Rules:
             "model": CLAUDE_MODEL,
             "sources": sources,
             "chunks_used": len(context_parts),
+            "images": images,
         }
     except Exception as e:
         return {"status": "error", "error": f"LLM call failed: {str(e)}"}
