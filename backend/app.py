@@ -870,60 +870,65 @@ def ask(
         return {"status": "no_llm", "error": "Anthropic API key not configured. Set ANTHROPIC_API_KEY."}
 
     where = _build_tenant_where(user.tenant_id, workspace_id)
-    # Use fusion search (text + visual) for better recall, then extract text chunks
-    search_results = _search_fusion(q, n * 2, where)
-    results = search_results.get("results", [])
-
-    if not results:
-        return {"status": "no_results", "error": "No results found for this query."}
 
     context_parts, sources = [], []
+    seen_texts = set()
 
-    # Collect timestamps from visual matches to look up corresponding text
-    visual_timestamps = []
-    for r in results[:n * 2]:
-        text = r.get("text", "").strip()
-        if text.startswith("[Visual match"):
-            ts = r.get("start_sec", 0) or r.get("timestamp_sec", 0)
-            src = r.get("source_file", "")
-            if ts > 0 and src:
-                visual_timestamps.append((src, ts))
+    def _add_context(text, source_label):
+        text = _clean_transcript(text.strip())
+        if not text or len(text) < 20:
+            return
+        sig = text[:100]
+        if sig in seen_texts:
+            return
+        seen_texts.add(sig)
+        context_parts.append(text)
+        sources.append(source_label)
 
-    # Look up text chunks near visual match timestamps
-    if visual_timestamps and text_col.count() > 0:
-        try:
-            all_chunks = text_col.get(
-                where=where if where else None,
-                include=["documents", "metadatas"],
-            )
-            if all_chunks and all_chunks.get("metadatas"):
-                for src_file, ts in visual_timestamps:
-                    for doc, meta in zip(all_chunks["documents"], all_chunks["metadatas"]):
-                        if not meta or meta.get("source_file") != src_file:
-                            continue
-                        start = meta.get("start_sec", 0) or 0
-                        end = meta.get("end_sec", 0) or 0
-                        # Check if visual timestamp falls within or near this chunk
-                        if start > 0 and end > 0 and start - 10 <= ts <= end + 10:
-                            display = meta.get("display_text", doc)
-                            if display and display not in context_parts:
-                                context_parts.append(_clean_transcript(display))
-                                sources.append(src_file)
-        except Exception:
-            pass  # Don't fail if lookup breaks
+    # 1) Direct text search
+    text_results = _search_text(q, n, where)
+    for r in text_results.get("results", []):
+        text = r.get("text", "")
+        src = r.get("source_file", "")
+        page = r.get("page", 0)
+        _add_context(text, f"{src} p.{page}" if page else src)
 
-    # Also add direct text matches from fusion
-    for r in results[:n]:
-        text = r.get("text", "").strip()
-        if not text or text.startswith("[Visual match"):
-            continue
-        text = _clean_transcript(text)
-        if text not in context_parts:
-            context_parts.append(text)
-            src = r.get("source_file", "")
-            page = r.get("page", 0)
-            source_label = f"{src} p.{page}" if page else src
-            sources.append(source_label)
+    # 2) Visual search → look up transcript text near matched timestamps
+    try:
+        visual_results = _search_visual(q, 6, where)
+        visual_hits = visual_results.get("results", [])
+        print(f"  [Ask] Visual hits: {len(visual_hits)}")
+        if visual_hits and text_col.count() > 0:
+            # Fetch all text chunks to match by timestamp
+            get_kwargs = {"include": ["documents", "metadatas"]}
+            if where:
+                get_kwargs["where"] = where
+            all_chunks = text_col.get(**get_kwargs)
+            docs = all_chunks.get("documents", [])
+            metas = all_chunks.get("metadatas", [])
+            print(f"  [Ask] Total text chunks: {len(docs)}")
+
+            for vr in visual_hits:
+                ts = vr.get("timestamp_sec", 0)
+                v_src = vr.get("source_file", "")
+                if ts <= 0 or not v_src:
+                    continue
+                print(f"  [Ask] Looking for text near ts={ts} in {v_src}")
+                for doc, meta in zip(docs, metas):
+                    if not meta or meta.get("source_file") != v_src:
+                        continue
+                    s = float(meta.get("start_sec", 0) or 0)
+                    e = float(meta.get("end_sec", 0) or 0)
+                    print(f"  [Ask]   chunk: start={s} end={e}")
+                    if s <= 0 and e <= 0:
+                        continue
+                    if s - 15 <= ts <= e + 15:
+                        display = meta.get("display_text", doc) or doc
+                        _add_context(display, v_src)
+                        print(f"  [Ask]   MATCH! Added {len(display)} chars")
+    except Exception as ex:
+        print(f"  [Ask] Visual text lookup error: {ex}")
+        import traceback; traceback.print_exc()
 
     if not context_parts:
         return {"status": "no_results", "error": "No text content to summarize."}
