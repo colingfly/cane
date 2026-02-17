@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useSearchParams } from 'react-router-dom'
-import { askStream, getToken, resetSession } from '../api/client'
+import { askStream, getToken, resetSession, getAgents } from '../api/client'
 import { Search as SearchIcon, X, RotateCcw } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 
@@ -16,6 +16,12 @@ export default function SearchPage() {
   const [error, setError] = useState(null)
   const [lightbox, setLightbox] = useState(null)
   const [history, setHistory] = useState([])
+  const [agents, setAgents] = useState([])
+
+  // Load agents for dropdown
+  useEffect(() => {
+    getAgents().then(res => setAgents(res.agents || [])).catch(() => {})
+  }, [])
 
   // Handle workspace param from agent "Ask this agent" button
   useEffect(() => {
@@ -26,8 +32,8 @@ export default function SearchPage() {
     }
   }, [])
 
-  // Build filtered workspace list: regular workspaces + agents with show_on_homepage
-  const visibleWorkspaces = workspaces.filter(w => !w.agent_type || w.show_on_homepage)
+  // Regular workspaces (non-agent)
+  const regularWorkspaces = workspaces.filter(w => !w.agent_type)
 
   const authImg = (url) => url ? `${url}${url.includes('?') ? '&' : '?'}token=${getToken()}` : ''
 
@@ -70,6 +76,8 @@ export default function SearchPage() {
     setQuery('')
   }
 
+  const showDropdown = regularWorkspaces.length > 1 || agents.length > 0
+
   return (
     <div className="fade-in">
       <div style={{ textAlign: 'center', paddingTop: 40, marginBottom: 40 }}>
@@ -97,7 +105,7 @@ export default function SearchPage() {
         </form>
 
         <div className="search-modes">
-          {visibleWorkspaces.length > 1 && (
+          {showDropdown && (
             <select
               className="search-mode-btn"
               value={workspaceId}
@@ -105,11 +113,18 @@ export default function SearchPage() {
               style={{ cursor: 'pointer' }}
             >
               <option value="">All workspaces</option>
-              {visibleWorkspaces.map(w => (
-                <option key={w.id} value={w.id}>
-                  {w.agent_icon ? `${w.agent_icon} ` : ''}{w.name}
-                </option>
+              {regularWorkspaces.map(w => (
+                <option key={w.id} value={w.id}>{w.name}</option>
               ))}
+              {agents.length > 0 && (
+                <optgroup label="Agents">
+                  {agents.map(a => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           )}
           {history.length > 0 && (

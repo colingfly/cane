@@ -1,7 +1,30 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Trash2 } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { getAgents, getAgentTemplates, createAgent, deleteAgent } from '../api/client'
+
+const ICON_COLORS = {
+  HR: { bg: '#c8963e' },
+  AA: { bg: '#3d8c5c' },
+  AT: { bg: '#5b7bb4' },
+}
+const DEFAULT_COLOR = { bg: '#8a7a62' }
+
+function AgentIcon({ icon, size = 40 }) {
+  const label = (icon || '??').slice(0, 2).toUpperCase()
+  const colors = ICON_COLORS[label] || DEFAULT_COLOR
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: size * 0.25,
+      background: colors.bg, color: '#fff',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: 'var(--font-display)', fontWeight: 700,
+      fontSize: size * 0.36, letterSpacing: '0.02em', flexShrink: 0,
+    }}>
+      {label}
+    </div>
+  )
+}
 
 export default function AgentBuilder() {
   const [agents, setAgents] = useState([])
@@ -104,7 +127,9 @@ export default function AgentBuilder() {
             onMouseOver={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
             onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'translateY(0)' }}
           >
-            <div style={{ fontSize: '2rem', marginBottom: 12 }}>{t.icon}</div>
+            <div style={{ marginBottom: 14 }}>
+              <AgentIcon icon={t.icon} size={44} />
+            </div>
             <div style={{ fontWeight: 600, fontSize: '0.9375rem', marginBottom: 6 }}>{t.name}</div>
             <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
               {t.description}
@@ -123,8 +148,14 @@ export default function AgentBuilder() {
           onMouseOver={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
           onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'translateY(0)' }}
         >
-          <div style={{ marginBottom: 12, opacity: 0.5 }}>
-            <Plus size={32} />
+          <div style={{ marginBottom: 14 }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: 11,
+              border: '2px dashed var(--cane-400)', color: 'var(--cane-400)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Plus size={20} />
+            </div>
           </div>
           <div style={{ fontWeight: 600, fontSize: '0.9375rem', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
             Create Your Own
@@ -157,7 +188,7 @@ export default function AgentBuilder() {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
-                    <span style={{ fontSize: '1.5rem' }}>{a.agent_icon || '🤖'}</span>
+                    <AgentIcon icon={a.agent_icon} size={36} />
                     <div>
                       <div style={{ fontWeight: 600 }}>{a.name}</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
@@ -174,22 +205,15 @@ export default function AgentBuilder() {
                     <Trash2 size={14} />
                   </button>
                 </div>
-                <div style={{ display: 'flex', gap: 16 }}>
+                <div style={{ display: 'flex', gap: 20, marginTop: 4 }}>
                   <div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 700, fontFamily: 'var(--font-display)' }}>{a.document_count}</div>
+                    <div style={{ fontSize: '1.125rem', fontWeight: 700, fontFamily: 'var(--font-display)' }}>{a.document_count}</div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Documents</div>
                   </div>
-                  <div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 700, fontFamily: 'var(--font-display)' }}>
-                      {a.system_prompt ? '✓' : '—'}
+                  <div style={{ marginTop: 4 }}>
+                    <div style={{ fontSize: '0.7rem', color: a.system_prompt ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>
+                      {a.system_prompt ? 'Prompt configured' : 'No prompt yet'}
                     </div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Prompt</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 700, fontFamily: 'var(--font-display)' }}>
-                      {a.show_on_homepage ? '✓' : '—'}
-                    </div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>On Search</div>
                   </div>
                 </div>
               </div>
@@ -240,3 +264,5 @@ export default function AgentBuilder() {
     </div>
   )
 }
+
+export { AgentIcon }

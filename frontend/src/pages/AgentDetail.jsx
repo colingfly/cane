@@ -6,6 +6,29 @@ import {
   getDocuments, uploadDocument, deleteDocument, getDocumentStatus,
 } from '../api/client'
 
+const ICON_COLORS = {
+  HR: { bg: '#c8963e' },
+  AA: { bg: '#3d8c5c' },
+  AT: { bg: '#5b7bb4' },
+}
+const DEFAULT_COLOR = { bg: '#8a7a62' }
+
+function AgentIcon({ icon, size = 40 }) {
+  const label = (icon || '??').slice(0, 2).toUpperCase()
+  const colors = ICON_COLORS[label] || DEFAULT_COLOR
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: size * 0.25,
+      background: colors.bg, color: '#fff',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: 'var(--font-display)', fontWeight: 700,
+      fontSize: size * 0.36, letterSpacing: '0.02em', flexShrink: 0,
+    }}>
+      {label}
+    </div>
+  )
+}
+
 export default function AgentDetail() {
   const { agentId } = useParams()
   const navigate = useNavigate()
@@ -87,7 +110,7 @@ export default function AgentDetail() {
   const handleSavePrompt = async () => {
     setSaving(true)
     try {
-      const res = await updateAgent(agentId, { system_prompt: editPrompt })
+      await updateAgent(agentId, { system_prompt: editPrompt })
       setAgent(prev => ({ ...prev, system_prompt: editPrompt }))
       setPromptDirty(false)
     } catch (e) {
@@ -144,7 +167,7 @@ export default function AgentDetail() {
           <ArrowLeft size={14} /> Back to Agent Builder
         </Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: '2rem' }}>{agent.agent_icon || '🤖'}</span>
+          <AgentIcon icon={agent.agent_icon} size={48} />
           <div>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 700, fontFamily: 'var(--font-display)', display: 'flex', alignItems: 'center', gap: 8 }}>
               {agent.name}
@@ -162,7 +185,7 @@ export default function AgentDetail() {
         </div>
       </div>
 
-      {/* Search toggle + link */}
+      {/* Search toggle */}
       <div className="card" style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <div style={{ fontWeight: 600, marginBottom: 2 }}>Include on Search page</div>
@@ -182,7 +205,7 @@ export default function AgentDetail() {
         </button>
       </div>
 
-      {/* Ask this agent button */}
+      {/* Ask this agent */}
       {readyDocs.length > 0 && agent.system_prompt && (
         <div style={{ marginBottom: 24 }}>
           <button
@@ -199,7 +222,6 @@ export default function AgentDetail() {
       <div className="card" style={{ marginBottom: 24 }}>
         <h3 style={{ marginBottom: 16 }}>Documents</h3>
 
-        {/* Upload zone */}
         <div
           style={{
             border: `2px dashed ${dragover ? 'var(--accent)' : 'var(--border)'}`,
@@ -232,7 +254,6 @@ export default function AgentDetail() {
           />
         </div>
 
-        {/* Processing */}
         {processingDocs.length > 0 && (
           <div style={{ marginBottom: 12 }}>
             {processingDocs.map(d => (
@@ -247,7 +268,6 @@ export default function AgentDetail() {
           </div>
         )}
 
-        {/* Document list */}
         {readyDocs.length > 0 ? (
           <div>
             {readyDocs.map((d, i) => (

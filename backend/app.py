@@ -1717,7 +1717,7 @@ def create_agent(
         system_prompt = template.get("system_prompt", "")
     else:
         agent_type = "custom"
-        icon = icon or "\U0001F916"
+        icon = icon or "CA"
         system_prompt = ""
 
     if not name:

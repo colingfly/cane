@@ -13,7 +13,7 @@ from config import ANTHROPIC_API_KEY
 AGENT_TEMPLATES = {
     "hr_rep": {
         "name": "HR Rep",
-        "icon": "👔",
+        "icon": "HR",
         "description": "Answer employee questions about policies, benefits, onboarding, and compliance.",
         "system_prompt": """You are an HR Representative assistant. You answer employee questions using ONLY the provided company documents.
 
@@ -30,7 +30,7 @@ Rules:
     },
     "admin_assistant": {
         "name": "Administrative Assistant",
-        "icon": "📋",
+        "icon": "AA",
         "description": "Help with procedures, scheduling, forms, and organizational knowledge.",
         "system_prompt": """You are an Administrative Assistant. You help staff navigate internal procedures, forms, and organizational knowledge using ONLY the provided documents.
 
@@ -46,7 +46,7 @@ Rules:
     },
     "academic_tutor": {
         "name": "Academic Tutor",
-        "icon": "🎓",
+        "icon": "AT",
         "description": "Explain concepts, help with coursework, and reference lecture materials.",
         "system_prompt": """You are an Academic Tutor. You help students understand course material using ONLY the provided lecture notes, slides, and materials.
 
