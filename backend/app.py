@@ -977,6 +977,15 @@ def ask(
         context_parts.append("=== ADDITIONAL DOCUMENT EXCERPTS ===\n\n" + "\n\n---\n\n".join(text_context))
         sources.extend(text_sources)
 
+    # Deduplicate sources while preserving order
+    seen_sources = set()
+    unique_sources = []
+    for s in sources:
+        if s not in seen_sources:
+            seen_sources.add(s)
+            unique_sources.append(s)
+    sources = unique_sources
+
     if not visual_context and not text_context:
         return {"status": "no_results", "error": "No text content to summarize."}
 
