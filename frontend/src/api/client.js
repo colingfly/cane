@@ -96,6 +96,10 @@ export async function deleteDocument(documentId) {
   return request(`/documents/${documentId}`, { method: 'DELETE' })
 }
 
+export async function getDocumentStatus(documentId) {
+  return request(`/documents/${documentId}/status`)
+}
+
 // -- Search --
 export async function search(query, mode = 'text', n = 10, workspaceId = '') {
   const params = new URLSearchParams({ q: query, mode, n, workspace_id: workspaceId })

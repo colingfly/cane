@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { getDocuments, uploadDocument, deleteDocument, getWorkspaces } from '../api/client'
+import { getDocuments, uploadDocument, deleteDocument, getWorkspaces, getDocumentStatus } from '../api/client'
 import { Upload, Trash2, FileText, AlertCircle, ChevronDown } from 'lucide-react'
 
 export default function Documents() {
@@ -101,22 +101,66 @@ export default function Documents() {
     const wsName = workspaces.find(w => w.id === wsId)?.name || ''
 
     let successCount = 0
+    const pendingDocs = []
+
     for (const file of fileArray) {
       try {
         setUploadStatus(`Uploading ${file.name} to ${wsName}...`)
-        await uploadDocument(file, wsId)
+        const res = await uploadDocument(file, wsId)
         successCount++
+        if (res.document_id && res.status === 'processing') {
+          pendingDocs.push({ id: res.document_id, name: file.name })
+        }
       } catch (err) {
         setUploadStatus(`Error with ${file.name}: ${err.message}`)
       }
     }
 
-    setUploading(false)
     if (successCount > 0) {
-      setUploadStatus(`${successCount} file${successCount > 1 ? 's' : ''} uploaded to ${wsName}`)
       loadDocs()
+
+      // Poll for processing completion
+      if (pendingDocs.length > 0) {
+        setUploadStatus(`Processing ${pendingDocs.length} file${pendingDocs.length > 1 ? 's' : ''}...`)
+        await pollForCompletion(pendingDocs)
+      }
+
       const wsData = await getWorkspaces()
       updateWorkspaces(wsData.workspaces || [])
+    }
+    setUploading(false)
+  }
+
+  async function pollForCompletion(pendingDocs) {
+    const remaining = new Set(pendingDocs.map(d => d.id))
+    const names = Object.fromEntries(pendingDocs.map(d => [d.id, d.name]))
+    const maxAttempts = 120  // 10 minutes max (5s intervals)
+    let attempts = 0
+
+    while (remaining.size > 0 && attempts < maxAttempts) {
+      await new Promise(r => setTimeout(r, 5000))  // Poll every 5s
+      attempts++
+
+      for (const docId of [...remaining]) {
+        try {
+          const status = await getDocumentStatus(docId)
+          if (status.status === 'ready') {
+            remaining.delete(docId)
+            setUploadStatus(`✓ ${names[docId]} ready (${status.chunks} chunks)${remaining.size > 0 ? ` — ${remaining.size} still processing...` : ''}`)
+            loadDocs()
+          } else if (status.status === 'error') {
+            remaining.delete(docId)
+            setUploadStatus(`✗ ${names[docId]}: ${status.error || 'Processing failed'}`)
+            loadDocs()
+          }
+        } catch {
+          // Polling error, keep trying
+        }
+      }
+    }
+
+    if (remaining.size > 0) {
+      setUploadStatus(`${remaining.size} file(s) still processing. Check back shortly.`)
     }
   }
 

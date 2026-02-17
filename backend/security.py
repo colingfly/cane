@@ -124,8 +124,8 @@ MAGIC_BYTES = {
     ],
 }
 
-# Maximum file size: 50MB
-MAX_FILE_SIZE = 50 * 1024 * 1024
+# Maximum file size: 200MB (videos can be large)
+MAX_FILE_SIZE = 200 * 1024 * 1024
 
 
 def validate_file_content(content: bytes, claimed_type: str) -> Optional[str]:

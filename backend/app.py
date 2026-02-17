@@ -22,7 +22,7 @@ _root = str(Path(__file__).resolve().parent)
 if _root not in sys.path:
     sys.path.insert(0, _root)
 
-from fastapi import FastAPI, Query, UploadFile, File, Form, HTTPException, Depends, Request
+from fastapi import FastAPI, Query, UploadFile, File, Form, HTTPException, Depends, Request, BackgroundTasks
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -319,14 +319,15 @@ def list_documents(
     }
 
 
-@app.post("/api/documents/upload")
+@app.post("/api/documents/upload", status_code=202)
 async def upload_and_ingest(
     file: UploadFile = File(...),
     workspace_id: str = Form(...),
+    background_tasks: BackgroundTasks = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Upload a file, ingest it, and index chunks scoped to the tenant."""
+    """Upload a file and start async ingestion. Returns 202 immediately."""
     # Validate workspace belongs to tenant
     ws = db.query(Workspace).filter(
         Workspace.id == workspace_id,
@@ -356,7 +357,7 @@ async def upload_and_ingest(
     if content_err:
         raise HTTPException(400, content_err)
 
-    # Sanitize filename â€” strip path components, limit length
+    # Sanitize filename
     safe_filename = Path(file.filename).name[:200]
 
     # Save file to tenant-specific upload dir
@@ -380,20 +381,62 @@ async def upload_and_ingest(
     db.commit()
     db.refresh(doc)
 
-    # Run extraction + indexing
+    # Capture values for background task (can't use request-scoped db session)
+    doc_id = doc.id
+    tenant_id = user.tenant_id
+    tenant_obj = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+    tenant_name = tenant_obj.name if tenant_obj else ""
+    ws_name = ws.name
+    filepath = str(dest)
+
+    # Kick off ingestion in background — returns 202 immediately
+    background_tasks.add_task(
+        _run_ingestion_background,
+        doc_id=doc_id,
+        filepath=filepath,
+        tenant_id=tenant_id,
+        workspace_id=workspace_id,
+        tenant_name=tenant_name,
+        workspace_name=ws_name,
+    )
+
+    return {
+        "document_id": doc.id,
+        "status": "processing",
+        "filename": doc.filename,
+        "message": "Upload received. Ingestion running in background.",
+    }
+
+
+def _run_ingestion_background(
+    doc_id: str,
+    filepath: str,
+    tenant_id: str,
+    workspace_id: str,
+    tenant_name: str,
+    workspace_name: str,
+):
+    """Background task: run extraction + indexing with its own DB session."""
+    from database import SessionLocal
+    db = SessionLocal()
     try:
+        doc = db.query(Document).filter(Document.id == doc_id).first()
+        if not doc:
+            print(f"  [BG] Document {doc_id} not found, aborting")
+            return
+
+        print(f"  [BG] Starting ingestion for {doc.filename}...")
+
         from ingestor import Ingestor
         ing = Ingestor()
 
-        tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
-
         result = ing.ingest(
-            filepath=str(dest),
-            tenant_id=user.tenant_id,
+            filepath=filepath,
+            tenant_id=tenant_id,
             workspace_id=workspace_id,
-            document_id=doc.id,
-            company_name=tenant.name if tenant else "",
-            workspace_name=ws.name,
+            document_id=doc_id,
+            company_name=tenant_name,
+            workspace_name=workspace_name,
             force=True,
         )
 
@@ -402,26 +445,52 @@ async def upload_and_ingest(
             doc.chunk_count = len(result.chunks)
             doc.image_count = len(result.images)
             doc.processed_at = datetime.utcnow()
+            print(f"  [BG] Done: {doc.filename} -> {doc.chunk_count} chunks, {doc.image_count} images")
         else:
             doc.status = "error"
             doc.error_message = result.error
+            print(f"  [BG] Error: {doc.filename} -> {result.error}")
 
         db.commit()
-
-        return {
-            "document_id": doc.id,
-            "status": doc.status,
-            "filename": doc.filename,
-            "chunks": doc.chunk_count,
-            "images": doc.image_count,
-            "error": doc.error_message,
-        }
 
     except Exception as e:
-        doc.status = "error"
-        doc.error_message = str(e)
-        db.commit()
-        raise HTTPException(500, f"Ingestion failed: {str(e)}")
+        print(f"  [BG] Ingestion failed for {doc_id}: {e}")
+        traceback.print_exc()
+        try:
+            doc = db.query(Document).filter(Document.id == doc_id).first()
+            if doc:
+                doc.status = "error"
+                doc.error_message = str(e)[:500]
+                db.commit()
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
+@app.get("/api/documents/{document_id}/status")
+def document_status(
+    document_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Poll document processing status."""
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.tenant_id == user.tenant_id,
+    ).first()
+    if not doc:
+        raise HTTPException(404, "Document not found")
+
+    return {
+        "document_id": doc.id,
+        "status": doc.status,
+        "filename": doc.filename,
+        "chunks": doc.chunk_count,
+        "images": doc.image_count,
+        "error": doc.error_message,
+        "processed_at": doc.processed_at.isoformat() if doc.processed_at else None,
+    }
 
 
 @app.delete("/api/documents/{document_id}")
@@ -899,39 +968,50 @@ def ask(
         visual_hits = visual_results.get("results", [])
         print(f"  [Ask] Visual hits: {len(visual_hits)}")
         if visual_hits and text_col.count() > 0:
-            get_kwargs = {"include": ["documents", "metadatas"]}
-            if where:
-                get_kwargs["where"] = where
-            all_chunks = text_col.get(**get_kwargs)
-            docs = all_chunks.get("documents", [])
-            metas = all_chunks.get("metadatas", [])
-            print(f"  [Ask] Total text chunks for visual matching: {len(docs)}")
-
+            # Group visual hits by source_file to do targeted fetches
+            source_files = set()
             for vr in visual_hits:
-                ts = vr.get("timestamp_sec", 0)
-                v_page = vr.get("page", 0)
                 v_src = vr.get("source_file", "")
-                if not v_src:
+                if v_src:
+                    source_files.add(v_src)
+
+            # Fetch chunks only for matched source files (not ALL chunks)
+            for src_file in source_files:
+                src_where = {"$and": [{"tenant_id": user.tenant_id}, {"source_file": src_file}]}
+                if workspace_id:
+                    src_where = {"$and": [{"tenant_id": user.tenant_id}, {"workspace_id": workspace_id}, {"source_file": src_file}]}
+                try:
+                    src_chunks = text_col.get(where=src_where, include=["documents", "metadatas"])
+                    src_docs = src_chunks.get("documents", [])
+                    src_metas = src_chunks.get("metadatas", [])
+                except Exception:
                     continue
-                for doc, meta in zip(docs, metas):
-                    if not meta or meta.get("source_file") != v_src:
+
+                # Match visual hits for this source file
+                for vr in visual_hits:
+                    if vr.get("source_file", "") != src_file:
                         continue
-                    # For videos: match by timestamp window
-                    s = float(meta.get("start_sec", 0) or 0)
-                    e = float(meta.get("end_sec", 0) or 0)
-                    if ts > 0 and s > 0 and s - 15 <= ts <= e + 15:
-                        display = meta.get("display_text", doc) or doc
-                        # Include OCR slide text if available (correct terminology from slides)
-                        ocr_text = meta.get("ocr_slide_text", "")
-                        if ocr_text:
-                            display = f"[Slide text]: {ocr_text}\n\n[Spoken]: {display}"
-                        _add_to(visual_context, visual_sources, display, v_src)
-                        continue
-                    # For PDFs: match by page
-                    chunk_page = int(meta.get("page", 0) or 0)
-                    if v_page > 0 and chunk_page == v_page:
-                        display = meta.get("display_text", doc) or doc
-                        _add_to(visual_context, visual_sources, display, v_src)
+                    ts = vr.get("timestamp_sec", 0)
+                    v_page = vr.get("page", 0)
+
+                    for doc, meta in zip(src_docs, src_metas):
+                        if not meta:
+                            continue
+                        # For videos: match by timestamp window
+                        s = float(meta.get("start_sec", 0) or 0)
+                        e = float(meta.get("end_sec", 0) or 0)
+                        if ts > 0 and s > 0 and s - 15 <= ts <= e + 15:
+                            display = meta.get("display_text", doc) or doc
+                            ocr_text = meta.get("ocr_slide_text", "")
+                            if ocr_text:
+                                display = f"[Slide text]: {ocr_text}\n\n[Spoken]: {display}"
+                            _add_to(visual_context, visual_sources, display, src_file)
+                            continue
+                        # For PDFs: match by page
+                        chunk_page = int(meta.get("page", 0) or 0)
+                        if v_page > 0 and chunk_page == v_page:
+                            display = meta.get("display_text", doc) or doc
+                            _add_to(visual_context, visual_sources, display, src_file)
     except Exception as ex:
         print(f"  [Ask] Visual text lookup error: {ex}")
         import traceback; traceback.print_exc()
@@ -944,18 +1024,19 @@ def ask(
         page = r.get("page", 0)
         _add_to(text_context, text_sources, text, f"{src} p.{page}" if page else src)
 
-    # 3) Small corpus fallback: include ALL chunks as supplementary context
+    # 3) Small corpus fallback: if tenant has few chunks, include all for comprehensive answers
     try:
-        total_chunks = text_col.count()
-        print(f"  [Ask] text_col.count()={total_chunks}")
-        if total_chunks > 0 and total_chunks <= 200:
-            get_kwargs = {"include": ["documents", "metadatas"]}
-            if where:
-                get_kwargs["where"] = where
-            all_chunks = text_col.get(**get_kwargs)
-            docs = all_chunks.get("documents", [])
-            metas = all_chunks.get("metadatas", [])
-            print(f"  [Ask] Fetched {len(docs)} chunks, adding as supplementary")
+        get_kwargs = {"include": ["documents", "metadatas"]}
+        if where:
+            get_kwargs["where"] = where
+        # Count only this tenant's chunks, not global
+        tenant_chunks = text_col.get(**get_kwargs)
+        tenant_doc_count = len(tenant_chunks.get("documents", []))
+        print(f"  [Ask] Tenant chunk count={tenant_doc_count}")
+        if 0 < tenant_doc_count <= 200:
+            docs = tenant_chunks.get("documents", [])
+            metas = tenant_chunks.get("metadatas", [])
+            print(f"  [Ask] Small corpus: adding {len(docs)} chunks as supplementary")
             for doc, meta in zip(docs, metas):
                 src = (meta or {}).get("source_file", "")
                 display = (meta or {}).get("display_text", doc) or doc
