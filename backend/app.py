@@ -826,6 +826,7 @@ def _call_claude(user_prompt: str, system: str = "") -> str:
     payload = {
         "model": CLAUDE_MODEL,
         "max_tokens": 1024,
+        "temperature": 0,
         "system": system,
         "messages": [
             {"role": "user", "content": user_prompt}
