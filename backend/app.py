@@ -853,33 +853,6 @@ def _call_claude(user_prompt: str, system: str = "") -> str:
         ).strip()
 
 
-@app.get("/api/debug/chunks")
-def debug_chunks(user: User = Depends(get_current_user)):
-    """Temporary debug: dump all text chunks for this tenant."""
-    where = _build_tenant_where(user.tenant_id)
-    try:
-        get_kwargs = {"include": ["documents", "metadatas"]}
-        if where:
-            get_kwargs["where"] = where
-        all_chunks = text_col.get(**get_kwargs)
-        docs = all_chunks.get("documents", [])
-        metas = all_chunks.get("metadatas", [])
-        chunks = []
-        for i, (doc, meta) in enumerate(zip(docs, metas)):
-            chunks.append({
-                "index": i,
-                "doc_preview": doc[:200] if doc else None,
-                "display_text_preview": (meta or {}).get("display_text", "")[:200] if meta else None,
-                "source_file": (meta or {}).get("source_file"),
-                "start_sec": (meta or {}).get("start_sec"),
-                "end_sec": (meta or {}).get("end_sec"),
-                "has_phenol_in_doc": "phenol" in (doc or "").lower(),
-                "has_phenol_in_display": "phenol" in ((meta or {}).get("display_text", "") or "").lower(),
-            })
-        return {"total": len(docs), "count_from_col": text_col.count(), "chunks": chunks}
-    except Exception as e:
-        return {"error": str(e)}
-
 
 @app.get("/api/ask")
 def ask(
