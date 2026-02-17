@@ -873,10 +873,14 @@ def ask(
 
     where = _build_tenant_where(user.tenant_id, workspace_id)
 
-    context_parts, sources = [], []
+    # Separate buckets: visual-matched content gets priority placement
+    visual_context = []  # High-relevance: CLIP-matched transcript text
+    visual_sources = []
+    text_context = []    # Standard: text-search results + supplementary
+    text_sources = []
     seen_texts = set()
 
-    def _add_context(text, source_label):
+    def _add_to(bucket, src_bucket, text, source_label):
         text = _clean_transcript(text.strip())
         if not text or len(text) < 20:
             return
@@ -884,19 +888,12 @@ def ask(
         if sig in seen_texts:
             return
         seen_texts.add(sig)
-        context_parts.append(text)
-        sources.append(source_label)
+        bucket.append(text)
+        src_bucket.append(source_label)
 
-    # 1) Direct text search — ranked results
-    text_results = _search_text(q, n, where)
-    for r in text_results.get("results", []):
-        text = r.get("text", "")
-        src = r.get("source_file", "")
-        page = r.get("page", 0)
-        _add_context(text, f"{src} p.{page}" if page else src)
-
-    # 2) Visual search → look up transcript text near matched frames
-    #    CLIP can find content that text embeddings miss (e.g. phenol slides)
+    # 1) Visual search FIRST — CLIP finds content text embeddings miss
+    #    (e.g. phenol slides that Whisper mis-transcribed)
+    visual_hits = []
     try:
         visual_results = _search_visual(q, 6, where)
         visual_hits = visual_results.get("results", [])
@@ -916,7 +913,6 @@ def ask(
                 v_src = vr.get("source_file", "")
                 if not v_src:
                     continue
-                # Match by timestamp (videos) or page (PDFs)
                 for doc, meta in zip(docs, metas):
                     if not meta or meta.get("source_file") != v_src:
                         continue
@@ -925,19 +921,30 @@ def ask(
                     e = float(meta.get("end_sec", 0) or 0)
                     if ts > 0 and s > 0 and s - 15 <= ts <= e + 15:
                         display = meta.get("display_text", doc) or doc
-                        _add_context(display, v_src)
+                        # Include OCR slide text if available (correct terminology from slides)
+                        ocr_text = meta.get("ocr_slide_text", "")
+                        if ocr_text:
+                            display = f"[Slide text]: {ocr_text}\n\n[Spoken]: {display}"
+                        _add_to(visual_context, visual_sources, display, v_src)
                         continue
                     # For PDFs: match by page
                     chunk_page = int(meta.get("page", 0) or 0)
                     if v_page > 0 and chunk_page == v_page:
                         display = meta.get("display_text", doc) or doc
-                        _add_context(display, v_src)
+                        _add_to(visual_context, visual_sources, display, v_src)
     except Exception as ex:
         print(f"  [Ask] Visual text lookup error: {ex}")
         import traceback; traceback.print_exc()
 
+    # 2) Direct text search — ranked results
+    text_results = _search_text(q, n, where)
+    for r in text_results.get("results", []):
+        text = r.get("text", "")
+        src = r.get("source_file", "")
+        page = r.get("page", 0)
+        _add_to(text_context, text_sources, text, f"{src} p.{page}" if page else src)
+
     # 3) Small corpus fallback: include ALL chunks as supplementary context
-    #    Ensures nothing is missed when corpus is small
     try:
         total_chunks = text_col.count()
         print(f"  [Ask] text_col.count()={total_chunks}")
@@ -948,30 +955,43 @@ def ask(
             all_chunks = text_col.get(**get_kwargs)
             docs = all_chunks.get("documents", [])
             metas = all_chunks.get("metadatas", [])
-            print(f"  [Ask] Fetched {len(docs)} chunks, adding all as context")
+            print(f"  [Ask] Fetched {len(docs)} chunks, adding as supplementary")
             for doc, meta in zip(docs, metas):
                 src = (meta or {}).get("source_file", "")
                 display = (meta or {}).get("display_text", doc) or doc
-                _add_context(display, src)
+                ocr_text = (meta or {}).get("ocr_slide_text", "")
+                if ocr_text:
+                    display = f"[Slide text]: {ocr_text}\n\n[Spoken]: {display}"
+                _add_to(text_context, text_sources, display, src)
     except Exception as ex:
         print(f"  [Ask] Supplementary context error: {ex}")
         import traceback; traceback.print_exc()
 
-    if not context_parts:
+    # Combine: visual-matched content FIRST (labeled), then text results
+    context_parts = []
+    sources = []
+    if visual_context:
+        context_parts.append("=== HIGHLY RELEVANT (matched by visual/slide analysis) ===\n\n" + "\n\n---\n\n".join(visual_context))
+        sources.extend(visual_sources)
+    if text_context:
+        context_parts.append("=== ADDITIONAL DOCUMENT EXCERPTS ===\n\n" + "\n\n---\n\n".join(text_context))
+        sources.extend(text_sources)
+
+    if not visual_context and not text_context:
         return {"status": "no_results", "error": "No text content to summarize."}
 
     # Debug: log what we're sending to Claude
-    print(f"  [Ask] Sending {len(context_parts)} context parts to Claude:")
-    for i, cp in enumerate(context_parts):
-        print(f"  [Ask]   Part {i}: {cp[:120]}...")
+    print(f"  [Ask] Sending {len(visual_context)} visual + {len(text_context)} text context parts to Claude")
 
-    context = "\n\n---\n\n".join(context_parts)
+    context = "\n\n\n".join(context_parts)
 
     system_prompt = """You are a helpful assistant. Answer the question using ONLY the provided document excerpts.
 Rules:
-- Search through ALL provided excerpts carefully before answering. The answer may appear in any excerpt.
+- Excerpts marked "HIGHLY RELEVANT" were identified by visual/slide analysis as directly related to the question. Pay special attention to these.
+- Some excerpts contain [Slide text] (OCR'd from slides — accurate terminology) and [Spoken] (audio transcript — may have spelling errors). Trust slide text for exact terms and names.
+- Search through ALL provided excerpts carefully before concluding something is not covered.
+- Fix obvious transcription errors: audio transcripts may contain phonetic misspellings (e.g. "outcall chain" = "alkyl chain", "fee-nol" = "phenol"). Use context and slide text to correct these.
 - Answer strictly based on the provided content.
-- Fix obvious transcription errors: audio transcripts may contain phonetic misspellings of technical terms (e.g. "outcall chain" = "alkyl chain", "fee-nol" = "phenol"). Use context to correct these.
 - Give a clear, concise explanation.
 - If the excerpts don't contain enough info, say what you can and note the gap."""
 
@@ -981,10 +1001,10 @@ Rules:
         summary = _call_claude(user_prompt, system=system_prompt)
 
         # Also fetch relevant images to show alongside the answer
+        # Reuse visual results from step 1 instead of calling CLIP again
         images = []
         try:
-            visual_results = _search_visual(q, 4, where)
-            for vr in visual_results.get("results", []):
+            for vr in visual_hits:
                 if vr.get("frame_url") and vr.get("score", 0) > 0.15:
                     images.append({
                         "url": vr["frame_url"],
@@ -994,12 +1014,12 @@ Rules:
                         "score": vr.get("score", 0),
                     })
         except Exception:
-            pass  # Don't fail the whole response if image search breaks
+            pass
 
         # Log as search
         log = SearchLog(
             tenant_id=user.tenant_id, user_id=user.id, query=q, mode="ask",
-            workspace_id=workspace_id or None, result_count=len(context_parts),
+            workspace_id=workspace_id or None, result_count=len(visual_context) + len(text_context),
         )
         db.add(log)
         db.commit()
@@ -1009,7 +1029,7 @@ Rules:
             "summary": summary,
             "model": CLAUDE_MODEL,
             "sources": sources,
-            "chunks_used": len(context_parts),
+            "chunks_used": len(visual_context) + len(text_context),
             "images": images,
         }
     except Exception as e:

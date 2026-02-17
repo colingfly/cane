@@ -400,6 +400,27 @@ def _extract_audio_video(path: Path, file_type: str, extracted_dir: str) -> Extr
     if file_type == "video":
         images = _extract_keyframes(path, slug, extracted_dir)
 
+    # ── Step 5: Create OCR chunks from keyframes with slide text ──
+    #    These get their own embeddings with correct text (e.g. "Phenol")
+    #    so text search finds them even if Whisper mangled the transcript.
+    ocr_chunks = []
+    if images:
+        for img in images:
+            if not img.caption or len(img.caption.strip()) < 30:
+                continue
+            ocr_chunks.append(Chunk(
+                text=img.caption.strip(),
+                source_file=source_file,
+                source_type=file_type,
+                chunk_index=len(chunks) + len(ocr_chunks),
+                start_sec=img.timestamp_sec,
+                end_sec=img.timestamp_sec + MIN_FRAME_GAP_SEC,
+                location=f"{_fmt_time(img.timestamp_sec)} [slide]",
+            ))
+        if ocr_chunks:
+            print(f"  [AV] {len(ocr_chunks)} additional chunks from keyframe OCR")
+            chunks.extend(ocr_chunks)
+
     return ExtractionResult(
         source_file=source_file,
         source_type=file_type,
@@ -409,7 +430,7 @@ def _extract_audio_video(path: Path, file_type: str, extracted_dir: str) -> Extr
 
 
 def _extract_keyframes(path: Path, slug: str, extracted_dir: str) -> list:
-    """Extract keyframes from video at regular intervals using ffmpeg."""
+    """Extract keyframes from video at regular intervals using ffmpeg, then OCR each frame."""
     import subprocess
 
     img_dir = Path(extracted_dir) / slug / "images"
@@ -446,10 +467,19 @@ def _extract_keyframes(path: Path, slug: str, extracted_dir: str) -> list:
         print(f"  [AV] Keyframe extraction failed: {e}")
         return []
 
-    # Collect extracted frames
+    # Check if OCR is available
+    ocr_available = False
+    try:
+        import pytesseract
+        pytesseract.get_tesseract_version()
+        ocr_available = True
+    except Exception:
+        print(f"  [AV] pytesseract not available, skipping keyframe OCR")
+
+    # Collect extracted frames + OCR each one
     images = []
+    ocr_count = 0
     for frame_path in sorted(img_dir.glob("frame_*.jpg")):
-        # Parse frame number to get timestamp
         try:
             frame_num = int(frame_path.stem.split("_")[1])
             timestamp = (frame_num - 1) * interval  # ffmpeg starts at 1
@@ -457,6 +487,19 @@ def _extract_keyframes(path: Path, slug: str, extracted_dir: str) -> list:
             from PIL import Image as PILImage
             img = PILImage.open(str(frame_path))
             w, h = img.size
+
+            # OCR the keyframe to extract slide text
+            caption = ""
+            if ocr_available:
+                try:
+                    ocr_text = pytesseract.image_to_string(img).strip()
+                    # Only keep if meaningful text found (not just noise)
+                    if ocr_text and len(ocr_text) > 20:
+                        caption = ocr_text
+                        ocr_count += 1
+                except Exception:
+                    pass
+
             img.close()
 
             images.append(Image(
@@ -466,12 +509,13 @@ def _extract_keyframes(path: Path, slug: str, extracted_dir: str) -> list:
                 timestamp_sec=float(timestamp),
                 width=w,
                 height=h,
+                caption=caption,
             ))
         except Exception as e:
             print(f"  [AV] Failed reading frame {frame_path}: {e}")
             continue
 
-    print(f"  [AV] {len(images)} keyframes extracted")
+    print(f"  [AV] {len(images)} keyframes extracted, {ocr_count} with OCR text")
     return images
 
 

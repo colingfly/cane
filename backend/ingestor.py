@@ -76,6 +76,7 @@ class Ingestor:
                 document_id=document_id,
                 company_name=company_name,
                 workspace_name=workspace_name,
+                images=result.images,  # Pass images for OCR text merging
             )
         if result.images:
             self._index_images(
@@ -134,6 +135,7 @@ class Ingestor:
         document_id: str,
         company_name: str,
         workspace_name: str,
+        images: list = None,
     ):
         """Index text chunks with tenant scoping and contextual enrichment."""
 
@@ -141,6 +143,33 @@ class Ingestor:
         for chunk in result.chunks:
             if chunk.text:
                 chunk.text = self._clean_transcript(chunk.text)
+
+        # Merge OCR text from keyframes into nearby Whisper transcript chunks
+        # This gives Whisper chunks the correct slide terminology for display
+        if images:
+            ocr_frames = [(img.timestamp_sec, img.caption) for img in images
+                          if img.caption and len(img.caption.strip()) > 20]
+            if ocr_frames:
+                merged_count = 0
+                for chunk in result.chunks:
+                    # Skip OCR-created chunks (location ends with "[slide]")
+                    if chunk.location and chunk.location.endswith("[slide]"):
+                        continue
+                    s = chunk.start_sec or 0
+                    e = chunk.end_sec or 0
+                    if s <= 0 and e <= 0:
+                        continue
+                    # Find keyframes within this chunk's time window
+                    nearby_ocr = []
+                    for ts, caption in ocr_frames:
+                        if s - 5 <= ts <= e + 5:
+                            nearby_ocr.append(caption)
+                    if nearby_ocr:
+                        # Store OCR text in metadata for later use as display_text boost
+                        chunk.metadata["ocr_slide_text"] = "\n\n".join(nearby_ocr)
+                        merged_count += 1
+                if merged_count:
+                    print(f"  [OCR] Merged slide text into {merged_count} transcript chunks")
 
         # Quality filter
         quality_chunks = [c for c in result.chunks if c.text and is_quality_chunk(c.text.strip())]
@@ -200,6 +229,8 @@ class Ingestor:
                 # Display + quality
                 "display_text": ec.display_text,
                 "quality_score": chunk_quality_score(ec.display_text),
+                # OCR slide text (from keyframe OCR, if available)
+                "ocr_slide_text": chunk.metadata.get("ocr_slide_text", ""),
             })
 
         # Batch upsert
