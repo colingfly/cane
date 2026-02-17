@@ -1191,16 +1191,24 @@ Rules:
         # Also fetch relevant images to show alongside the answer
         # Reuse visual results from step 1 instead of calling CLIP again
         images = []
+        seen_sources = {}  # best image per source file
         try:
             for vr in visual_hits:
-                if vr.get("frame_url") and vr.get("score", 0) > 0.15:
-                    images.append({
-                        "url": vr["frame_url"],
-                        "source_file": vr.get("source_file", ""),
-                        "timestamp_sec": vr.get("timestamp_sec", 0),
-                        "page": vr.get("page", 0),
-                        "score": vr.get("score", 0),
-                    })
+                if vr.get("frame_url") and vr.get("score", 0) > 0.22:
+                    src = vr.get("source_file", "")
+                    page = vr.get("page", 0)
+                    key = f"{src}:{page}" if page else f"{src}:{vr.get('timestamp_sec', 0)}"
+                    # Keep highest-scoring image per source+page
+                    if key not in seen_sources or vr["score"] > seen_sources[key]["score"]:
+                        seen_sources[key] = {
+                            "url": vr["frame_url"],
+                            "source_file": src,
+                            "timestamp_sec": vr.get("timestamp_sec", 0),
+                            "page": page,
+                            "score": vr.get("score", 0),
+                        }
+            # Sort by score, cap at 4
+            images = sorted(seen_sources.values(), key=lambda x: x["score"], reverse=True)[:4]
         except Exception:
             pass
 
@@ -1366,13 +1374,20 @@ Rules:
         "content": f"Question: {q}\n\nDocument Excerpts:\n{context}\n\nProvide a clear answer based on the above."
     })
 
-    # Images
-    images = [
-        {"url": vr["frame_url"], "source_file": vr.get("source_file", ""),
-         "timestamp_sec": vr.get("timestamp_sec", 0), "page": vr.get("page", 0),
-         "score": vr.get("score", 0)}
-        for vr in visual_hits if vr.get("frame_url") and vr.get("score", 0) > 0.15
-    ]
+    # Images — deduplicate by source+page, raise threshold, cap at 4
+    _img_seen = {}
+    for vr in visual_hits:
+        if vr.get("frame_url") and vr.get("score", 0) > 0.22:
+            src = vr.get("source_file", "")
+            page = vr.get("page", 0)
+            key = f"{src}:{page}" if page else f"{src}:{vr.get('timestamp_sec', 0)}"
+            if key not in _img_seen or vr["score"] > _img_seen[key]["score"]:
+                _img_seen[key] = {
+                    "url": vr["frame_url"], "source_file": src,
+                    "timestamp_sec": vr.get("timestamp_sec", 0),
+                    "page": page, "score": vr.get("score", 0),
+                }
+    images = sorted(_img_seen.values(), key=lambda x: x["score"], reverse=True)[:4]
 
     def generate():
         # Send metadata first
