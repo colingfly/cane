@@ -848,10 +848,12 @@ def _search_visual(q, n, where):
         emb = _search_visual._model.text_projection(text_out.pooler_output)
         emb = emb / emb.norm(dim=-1, keepdim=True)
 
+    # Fetch extra results for dedup headroom
+    fetch_n = min(n * 3, image_col.count())
     kwargs = {
         "query_embeddings": [emb[0].cpu().tolist()],
-        "n_results": min(n, image_col.count()),
-        "include": ["metadatas", "distances"],
+        "n_results": fetch_n,
+        "include": ["metadatas", "distances", "embeddings"],
     }
     if where:
         kwargs["where"] = where
@@ -861,11 +863,13 @@ def _search_visual(q, n, where):
     except Exception:
         return {"results": [], "mode": "visual", "total": 0}
 
-    results = []
-    for i, (img_id, meta, dist) in enumerate(zip(r["ids"][0], r["metadatas"][0], r["distances"][0])):
+    raw = []
+    for i, (img_id, meta, dist, img_emb) in enumerate(zip(
+        r["ids"][0], r["metadatas"][0], r["distances"][0], r["embeddings"][0]
+    )):
         score = max(0, 1 - (dist ** 2 / 2))
         frame_url = _frame_path_to_url(meta.get("frame_path", ""))
-        results.append({
+        raw.append({
             "rank": i + 1,
             "image_id": img_id,
             "score": round(score, 4),
@@ -875,7 +879,30 @@ def _search_visual(q, n, where):
             "workspace_id": meta.get("workspace_id", ""),
             "timestamp_sec": meta.get("timestamp_sec", 0),
             "page": meta.get("page", 0),
+            "_emb": img_emb,
         })
+
+    # Embedding-based dedup: if two images have cosine similarity > 0.95,
+    # they're visually near-identical (templates, headers). Keep only the best.
+    results = []
+    for candidate in raw:
+        is_dup = False
+        c_emb = candidate["_emb"]
+        for accepted in results:
+            a_emb = accepted["_emb"]
+            # Cosine similarity (embeddings are already normalized)
+            sim = sum(a * b for a, b in zip(c_emb, a_emb))
+            if sim > 0.95:
+                is_dup = True
+                break
+        if not is_dup:
+            results.append(candidate)
+        if len(results) >= n:
+            break
+
+    # Strip internal embedding data before returning
+    for r in results:
+        r.pop("_emb", None)
 
     return {"results": results, "mode": "visual", "total": image_col.count()}
 
@@ -1194,7 +1221,7 @@ Rules:
         seen_sources = {}  # best image per source file
         try:
             for vr in visual_hits:
-                if vr.get("frame_url") and vr.get("score", 0) > 0.22:
+                if vr.get("frame_url") and vr.get("score", 0) > 0.20:
                     src = vr.get("source_file", "")
                     page = vr.get("page", 0)
                     key = f"{src}:{page}" if page else f"{src}:{vr.get('timestamp_sec', 0)}"
@@ -1207,8 +1234,21 @@ Rules:
                             "page": page,
                             "score": vr.get("score", 0),
                         }
+
+            # Template detection: if the same page number appears from 3+ different files,
+            # it's likely a header/footer template — drop those images
+            from collections import Counter
+            page_file_count = Counter()
+            for info in seen_sources.values():
+                if info["page"] > 0:
+                    page_file_count[info["page"]] += 1
+            template_pages = {p for p, c in page_file_count.items() if c >= 3}
+
+            filtered = {k: v for k, v in seen_sources.items()
+                        if v["page"] not in template_pages}
+
             # Sort by score, cap at 4
-            images = sorted(seen_sources.values(), key=lambda x: x["score"], reverse=True)[:4]
+            images = sorted(filtered.values(), key=lambda x: x["score"], reverse=True)[:4]
         except Exception:
             pass
 
@@ -1374,10 +1414,10 @@ Rules:
         "content": f"Question: {q}\n\nDocument Excerpts:\n{context}\n\nProvide a clear answer based on the above."
     })
 
-    # Images — deduplicate by source+page, raise threshold, cap at 4
+    # Images — deduplicate by source+page, template detection, cap at 4
     _img_seen = {}
     for vr in visual_hits:
-        if vr.get("frame_url") and vr.get("score", 0) > 0.22:
+        if vr.get("frame_url") and vr.get("score", 0) > 0.20:
             src = vr.get("source_file", "")
             page = vr.get("page", 0)
             key = f"{src}:{page}" if page else f"{src}:{vr.get('timestamp_sec', 0)}"
@@ -1387,7 +1427,12 @@ Rules:
                     "timestamp_sec": vr.get("timestamp_sec", 0),
                     "page": page, "score": vr.get("score", 0),
                 }
-    images = sorted(_img_seen.values(), key=lambda x: x["score"], reverse=True)[:4]
+    # Template detection: same page from 3+ files = boilerplate
+    from collections import Counter
+    _pg_count = Counter(v["page"] for v in _img_seen.values() if v["page"] > 0)
+    _tpl_pages = {p for p, c in _pg_count.items() if c >= 3}
+    _img_filtered = {k: v for k, v in _img_seen.items() if v["page"] not in _tpl_pages}
+    images = sorted(_img_filtered.values(), key=lambda x: x["score"], reverse=True)[:4]
 
     def generate():
         # Send metadata first
