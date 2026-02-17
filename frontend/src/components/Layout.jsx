@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { Search, FileText, Settings, BarChart3, Shield, Bot } from 'lucide-react'
+import { Search, FileText, Settings, BarChart3, Shield, Bot, HelpCircle } from 'lucide-react'
 
 export default function Layout({ children }) {
   const { user, tenant, handleLogout, isAdmin } = useAuth()
@@ -34,6 +34,9 @@ export default function Layout({ children }) {
           </NavLink>
           <NavLink to="/dashboard">
             <BarChart3 /> Dashboard
+          </NavLink>
+          <NavLink to="/guide">
+            <HelpCircle /> Guide
           </NavLink>
           <NavLink to="/settings">
             <Settings /> Settings
