@@ -7,9 +7,9 @@ import {
 } from '../api/client'
 
 const ICON_COLORS = {
-  HR: { bg: '#c8963e' },
-  AA: { bg: '#3d8c5c' },
+  OG: { bg: '#c8963e' },
   AT: { bg: '#5b7bb4' },
+  KB: { bg: '#3d8c5c' },
 }
 const DEFAULT_COLOR = { bg: '#8a7a62' }
 

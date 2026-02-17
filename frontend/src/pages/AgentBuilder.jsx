@@ -4,9 +4,9 @@ import { Plus, Trash2 } from 'lucide-react'
 import { getAgents, getAgentTemplates, createAgent, deleteAgent } from '../api/client'
 
 const ICON_COLORS = {
-  HR: { bg: '#c8963e' },
-  AA: { bg: '#3d8c5c' },
+  OG: { bg: '#c8963e' },
   AT: { bg: '#5b7bb4' },
+  KB: { bg: '#3d8c5c' },
 }
 const DEFAULT_COLOR = { bg: '#8a7a62' }
 
@@ -32,6 +32,7 @@ export default function AgentBuilder() {
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [showCustomModal, setShowCustomModal] = useState(false)
+  const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [customName, setCustomName] = useState('')
   const [customDesc, setCustomDesc] = useState('')
   const navigate = useNavigate()
@@ -50,12 +51,15 @@ export default function AgentBuilder() {
     }
   }
 
-  const handleCreateFromTemplate = async (agentType) => {
-    if (creating) return
+  const handleCreateFromTemplate = async () => {
+    if (creating || !selectedTemplate) return
     setCreating(true)
     try {
-      const res = await createAgent({ agent_type: agentType })
-      if (res.id) navigate(`/agents/${res.id}`)
+      const res = await createAgent({ agent_type: selectedTemplate.type })
+      if (res.id) {
+        setSelectedTemplate(null)
+        navigate(`/agents/${res.id}`)
+      }
     } catch (e) {
       console.error('Failed to create agent:', e)
     } finally {
@@ -123,7 +127,7 @@ export default function AgentBuilder() {
             key={t.type}
             className="card"
             style={{ cursor: 'pointer', transition: 'all 0.15s', padding: 24 }}
-            onClick={() => handleCreateFromTemplate(t.type)}
+            onClick={() => setSelectedTemplate(t)}
             onMouseOver={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
             onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'translateY(0)' }}
           >
@@ -220,6 +224,34 @@ export default function AgentBuilder() {
             ))}
           </div>
         </>
+      )}
+
+      {/* Template Confirmation Modal */}
+      {selectedTemplate && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000,
+        }} onClick={() => setSelectedTemplate(null)}>
+          <div className="card" style={{ width: 420, maxWidth: '90vw' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 16 }}>
+              <AgentIcon icon={selectedTemplate.icon} size={48} />
+              <div>
+                <h3 style={{ marginBottom: 2 }}>{selectedTemplate.name}</h3>
+                <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Agent Template</div>
+              </div>
+            </div>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 24 }}>
+              {selectedTemplate.description} This will create a new agent workspace with a pre-configured prompt. You can upload documents and customize the prompt after creation.
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost" onClick={() => setSelectedTemplate(null)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleCreateFromTemplate} disabled={creating}>
+                {creating ? 'Creating...' : 'Create Agent'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Custom Agent Modal */}
