@@ -17,12 +17,12 @@ from sqlalchemy.orm import Session
 
 from config import SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRE_HOURS
 from database import get_db
-from db_models import User, Tenant
+from db_models import User, Tenant, ApiKey
 
-# ── Password hashing ──
+# -- Password hashing --
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# ── Bearer token scheme ──
+# -- Bearer token scheme --
 bearer_scheme = HTTPBearer()
 
 
@@ -33,6 +33,14 @@ def hash_password(password: str) -> str:
 
 def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
+
+
+def hash_api_key(key: str) -> str:
+    return pwd_context.hash(key[:72])
+
+
+def verify_api_key(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain[:72], hashed)
 
 
 # ── JWT ──
@@ -94,3 +102,65 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
     if user.role != "admin":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin access required")
     return user
+
+
+# -- API Key Auth --
+
+import secrets
+from datetime import date
+
+def generate_api_key() -> str:
+    """Generate a new API key with cane_ prefix."""
+    return f"cane_{secrets.token_hex(24)}"
+
+
+def get_api_key_auth(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> ApiKey:
+    """
+    Authenticate via API key (cane_... prefix).
+    Returns the ApiKey object with tenant info.
+    """
+    token = credentials.credentials
+
+    if not token.startswith("cane_"):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid API key format")
+
+    # Find matching keys by prefix (first 12 chars)
+    prefix = token[:12]
+    candidates = db.query(ApiKey).filter(
+        ApiKey.key_prefix == prefix,
+        ApiKey.is_active == True,
+    ).all()
+
+    matched = None
+    for candidate in candidates:
+        try:
+            if verify_api_key(token, candidate.key_hash):
+                matched = candidate
+                break
+        except Exception:
+            continue
+
+    if not matched:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid API key")
+
+    # Check tenant is active
+    tenant = db.query(Tenant).filter(Tenant.id == matched.tenant_id, Tenant.is_active == True).first()
+    if not tenant:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Tenant inactive")
+
+    # Rate limiting — simple daily counter
+    today = date.today().isoformat()
+    if matched.last_used_at and matched.last_used_at.date().isoformat() != today:
+        matched.requests_today = 0
+
+    matched.requests_today += 1
+    if matched.requests_today > matched.rate_limit:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Daily rate limit exceeded")
+
+    matched.last_used_at = datetime.utcnow()
+    db.commit()
+
+    return matched

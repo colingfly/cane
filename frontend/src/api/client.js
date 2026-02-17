@@ -281,3 +281,20 @@ export async function changePassword(currentPassword, newPassword) {
   form.append('new_password', newPassword)
   return request('/auth/password', { method: 'POST', body: form })
 }
+
+// -- API Keys --
+
+export async function getApiKeys() {
+  return request('/api-keys')
+}
+
+export async function createApiKey(name, workspaceId = null) {
+  return request('/api-keys', {
+    method: 'POST',
+    body: JSON.stringify({ name, workspace_id: workspaceId }),
+  })
+}
+
+export async function deleteApiKey(keyId) {
+  return request(`/api-keys/${keyId}`, { method: 'DELETE' })
+}

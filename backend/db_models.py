@@ -148,3 +148,25 @@ class SearchLog(Base):
     result_count = Column(Integer, default=0)
     top_score = Column(String(10), default="")
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# -----------------------------------------
+#  ApiKey — tenant-scoped API access
+# -----------------------------------------
+
+class ApiKey(Base):
+    __tablename__ = "api_keys"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    tenant_id = Column(String(36), ForeignKey("tenants.id"), nullable=False)
+    name = Column(String(255), nullable=False)                   # "Production", "Slack Bot"
+    key_hash = Column(String(255), nullable=False)               # bcrypt hash of full key
+    key_prefix = Column(String(12), nullable=False)              # "cane_a1b2c3d4" for display
+    workspace_id = Column(String(36), nullable=True)             # Scope to workspace/agent (null = all)
+    is_active = Column(Boolean, default=True)
+    requests_today = Column(Integer, default=0)
+    rate_limit = Column(Integer, default=1000)                   # Requests per day
+    last_used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    tenant = relationship("Tenant")

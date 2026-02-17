@@ -87,6 +87,38 @@ try:
 except Exception as e:
     print(f"  [DB] Migration skipped: {e}")
 
+# Migrate: create api_keys table if missing
+def _migrate_api_keys_table():
+    from sqlalchemy import inspect, text
+    from database import engine
+    insp = inspect(engine)
+    if "api_keys" not in insp.get_table_names():
+        with engine.begin() as conn:
+            conn.execute(text("""
+                CREATE TABLE api_keys (
+                    id VARCHAR(36) PRIMARY KEY,
+                    tenant_id VARCHAR(36) NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    key_hash VARCHAR(255) NOT NULL,
+                    key_prefix VARCHAR(12) NOT NULL,
+                    workspace_id VARCHAR(36) NULL,
+                    is_active TINYINT(1) DEFAULT 1,
+                    requests_today INT DEFAULT 0,
+                    rate_limit INT DEFAULT 1000,
+                    last_used_at DATETIME NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+                )
+            """))
+        print("  [DB] api_keys table created")
+    else:
+        print("  [DB] api_keys table already exists")
+
+try:
+    _migrate_api_keys_table()
+except Exception as e:
+    print(f"  [DB] api_keys migration skipped: {e}")
+
 # Auto-seed admin on first deploy
 from auto_seed import auto_seed
 auto_seed()
@@ -2130,6 +2162,328 @@ def change_password(
 @app.get("/api/health")
 def health_check():
     return {"status": "ok", "service": "cane"}
+
+
+# ══════════════════════════════════════════
+#  API Key Management (web-authenticated)
+# ══════════════════════════════════════════
+from auth import generate_api_key, hash_api_key, get_api_key_auth
+from db_models import ApiKey
+
+
+@app.get("/api/api-keys")
+def list_api_keys(user: User = Depends(require_owner), db: Session = Depends(get_db)):
+    """List all API keys for the tenant."""
+    keys = db.query(ApiKey).filter(
+        ApiKey.tenant_id == user.tenant_id
+    ).order_by(ApiKey.created_at.desc()).all()
+
+    return {
+        "keys": [
+            {
+                "id": k.id,
+                "name": k.name,
+                "key_prefix": k.key_prefix,
+                "workspace_id": k.workspace_id,
+                "is_active": k.is_active,
+                "rate_limit": k.rate_limit,
+                "requests_today": k.requests_today,
+                "last_used_at": k.last_used_at.isoformat() if k.last_used_at else None,
+                "created_at": k.created_at.isoformat() if k.created_at else None,
+            }
+            for k in keys
+        ]
+    }
+
+
+@app.post("/api/api-keys")
+async def create_api_key_endpoint(
+    request: Request,
+    user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+):
+    """Generate a new API key. Returns the full key ONCE — it cannot be retrieved again."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    name = body.get("name", "API Key")
+    workspace_id = body.get("workspace_id", None)
+
+    raw_key = generate_api_key()
+    key_prefix = raw_key[:12]
+    key_hashed = hash_api_key(raw_key)
+
+    api_key = ApiKey(
+        tenant_id=user.tenant_id,
+        name=name,
+        key_hash=key_hashed,
+        key_prefix=key_prefix,
+        workspace_id=workspace_id if workspace_id else None,
+        rate_limit=1000,
+    )
+    db.add(api_key)
+    db.commit()
+    db.refresh(api_key)
+
+    return {
+        "id": api_key.id,
+        "name": api_key.name,
+        "key": raw_key,  # Only time the full key is returned
+        "key_prefix": key_prefix,
+        "workspace_id": api_key.workspace_id,
+        "rate_limit": api_key.rate_limit,
+        "created_at": api_key.created_at.isoformat() if api_key.created_at else None,
+    }
+
+
+@app.delete("/api/api-keys/{key_id}")
+def revoke_api_key(
+    key_id: str,
+    user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+):
+    """Revoke an API key."""
+    api_key = db.query(ApiKey).filter(
+        ApiKey.id == key_id,
+        ApiKey.tenant_id == user.tenant_id,
+    ).first()
+    if not api_key:
+        raise HTTPException(404, "API key not found")
+    db.delete(api_key)
+    db.commit()
+    return {"status": "deleted"}
+
+
+# ══════════════════════════════════════════
+#  Public API v1 (API-key authenticated)
+# ══════════════════════════════════════════
+
+@app.post("/v1/ask")
+async def v1_ask(
+    request: Request,
+    api_key: ApiKey = Depends(get_api_key_auth),
+    db: Session = Depends(get_db),
+):
+    """
+    Public API: Ask a question against your documents.
+
+    Request body (JSON):
+        query: str (required) — the question
+        workspace_id: str (optional) — scope to a workspace/agent
+        max_chunks: int (optional, default 5) — number of chunks to retrieve
+
+    Response:
+        answer: str — AI-generated answer
+        sources: list[str] — source document names
+        chunks_used: int — number of chunks used
+        model: str — Claude model used
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    query = (body.get("query") or "").strip()
+    if not query:
+        raise HTTPException(400, "query is required")
+
+    workspace_id = body.get("workspace_id") or api_key.workspace_id or ""
+    max_chunks = min(body.get("max_chunks", 5), 20)
+
+    query = sanitize_query(query)
+
+    if not ANTHROPIC_API_KEY:
+        raise HTTPException(503, "AI service not configured")
+
+    where = _build_tenant_where(api_key.tenant_id, workspace_id)
+
+    # Gather context (text search)
+    context_chunks = []
+    sources = []
+    seen = set()
+
+    if text_col.count() > 0:
+        try:
+            fetch_n = min(max_chunks * 3, text_col.count())
+            r = text_col.query(query_texts=[query], n_results=fetch_n, where=where,
+                               include=["documents", "metadatas", "distances"])
+            docs = r.get("documents", [[]])[0]
+            metas = r.get("metadatas", [[]])[0]
+            dists = r.get("distances", [[]])[0]
+
+            for txt, meta, dist in zip(docs, metas, dists):
+                if not txt or len(txt.strip()) < 20:
+                    continue
+                sig = txt.strip()[:100]
+                if sig in seen:
+                    continue
+                seen.add(sig)
+                context_chunks.append(txt.strip())
+                src = meta.get("source_file", "unknown")
+                if src not in sources:
+                    sources.append(src)
+                if len(context_chunks) >= max_chunks:
+                    break
+        except Exception:
+            pass
+
+    if not context_chunks:
+        return {
+            "answer": "No relevant documents found for your query.",
+            "sources": [],
+            "chunks_used": 0,
+            "model": CLAUDE_MODEL,
+        }
+
+    # Build prompt
+    agent_prompt = ""
+    if workspace_id:
+        ws = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+        if ws and ws.system_prompt:
+            agent_prompt = ws.system_prompt
+
+    base_rules = (
+        "You answer questions based ONLY on the document excerpts below. "
+        "If the answer isn't in the excerpts, say so. Cite source documents."
+    )
+    rules = f"{agent_prompt}\n\nAdditional retrieval rules: {base_rules}" if agent_prompt else base_rules
+
+    numbered = "\n\n".join(f"[{i+1}] {c}" for i, c in enumerate(context_chunks))
+    user_msg = f"DOCUMENT EXCERPTS:\n{numbered}\n\nQUESTION: {query}"
+
+    # Call Claude
+    import json, urllib.request
+    payload = {
+        "model": CLAUDE_MODEL,
+        "max_tokens": 1024,
+        "system": rules,
+        "messages": [{"role": "user", "content": user_msg}],
+    }
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=data,
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+        },
+        method="POST",
+    )
+
+    try:
+        resp = urllib.request.urlopen(req, timeout=30)
+        result = json.loads(resp.read().decode())
+        answer = result.get("content", [{}])[0].get("text", "").strip()
+    except Exception as e:
+        raise HTTPException(502, f"AI service error: {str(e)}")
+
+    # Log
+    log = SearchLog(
+        tenant_id=api_key.tenant_id, user_id=None, query=query, mode="api_ask",
+        workspace_id=workspace_id or None, result_count=len(context_chunks),
+    )
+    db.add(log)
+    db.commit()
+
+    return {
+        "answer": answer,
+        "sources": sources,
+        "chunks_used": len(context_chunks),
+        "model": CLAUDE_MODEL,
+    }
+
+
+@app.post("/v1/search")
+async def v1_search(
+    request: Request,
+    api_key: ApiKey = Depends(get_api_key_auth),
+    db: Session = Depends(get_db),
+):
+    """
+    Public API: Search documents and return raw chunks.
+
+    Request body (JSON):
+        query: str (required) — search query
+        workspace_id: str (optional) — scope to a workspace/agent
+        max_results: int (optional, default 10) — number of results
+
+    Response:
+        results: list of {text, source_file, score, metadata}
+        query: str
+        total: int
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    query = (body.get("query") or "").strip()
+    if not query:
+        raise HTTPException(400, "query is required")
+
+    workspace_id = body.get("workspace_id") or api_key.workspace_id or ""
+    max_results = min(body.get("max_results", 10), 50)
+
+    query = sanitize_query(query)
+    where = _build_tenant_where(api_key.tenant_id, workspace_id)
+
+    results = []
+    if text_col.count() > 0:
+        try:
+            fetch_n = min(max_results * 2, text_col.count())
+            r = text_col.query(query_texts=[query], n_results=fetch_n, where=where,
+                               include=["documents", "metadatas", "distances"])
+            docs = r.get("documents", [[]])[0]
+            metas = r.get("metadatas", [[]])[0]
+            dists = r.get("distances", [[]])[0]
+
+            seen = set()
+            for txt, meta, dist in zip(docs, metas, dists):
+                if not txt or len(txt.strip()) < 20:
+                    continue
+                sig = txt.strip()[:100]
+                if sig in seen:
+                    continue
+                seen.add(sig)
+                score = round(max(0, 1 - dist / 2), 4)
+                results.append({
+                    "text": txt.strip(),
+                    "source_file": meta.get("source_file", ""),
+                    "score": score,
+                    "metadata": {
+                        "page": meta.get("page", 0),
+                        "chunk_index": meta.get("chunk_index", 0),
+                        "workspace_id": meta.get("workspace_id", ""),
+                    },
+                })
+                if len(results) >= max_results:
+                    break
+        except Exception:
+            pass
+
+    # Log
+    log = SearchLog(
+        tenant_id=api_key.tenant_id, user_id=None, query=query, mode="api_search",
+        workspace_id=workspace_id or None, result_count=len(results),
+    )
+    db.add(log)
+    db.commit()
+
+    return {
+        "results": results,
+        "query": query,
+        "total": len(results),
+    }
+
+
+@app.get("/v1/health")
+def v1_health():
+    """Public API health check — no auth required."""
+    return {"status": "ok", "service": "cane", "api_version": "v1"}
+
 
 # ── Serve React SPA ──────────────────────────────────────
 from fastapi.staticfiles import StaticFiles
