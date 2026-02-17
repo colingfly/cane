@@ -884,21 +884,33 @@ def _search_visual(q, n, where):
 
     # Embedding-based dedup: if two images have cosine similarity > 0.95,
     # they're visually near-identical (templates, headers). Keep only the best.
+    # Also track how many duplicates each accepted image suppressed —
+    # if it suppressed 2+, it's a repeating template (headers, footers) and gets removed.
     results = []
+    dup_counts = []  # parallel to results
     for candidate in raw:
-        is_dup = False
+        matched_idx = None
         c_emb = candidate["_emb"]
-        for accepted in results:
+        for idx, accepted in enumerate(results):
             a_emb = accepted["_emb"]
-            # Cosine similarity (embeddings are already normalized)
             sim = sum(a * b for a, b in zip(c_emb, a_emb))
             if sim > 0.95:
-                is_dup = True
+                matched_idx = idx
                 break
-        if not is_dup:
+        if matched_idx is not None:
+            dup_counts[matched_idx] += 1
+        else:
             results.append(candidate)
-        if len(results) >= n:
-            break
+            dup_counts.append(0)
+
+    # Remove templates: images that had 2+ near-duplicates are repeating elements
+    filtered = [r for r, dc in zip(results, dup_counts) if dc < 2]
+
+    # If we filtered too aggressively and have nothing, fall back to non-templates
+    if not filtered and results:
+        filtered = [r for r, dc in zip(results, dup_counts) if dc < 5]
+
+    results = filtered[:n]
 
     # Strip internal embedding data before returning
     for r in results:
