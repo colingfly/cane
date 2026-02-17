@@ -23,7 +23,7 @@ if _root not in sys.path:
     sys.path.insert(0, _root)
 
 from fastapi import FastAPI, Query, UploadFile, File, Form, HTTPException, Depends, Request, BackgroundTasks
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import chromadb
@@ -178,6 +178,104 @@ def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
             {"id": w.id, "name": w.name, "is_default": w.is_default}
             for w in workspaces
         ],
+    }
+
+
+
+@app.post("/api/auth/register")
+def register(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+    name: str = Form(""),
+    company_name: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Self-service signup: creates tenant + owner + default workspace + returns JWT."""
+    import re as _re
+
+    # Rate limit by IP (reuse login limiter)
+    client_ip = request.client.host if request.client else "unknown"
+    if login_limiter.is_locked(client_ip):
+        remaining = login_limiter.remaining_lockout(client_ip)
+        raise HTTPException(429, f"Too many attempts. Try again in {remaining} seconds.")
+
+    # Sanitize + validate
+    email = sanitize_form_field(email).lower()
+    name = sanitize_form_field(name)
+    company_name = sanitize_form_field(company_name)
+
+    email_err = validate_email(email)
+    if email_err:
+        raise HTTPException(400, email_err)
+    pwd_err = validate_password(password)
+    if pwd_err:
+        raise HTTPException(400, pwd_err)
+
+    # Check if email already exists
+    existing = db.query(User).filter(User.email == email).first()
+    if existing:
+        login_limiter.record_failure(client_ip)
+        raise HTTPException(400, "An account with this email already exists")
+
+    # Generate slug from company name or email domain
+    if company_name:
+        slug = _re.sub(r'[^a-z0-9]+', '-', company_name.lower()).strip('-')[:50]
+    else:
+        slug = email.split('@')[0]
+        slug = _re.sub(r'[^a-z0-9]+', '-', slug.lower()).strip('-')[:50]
+
+    # Ensure slug is unique
+    base_slug = slug
+    counter = 1
+    while db.query(Tenant).filter(Tenant.slug == slug).first():
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+
+    # Create tenant
+    tenant = Tenant(
+        name=company_name or name or email.split('@')[0],
+        slug=slug,
+    )
+    db.add(tenant)
+    db.flush()
+
+    # Create default workspace
+    ws = Workspace(
+        tenant_id=tenant.id,
+        name="Documents",
+        description="Default workspace",
+        is_default=True,
+    )
+    db.add(ws)
+
+    # Create owner user
+    user = User(
+        tenant_id=tenant.id,
+        email=email,
+        password_hash=hash_password(password),
+        name=name,
+        role="owner",
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    login_limiter.record_success(client_ip)
+
+    return {
+        "token": create_token(user.id, user.tenant_id, user.role),
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "role": user.role,
+        },
+        "tenant": {
+            "id": tenant.id,
+            "name": tenant.name,
+            "slug": tenant.slug,
+        },
     }
 
 
@@ -1124,6 +1222,189 @@ Rules:
         }
     except Exception as e:
         return {"status": "error", "error": f"LLM call failed: {str(e)}"}
+
+
+
+# ── Streaming Ask endpoint ──
+from streaming import stream_claude, get_conversation_history, save_conversation_turn, _sse
+
+
+@app.get("/api/ask/stream")
+def ask_stream(
+    q: str = Query(...),
+    n: int = Query(5, ge=1, le=20),
+    workspace_id: str = Query(""),
+    session_id: str = Query(""),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """RAG: search + stream answer via SSE."""
+    import json as _json
+
+    q = sanitize_query(q)
+    if not q:
+        return JSONResponse({"status": "error", "error": "Query is required"})
+
+    if not ANTHROPIC_API_KEY:
+        return JSONResponse({"status": "no_llm", "error": "Anthropic API key not configured."})
+
+    where = _build_tenant_where(user.tenant_id, workspace_id)
+
+    # Build context (same logic as /api/ask)
+    visual_context, visual_sources = [], []
+    text_context, text_sources = [], []
+    seen_texts = set()
+
+    def _add(bucket, src_bucket, text, source_label):
+        text = _clean_transcript(text.strip())
+        if not text or len(text) < 20:
+            return
+        sig = text[:100]
+        if sig in seen_texts:
+            return
+        seen_texts.add(sig)
+        bucket.append(text)
+        src_bucket.append(source_label)
+
+    # 1) Visual search
+    visual_hits = []
+    try:
+        visual_results = _search_visual(q, 6, where)
+        visual_hits = visual_results.get("results", [])
+        if visual_hits and text_col.count() > 0:
+            source_files = {vr.get("source_file", "") for vr in visual_hits if vr.get("source_file")}
+            for src_file in source_files:
+                src_where_parts = [{"tenant_id": user.tenant_id}, {"source_file": src_file}]
+                if workspace_id:
+                    src_where_parts.append({"workspace_id": workspace_id})
+                src_where = {"$and": src_where_parts}
+                try:
+                    src_chunks = text_col.get(where=src_where, include=["documents", "metadatas"])
+                except Exception:
+                    continue
+                src_docs = src_chunks.get("documents", [])
+                src_metas = src_chunks.get("metadatas", [])
+                for vr in visual_hits:
+                    if vr.get("source_file", "") != src_file:
+                        continue
+                    ts = vr.get("timestamp_sec", 0)
+                    v_page = vr.get("page", 0)
+                    for doc, meta in zip(src_docs, src_metas):
+                        if not meta:
+                            continue
+                        s = float(meta.get("start_sec", 0) or 0)
+                        e = float(meta.get("end_sec", 0) or 0)
+                        if ts > 0 and s > 0 and s - 15 <= ts <= e + 15:
+                            display = meta.get("display_text", doc) or doc
+                            ocr_text = meta.get("ocr_slide_text", "")
+                            if ocr_text:
+                                display = f"[Slide text]: {ocr_text}\n\n[Spoken]: {display}"
+                            _add(visual_context, visual_sources, display, src_file)
+                            continue
+                        chunk_page = int(meta.get("page", 0) or 0)
+                        if v_page > 0 and chunk_page == v_page:
+                            display = meta.get("display_text", doc) or doc
+                            _add(visual_context, visual_sources, display, src_file)
+    except Exception:
+        pass
+
+    # 2) Text search
+    text_results = _search_text(q, n, where)
+    for r in text_results.get("results", []):
+        text = r.get("text", "")
+        src = r.get("source_file", "")
+        page = r.get("page", 0)
+        _add(text_context, text_sources, text, f"{src} p.{page}" if page else src)
+
+    # 3) Small corpus fallback
+    try:
+        get_kw = {"include": ["documents", "metadatas"]}
+        if where:
+            get_kw["where"] = where
+        tenant_chunks = text_col.get(**get_kw)
+        if 0 < len(tenant_chunks.get("documents", [])) <= 200:
+            for doc, meta in zip(tenant_chunks["documents"], tenant_chunks["metadatas"]):
+                src = (meta or {}).get("source_file", "")
+                display = (meta or {}).get("display_text", doc) or doc
+                ocr_text = (meta or {}).get("ocr_slide_text", "")
+                if ocr_text:
+                    display = f"[Slide text]: {ocr_text}\n\n[Spoken]: {display}"
+                _add(text_context, text_sources, display, src)
+    except Exception:
+        pass
+
+    # Assemble context
+    context_parts = []
+    sources = []
+    if visual_context:
+        context_parts.append("=== HIGHLY RELEVANT (matched by visual/slide analysis) ===\n\n" + "\n\n---\n\n".join(visual_context))
+        sources.extend(visual_sources)
+    if text_context:
+        context_parts.append("=== ADDITIONAL DOCUMENT EXCERPTS ===\n\n" + "\n\n---\n\n".join(text_context))
+        sources.extend(text_sources)
+
+    sources = list(dict.fromkeys(sources))  # deduplicate preserving order
+
+    if not visual_context and not text_context:
+        return JSONResponse({"status": "no_results", "error": "No text content to summarize."})
+
+    context = "\n\n\n".join(context_parts)
+
+    system_prompt = """You are a helpful assistant. Answer the question using ONLY the provided document excerpts.
+Rules:
+- Excerpts marked "HIGHLY RELEVANT" were identified by visual/slide analysis as directly related to the question. Pay special attention to these.
+- Some excerpts contain [Slide text] (OCR'd from slides) and [Spoken] (audio transcript). Trust slide text for exact terms.
+- Fix obvious transcription errors using context and slide text.
+- Answer strictly based on the provided content.
+- Give a clear, concise explanation.
+- If the excerpts don't contain enough info, say what you can and note the gap."""
+
+    # Build messages with conversation history
+    messages = get_conversation_history(session_id)
+    messages.append({
+        "role": "user",
+        "content": f"Question: {q}\n\nDocument Excerpts:\n{context}\n\nProvide a clear answer based on the above."
+    })
+
+    # Images
+    images = [
+        {"url": vr["frame_url"], "source_file": vr.get("source_file", ""),
+         "timestamp_sec": vr.get("timestamp_sec", 0), "page": vr.get("page", 0),
+         "score": vr.get("score", 0)}
+        for vr in visual_hits if vr.get("frame_url") and vr.get("score", 0) > 0.15
+    ]
+
+    def generate():
+        # Send metadata first
+        yield _sse({"type": "meta", "sources": sources, "images": images,
+                     "chunks_used": len(visual_context) + len(text_context)})
+
+        # Stream text
+        full_text = []
+        for chunk in stream_claude("", system=system_prompt, messages=messages):
+            yield chunk
+            if chunk.startswith("data: "):
+                try:
+                    d = _json.loads(chunk[6:].strip())
+                    if d.get("type") == "text":
+                        full_text.append(d["text"])
+                except Exception:
+                    pass
+
+        # Save conversation history
+        save_conversation_turn(session_id, q, "".join(full_text))
+
+        yield _sse({"type": "done"})
+
+    # Log
+    log = SearchLog(
+        tenant_id=user.tenant_id, user_id=user.id, query=q, mode="ask_stream",
+        workspace_id=workspace_id or None, result_count=len(visual_context) + len(text_context),
+    )
+    db.add(log)
+    db.commit()
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•

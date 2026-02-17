@@ -52,6 +52,15 @@ export async function login(email, password) {
   return request('/auth/login', { method: 'POST', body: form })
 }
 
+export async function register(email, password, name = '', companyName = '') {
+  const form = new FormData()
+  form.append('email', email)
+  form.append('password', password)
+  form.append('name', name)
+  form.append('company_name', companyName)
+  return request('/auth/register', { method: 'POST', body: form })
+}
+
 export async function getMe() {
   return request('/auth/me')
 }
@@ -109,6 +118,72 @@ export async function search(query, mode = 'text', n = 10, workspaceId = '') {
 export async function ask(query, n = 5, workspaceId = '') {
   const params = new URLSearchParams({ q: query, n, workspace_id: workspaceId })
   return request(`/ask?${params}`)
+}
+
+// Generate a session ID for conversation memory
+let _sessionId = null
+export function getSessionId() {
+  if (!_sessionId) {
+    _sessionId = 'sess_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
+  }
+  return _sessionId
+}
+
+export function resetSession() {
+  _sessionId = null
+}
+
+export async function askStream(query, n = 5, workspaceId = '', onText, onMeta, onDone, onError) {
+  const token = getToken()
+  const sessionId = getSessionId()
+  const params = new URLSearchParams({ q: query, n, workspace_id: workspaceId, session_id: sessionId })
+
+  try {
+    const res = await fetch(`${API_BASE}/ask/stream?${params}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+
+    if (res.status === 401) {
+      setToken(null)
+      window.location.href = '/login'
+      return
+    }
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      onError?.(data.error || data.detail || `Request failed: ${res.status}`)
+      return
+    }
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() // keep incomplete line in buffer
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed || !trimmed.startsWith('data: ')) continue
+        try {
+          const data = JSON.parse(trimmed.slice(6))
+          if (data.type === 'text') onText?.(data.text)
+          else if (data.type === 'meta') onMeta?.(data)
+          else if (data.type === 'done') onDone?.()
+          else if (data.type === 'error') onError?.(data.error)
+        } catch {
+          // ignore malformed events
+        }
+      }
+    }
+  } catch (err) {
+    onError?.(err.message || 'Stream failed')
+  }
 }
 
 // -- Stats --

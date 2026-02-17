@@ -1,39 +1,59 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { ask, getToken } from '../api/client'
-import { Search as SearchIcon, X } from 'lucide-react'
+import { askStream, getToken, resetSession } from '../api/client'
+import { Search as SearchIcon, X, RotateCcw } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 
 export default function SearchPage() {
   const { workspaces } = useAuth()
   const [query, setQuery] = useState('')
   const [workspaceId, setWorkspaceId] = useState('')
-  const [summary, setSummary] = useState(null)
+  const [streamText, setStreamText] = useState('')
+  const [meta, setMeta] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
   const [lightbox, setLightbox] = useState(null)
+  const [history, setHistory] = useState([])
 
   const authImg = (url) => url ? `${url}${url.includes('?') ? '&' : '?'}token=${getToken()}` : ''
 
   async function handleSearch(e) {
     e.preventDefault()
-    if (!query.trim()) return
+    if (!query.trim() || loading) return
 
+    const currentQuery = query.trim()
     setLoading(true)
-    setSummary(null)
+    setStreamText('')
+    setMeta(null)
+    setError(null)
 
-    try {
-      const data = await ask(query, 5, workspaceId)
-      if (data.status === 'ok') {
-        setSummary(data)
-      } else {
-        setSummary({ error: data.error || 'No results found' })
-      }
-    } catch (err) {
-      console.error('Search failed:', err)
-      setSummary({ error: 'Something went wrong. Please try again.' })
-    } finally {
-      setLoading(false)
-    }
+    let fullText = ''
+    let metaRef = null
+
+    await askStream(
+      currentQuery, 5, workspaceId,
+      (text) => { fullText += text; setStreamText(fullText) },
+      (metaData) => { metaRef = metaData; setMeta(metaData) },
+      () => {
+        setLoading(false)
+        if (fullText) {
+          setHistory(prev => [...prev, { q: currentQuery, a: fullText, meta: metaRef }])
+          setStreamText('')
+          setMeta(null)
+        }
+        setQuery('')
+      },
+      (errMsg) => { setError(errMsg); setLoading(false) }
+    )
+  }
+
+  function handleNewChat() {
+    resetSession()
+    setHistory([])
+    setStreamText('')
+    setMeta(null)
+    setError(null)
+    setQuery('')
   }
 
   return (
@@ -54,7 +74,7 @@ export default function SearchPage() {
             <input
               type="text"
               className="search-input"
-              placeholder="Ask anything about your documents..."
+              placeholder={history.length > 0 ? "Ask a follow-up..." : "Ask anything about your documents..."}
               value={query}
               onChange={e => setQuery(e.target.value)}
               autoFocus
@@ -62,8 +82,8 @@ export default function SearchPage() {
           </div>
         </form>
 
-        {workspaces.length > 1 && (
-          <div className="search-modes">
+        <div className="search-modes">
+          {workspaces.length > 1 && (
             <select
               className="search-mode-btn"
               value={workspaceId}
@@ -75,40 +95,70 @@ export default function SearchPage() {
                 <option key={w.id} value={w.id}>{w.name}</option>
               ))}
             </select>
-          </div>
-        )}
+          )}
+          {history.length > 0 && (
+            <button
+              className="search-mode-btn"
+              onClick={handleNewChat}
+              title="Start new conversation"
+              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+            >
+              <RotateCcw size={14} /> New chat
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Loading */}
-      {loading && (
-        <div className="loading-center">
-          <div className="spinner" />
+      {/* Conversation history */}
+      {history.map((turn, i) => (
+        <div key={i} className="ai-summary fade-in" style={{ marginBottom: 16, opacity: 0.85 }}>
+          <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            {turn.q}
+          </div>
+          <div className="summary-text"><ReactMarkdown>{turn.a}</ReactMarkdown></div>
+          {turn.meta?.images?.length > 0 && (
+            <div className="summary-images">
+              <div className="image-grid">
+                {turn.meta.images.map((img, j) => (
+                  <div key={j} className="image-result-thumb" onClick={() => setLightbox(img)}>
+                    <img src={authImg(img.url)} alt={img.source_file} loading="lazy" />
+                    <span className="image-label">
+                      {img.source_file}
+                      {img.page > 0 ? ` · p.${img.page}` : img.timestamp_sec > 0 ? ` · ${fmtTime(img.timestamp_sec)}` : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {turn.meta?.sources?.length > 0 && (
+            <div className="summary-sources">Sources: {turn.meta.sources.join(' · ')}</div>
+          )}
         </div>
-      )}
+      ))}
 
-      {/* Answer */}
-      {summary && !loading && (
+      {/* Current streaming answer */}
+      {(streamText || loading) && (
         <div className="ai-summary fade-in">
-          {summary.error ? (
-            <p style={{ color: 'var(--text-muted)' }}>{summary.error}</p>
+          {error ? (
+            <p style={{ color: 'var(--text-muted)' }}>{error}</p>
           ) : (
             <>
-              <div className="summary-text"><ReactMarkdown>{summary.summary}</ReactMarkdown></div>
-
-              {summary.images?.length > 0 && (
+              {loading && !streamText && (
+                <div className="loading-center"><div className="spinner" /></div>
+              )}
+              {streamText && (
+                <div className="summary-text">
+                  <ReactMarkdown>{streamText}</ReactMarkdown>
+                  {loading && <span className="typing-cursor">▊</span>}
+                </div>
+              )}
+              {meta?.images?.length > 0 && (
                 <div className="summary-images">
                   <div className="image-grid">
-                    {summary.images.map((img, i) => (
-                      <div
-                        key={i}
-                        className="image-result-thumb"
-                        onClick={() => setLightbox(img)}
-                      >
-                        <img
-                          src={authImg(img.url)}
-                          alt={`${img.source_file} ${img.page ? `p.${img.page}` : fmtTime(img.timestamp_sec)}`}
-                          loading="lazy"
-                        />
+                    {meta.images.map((img, i) => (
+                      <div key={i} className="image-result-thumb" onClick={() => setLightbox(img)}>
+                        <img src={authImg(img.url)} alt={img.source_file} loading="lazy" />
                         <span className="image-label">
                           {img.source_file}
                           {img.page > 0 ? ` · p.${img.page}` : img.timestamp_sec > 0 ? ` · ${fmtTime(img.timestamp_sec)}` : ''}
@@ -118,28 +168,25 @@ export default function SearchPage() {
                   </div>
                 </div>
               )}
-
-              {summary.sources?.length > 0 && (
-                <div className="summary-sources">
-                  Sources: {summary.sources.join(' · ')}
-                </div>
+              {meta?.sources?.length > 0 && !loading && (
+                <div className="summary-sources">Sources: {meta.sources.join(' · ')}</div>
               )}
             </>
           )}
         </div>
       )}
 
-      {/* Lightbox */}
+      {error && !streamText && !loading && (
+        <div className="ai-summary fade-in">
+          <p style={{ color: 'var(--text-muted)' }}>{error}</p>
+        </div>
+      )}
+
       {lightbox && (
         <div className="lightbox-overlay" onClick={() => setLightbox(null)}>
           <div className="lightbox-content" onClick={e => e.stopPropagation()}>
-            <button className="lightbox-close" onClick={() => setLightbox(null)}>
-              <X size={20} />
-            </button>
-            <img
-              src={authImg(lightbox.url)}
-              alt={lightbox.source_file}
-            />
+            <button className="lightbox-close" onClick={() => setLightbox(null)}><X size={20} /></button>
+            <img src={authImg(lightbox.url)} alt={lightbox.source_file} />
             <div className="lightbox-caption">
               {lightbox.source_file}
               {lightbox.page > 0 ? ` · Page ${lightbox.page}` : lightbox.timestamp_sec > 0 ? ` · ${fmtTime(lightbox.timestamp_sec)}` : ''}
