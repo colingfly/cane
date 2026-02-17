@@ -1,19 +1,33 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useSearchParams } from 'react-router-dom'
 import { askStream, getToken, resetSession } from '../api/client'
 import { Search as SearchIcon, X, RotateCcw } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 
 export default function SearchPage() {
   const { workspaces } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [query, setQuery] = useState('')
-  const [workspaceId, setWorkspaceId] = useState('')
+  const [workspaceId, setWorkspaceId] = useState(searchParams.get('workspace') || '')
   const [streamText, setStreamText] = useState('')
   const [meta, setMeta] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [lightbox, setLightbox] = useState(null)
   const [history, setHistory] = useState([])
+
+  // Handle workspace param from agent "Ask this agent" button
+  useEffect(() => {
+    const wsParam = searchParams.get('workspace')
+    if (wsParam) {
+      setWorkspaceId(wsParam)
+      setSearchParams({}, { replace: true })
+    }
+  }, [])
+
+  // Build filtered workspace list: regular workspaces + agents with show_on_homepage
+  const visibleWorkspaces = workspaces.filter(w => !w.agent_type || w.show_on_homepage)
 
   const authImg = (url) => url ? `${url}${url.includes('?') ? '&' : '?'}token=${getToken()}` : ''
 
@@ -83,7 +97,7 @@ export default function SearchPage() {
         </form>
 
         <div className="search-modes">
-          {workspaces.length > 1 && (
+          {visibleWorkspaces.length > 1 && (
             <select
               className="search-mode-btn"
               value={workspaceId}
@@ -91,8 +105,10 @@ export default function SearchPage() {
               style={{ cursor: 'pointer' }}
             >
               <option value="">All workspaces</option>
-              {workspaces.map(w => (
-                <option key={w.id} value={w.id}>{w.name}</option>
+              {visibleWorkspaces.map(w => (
+                <option key={w.id} value={w.id}>
+                  {w.agent_icon ? `${w.agent_icon} ` : ''}{w.name}
+                </option>
               ))}
             </select>
           )}
