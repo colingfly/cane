@@ -788,8 +788,10 @@ def _search_fusion(q, n, where):
                 "workspace_id": r.get("workspace_id", ""),
                 "page": page,
                 "location": f"p.{page}" if page else "",
-                "start_sec": 0, "end_sec": 0,
+                "start_sec": ts, "end_sec": ts,
+                "timestamp_sec": ts,
                 "score": r.get("score", 0),
+                "frame_url": r.get("frame_url", ""),
                 "text": f"[Visual match â€” p.{page}]" if page else f"[Visual match at {ts:.0f}s]",
             }
 
@@ -876,16 +878,52 @@ def ask(
         return {"status": "no_results", "error": "No results found for this query."}
 
     context_parts, sources = [], []
+
+    # Collect timestamps from visual matches to look up corresponding text
+    visual_timestamps = []
+    for r in results[:n * 2]:
+        text = r.get("text", "").strip()
+        if text.startswith("[Visual match"):
+            ts = r.get("start_sec", 0) or r.get("timestamp_sec", 0)
+            src = r.get("source_file", "")
+            if ts > 0 and src:
+                visual_timestamps.append((src, ts))
+
+    # Look up text chunks near visual match timestamps
+    if visual_timestamps and text_col.count() > 0:
+        try:
+            all_chunks = text_col.get(
+                where=where if where else None,
+                include=["documents", "metadatas"],
+            )
+            if all_chunks and all_chunks.get("metadatas"):
+                for src_file, ts in visual_timestamps:
+                    for doc, meta in zip(all_chunks["documents"], all_chunks["metadatas"]):
+                        if not meta or meta.get("source_file") != src_file:
+                            continue
+                        start = meta.get("start_sec", 0) or 0
+                        end = meta.get("end_sec", 0) or 0
+                        # Check if visual timestamp falls within or near this chunk
+                        if start > 0 and end > 0 and start - 10 <= ts <= end + 10:
+                            display = meta.get("display_text", doc)
+                            if display and display not in context_parts:
+                                context_parts.append(_clean_transcript(display))
+                                sources.append(src_file)
+        except Exception:
+            pass  # Don't fail if lookup breaks
+
+    # Also add direct text matches from fusion
     for r in results[:n]:
         text = r.get("text", "").strip()
         if not text or text.startswith("[Visual match"):
             continue
         text = _clean_transcript(text)
-        src = r.get("source_file", "")
-        page = r.get("page", 0)
-        source_label = f"{src} p.{page}" if page else src
-        context_parts.append(text)
-        sources.append(source_label)
+        if text not in context_parts:
+            context_parts.append(text)
+            src = r.get("source_file", "")
+            page = r.get("page", 0)
+            source_label = f"{src} p.{page}" if page else src
+            sources.append(source_label)
 
     if not context_parts:
         return {"status": "no_results", "error": "No text content to summarize."}
