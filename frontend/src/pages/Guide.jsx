@@ -1,5 +1,36 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, Search, FileText, Bot, MessageSquare, Users, Upload } from 'lucide-react'
+import { ChevronDown, ChevronRight, Search, FileText, Bot, MessageSquare, Users, Upload, Code, Copy, Check } from 'lucide-react'
+
+function CodeBlock({ code }) {
+  const [copied, setCopied] = useState(false)
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+  return (
+    <div style={{ position: 'relative', marginTop: 8, marginBottom: 8 }}>
+      <button
+        onClick={handleCopy}
+        style={{
+          position: 'absolute', top: 8, right: 8, background: 'rgba(255,255,255,0.1)',
+          border: 'none', borderRadius: 4, padding: '4px 8px', cursor: 'pointer',
+          color: '#aaa', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: 4,
+        }}
+      >
+        {copied ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
+      </button>
+      <pre style={{
+        background: '#1a1612', color: '#e0d6cc', padding: 16,
+        borderRadius: 'var(--radius-sm)', fontSize: '0.78rem', lineHeight: 1.6,
+        overflowX: 'auto', border: '1px solid var(--border)', margin: 0,
+        fontFamily: '"SF Mono", "Fira Code", "Consolas", monospace',
+      }}>
+        <code>{code}</code>
+      </pre>
+    </div>
+  )
+}
 
 const sections = [
   {
@@ -9,7 +40,7 @@ const sections = [
     content: [
       {
         q: 'How do I search?',
-        a: 'Go to the Search page (home). Type your question in plain English — for example, "What is our PTO policy?" or "How do I configure the API?" Cane searches across all your documents and gives you an AI-generated answer with sources cited.',
+        a: 'Go to the Search page (home). Type your question in plain English \u2014 for example, "What is our PTO policy?" or "How do I configure the API?" Cane searches across all your documents and gives you an AI-generated answer with sources cited.',
       },
       {
         q: 'Can I search a specific workspace or agent?',
@@ -40,7 +71,7 @@ const sections = [
       },
       {
         q: 'How long does processing take?',
-        a: 'Most documents process in under a minute. Audio and video files take longer because they need to be transcribed. You\'ll see a status indicator while processing is in progress. You can keep working while files process in the background.',
+        a: 'Most documents process in under a minute. Audio and video files take longer because they need to be transcribed. You will see a status indicator while processing is in progress. You can keep working while files process in the background.',
       },
       {
         q: 'What happens during processing?',
@@ -67,7 +98,7 @@ const sections = [
       },
       {
         q: 'When should I use multiple workspaces?',
-        a: 'Use separate workspaces when you have distinct document collections that shouldn\'t overlap in search results. For example: one workspace for HR policies, another for product documentation, another for training materials.',
+        a: 'Use separate workspaces when you have distinct document collections that should not overlap in search results. For example: one workspace for HR policies, another for product documentation, another for training materials.',
       },
     ],
   },
@@ -99,6 +130,49 @@ const sections = [
     ],
   },
   {
+    id: 'api',
+    icon: Code,
+    title: 'API',
+    content: [
+      {
+        q: 'What can I do with the API?',
+        a: 'The Cane API lets you query your documents programmatically from any external app \u2014 a Slack bot, customer support widget, internal portal, or custom integration. Any agent you build in Cane can be accessed via API.',
+      },
+      {
+        q: 'How do I get an API key?',
+        a: 'Go to Settings and scroll to the API Keys section (owner access required). Click "Generate new key," give it a name, and optionally scope it to a specific workspace or agent. The full key is shown once \u2014 copy it immediately.',
+      },
+      {
+        q: 'How do I ask a question via API?',
+        a: 'Send a POST request to /v1/ask with your question. The response includes an AI-generated answer and source documents.',
+        code: 'curl -X POST https://cane.fyi/v1/ask \\\n  -H "Authorization: Bearer cane_your_key_here" \\\n  -H "Content-Type: application/json" \\\n  -d \'{\n    "query": "What is our PTO policy?",\n    "workspace_id": "optional-workspace-id"\n  }\'',
+      },
+      {
+        q: 'What does the response look like?',
+        a: 'The /v1/ask endpoint returns a JSON object with the answer, source documents, and metadata.',
+        code: '{\n  "answer": "According to the employee handbook...",\n  "sources": ["employee-handbook.pdf"],\n  "chunks_used": 5,\n  "model": "claude-haiku-4-5-20251001"\n}',
+      },
+      {
+        q: 'How do I search without AI synthesis?',
+        a: 'Use /v1/search to get raw document chunks with relevance scores \u2014 useful when you want to build your own UI or processing pipeline on top of the results.',
+        code: 'curl -X POST https://cane.fyi/v1/search \\\n  -H "Authorization: Bearer cane_your_key_here" \\\n  -H "Content-Type: application/json" \\\n  -d \'{\n    "query": "onboarding procedures",\n    "max_results": 5\n  }\'',
+      },
+      {
+        q: 'Can I scope a key to one agent?',
+        a: 'Yes. When generating an API key in Settings, select a workspace or agent from the scope dropdown. All requests using that key will automatically be scoped to that agent\'s documents and prompt \u2014 no need to pass workspace_id on every request.',
+      },
+      {
+        q: 'What are the rate limits?',
+        a: 'Each API key is limited to 1,000 requests per day. The counter resets at midnight UTC. If you need higher limits, contact your administrator.',
+      },
+      {
+        q: 'Is there a health check endpoint?',
+        a: 'Yes. GET /v1/health returns the service status. No authentication required.',
+        code: 'curl https://cane.fyi/v1/health\n\n# {"status": "ok", "service": "cane", "api_version": "v1"}',
+      },
+    ],
+  },
+  {
     id: 'conversations',
     icon: MessageSquare,
     title: 'Conversations & Follow-ups',
@@ -109,7 +183,7 @@ const sections = [
       },
       {
         q: 'How many follow-ups can I ask?',
-        a: 'There\'s no hard limit. The AI keeps the conversation context for the duration of your session. If the conversation gets very long, starting a new chat can improve answer quality.',
+        a: 'There is no hard limit. The AI keeps the conversation context for the duration of your session. If the conversation gets very long, starting a new chat can improve answer quality.',
       },
       {
         q: 'Are my conversations saved?',
@@ -124,7 +198,7 @@ const sections = [
     content: [
       {
         q: 'How do I invite team members?',
-        a: 'Go to Settings and use the team invite section. Enter their email address and they\'ll receive access. Team members can search and upload documents to shared workspaces.',
+        a: 'Go to Settings and use the team invite section. Enter their email address and they will receive access. Team members can search and upload documents to shared workspaces.',
       },
       {
         q: 'What are the different roles?',
@@ -174,6 +248,7 @@ function Section({ section, isOpen, onToggle }) {
               <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
                 {item.a}
               </div>
+              {item.code && <CodeBlock code={item.code} />}
             </div>
           ))}
         </div>
@@ -229,7 +304,7 @@ export default function Guide() {
         marginTop: 32, padding: 20, background: 'var(--accent-muted)',
         borderRadius: 'var(--radius)', fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: 1.6,
       }}>
-        <strong style={{ color: 'var(--text)' }}>Need help?</strong> If you can't find what you're looking for, 
+        <strong style={{ color: 'var(--text)' }}>Need help?</strong> If you cannot find what you are looking for,
         reach out to your team administrator. They can help with workspace setup, permissions, and account issues.
       </div>
     </div>
