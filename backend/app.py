@@ -826,7 +826,7 @@ def _call_claude(user_prompt: str, system: str = "") -> str:
     payload = {
         "model": CLAUDE_MODEL,
         "max_tokens": 1024,
-        "temperature": 0,
+        "temperature": 0.3,
         "system": system,
         "messages": [
             {"role": "user", "content": user_prompt}
@@ -895,12 +895,53 @@ def ask(
         page = r.get("page", 0)
         _add_context(text, f"{src} p.{page}" if page else src)
 
-    # 2) Also include ALL text chunks as supplementary context
-    #    (for small corpora this ensures visual-only matches still get transcript context)
+    # 2) Visual search → look up transcript text near matched frames
+    #    CLIP can find content that text embeddings miss (e.g. phenol slides)
+    try:
+        visual_results = _search_visual(q, 6, where)
+        visual_hits = visual_results.get("results", [])
+        print(f"  [Ask] Visual hits: {len(visual_hits)}")
+        if visual_hits and text_col.count() > 0:
+            get_kwargs = {"include": ["documents", "metadatas"]}
+            if where:
+                get_kwargs["where"] = where
+            all_chunks = text_col.get(**get_kwargs)
+            docs = all_chunks.get("documents", [])
+            metas = all_chunks.get("metadatas", [])
+            print(f"  [Ask] Total text chunks for visual matching: {len(docs)}")
+
+            for vr in visual_hits:
+                ts = vr.get("timestamp_sec", 0)
+                v_page = vr.get("page", 0)
+                v_src = vr.get("source_file", "")
+                if not v_src:
+                    continue
+                # Match by timestamp (videos) or page (PDFs)
+                for doc, meta in zip(docs, metas):
+                    if not meta or meta.get("source_file") != v_src:
+                        continue
+                    # For videos: match by timestamp window
+                    s = float(meta.get("start_sec", 0) or 0)
+                    e = float(meta.get("end_sec", 0) or 0)
+                    if ts > 0 and s > 0 and s - 15 <= ts <= e + 15:
+                        display = meta.get("display_text", doc) or doc
+                        _add_context(display, v_src)
+                        continue
+                    # For PDFs: match by page
+                    chunk_page = int(meta.get("page", 0) or 0)
+                    if v_page > 0 and chunk_page == v_page:
+                        display = meta.get("display_text", doc) or doc
+                        _add_context(display, v_src)
+    except Exception as ex:
+        print(f"  [Ask] Visual text lookup error: {ex}")
+        import traceback; traceback.print_exc()
+
+    # 3) Small corpus fallback: include ALL chunks as supplementary context
+    #    Ensures nothing is missed when corpus is small
     try:
         total_chunks = text_col.count()
         print(f"  [Ask] text_col.count()={total_chunks}")
-        if total_chunks > 0 and total_chunks <= 50:
+        if total_chunks > 0 and total_chunks <= 200:
             get_kwargs = {"include": ["documents", "metadatas"]}
             if where:
                 get_kwargs["where"] = where
@@ -928,7 +969,9 @@ def ask(
 
     system_prompt = """You are a helpful assistant. Answer the question using ONLY the provided document excerpts.
 Rules:
+- Search through ALL provided excerpts carefully before answering. The answer may appear in any excerpt.
 - Answer strictly based on the provided content.
+- Fix obvious transcription errors: audio transcripts may contain phonetic misspellings of technical terms (e.g. "outcall chain" = "alkyl chain", "fee-nol" = "phenol"). Use context to correct these.
 - Give a clear, concise explanation.
 - If the excerpts don't contain enough info, say what you can and note the gap."""
 
