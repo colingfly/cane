@@ -1,49 +1,39 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { search, ask, getToken } from '../api/client'
-import { Search as SearchIcon, Sparkles, FileText, Clock, Image } from 'lucide-react'
+import { ask, getToken } from '../api/client'
+import { Search as SearchIcon, X } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 
 export default function SearchPage() {
   const { workspaces } = useAuth()
   const [query, setQuery] = useState('')
-  const [mode, setMode] = useState('text')
   const [workspaceId, setWorkspaceId] = useState('')
-  const [results, setResults] = useState(null)
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [lightbox, setLightbox] = useState(null)
 
   const authImg = (url) => url ? `${url}${url.includes('?') ? '&' : '?'}token=${getToken()}` : ''
 
-  async function runSearch(searchMode) {
+  async function handleSearch(e) {
+    e.preventDefault()
     if (!query.trim()) return
 
     setLoading(true)
-    setResults(null)
     setSummary(null)
 
     try {
-      if (searchMode === 'ask') {
-        const data = await ask(query, 5, workspaceId)
-        if (data.status === 'ok') {
-          setSummary(data)
-        } else {
-          setSummary({ error: data.error || 'No results found' })
-        }
+      const data = await ask(query, 5, workspaceId)
+      if (data.status === 'ok') {
+        setSummary(data)
       } else {
-        const data = await search(query, searchMode, 10, workspaceId)
-        setResults(data.results || [])
+        setSummary({ error: data.error || 'No results found' })
       }
     } catch (err) {
       console.error('Search failed:', err)
+      setSummary({ error: 'Something went wrong. Please try again.' })
     } finally {
       setLoading(false)
     }
-  }
-
-  async function handleSearch(e) {
-    e.preventDefault()
-    runSearch(mode)
   }
 
   return (
@@ -64,7 +54,7 @@ export default function SearchPage() {
             <input
               type="text"
               className="search-input"
-              placeholder="Search your documents..."
+              placeholder="Ask anything about your documents..."
               value={query}
               onChange={e => setQuery(e.target.value)}
               autoFocus
@@ -72,25 +62,8 @@ export default function SearchPage() {
           </div>
         </form>
 
-        <div className="search-modes">
-          {[
-            { id: 'text', label: 'Search' },
-            { id: 'visual', label: 'Visual' },
-            { id: 'fusion', label: 'Deep Search' },
-            { id: 'ask', label: 'Ask AI' },
-          ].map(m => (
-            <button
-              key={m.id}
-              className={`search-mode-btn ${mode === m.id ? 'active' : ''}`}
-              onClick={() => { setMode(m.id); if (query.trim()) runSearch(m.id) }}
-            >
-              {m.id === 'visual' && <Image size={12} style={{ marginRight: 4 }} />}
-              {m.id === 'ask' && <Sparkles size={12} style={{ marginRight: 4 }} />}
-              {m.label}
-            </button>
-          ))}
-
-          {workspaces.length > 1 && (
+        {workspaces.length > 1 && (
+          <div className="search-modes">
             <select
               className="search-mode-btn"
               value={workspaceId}
@@ -102,8 +75,8 @@ export default function SearchPage() {
                 <option key={w.id} value={w.id}>{w.name}</option>
               ))}
             </select>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Loading */}
@@ -113,34 +86,39 @@ export default function SearchPage() {
         </div>
       )}
 
-      {/* AI Summary */}
+      {/* Answer */}
       {summary && !loading && (
         <div className="ai-summary fade-in">
           {summary.error ? (
             <p style={{ color: 'var(--text-muted)' }}>{summary.error}</p>
           ) : (
             <>
-              <h4><Sparkles size={14} /> AI Answer</h4>
               <div className="summary-text"><ReactMarkdown>{summary.summary}</ReactMarkdown></div>
+
               {summary.images?.length > 0 && (
                 <div className="summary-images">
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 8 }}>Related visuals:</p>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <div className="image-grid">
                     {summary.images.map((img, i) => (
-                      <div key={i} className="image-result-thumb">
+                      <div
+                        key={i}
+                        className="image-result-thumb"
+                        onClick={() => setLightbox(img)}
+                      >
                         <img
                           src={authImg(img.url)}
-                          alt={`${img.source_file} ${img.page ? `p.${img.page}` : `${Math.floor(img.timestamp_sec / 60)}:${String(Math.floor(img.timestamp_sec % 60)).padStart(2, '0')}`}`}
+                          alt={`${img.source_file} ${img.page ? `p.${img.page}` : fmtTime(img.timestamp_sec)}`}
                           loading="lazy"
                         />
                         <span className="image-label">
-                          {img.page > 0 ? `p.${img.page}` : fmtTime(img.timestamp_sec)}
+                          {img.source_file}
+                          {img.page > 0 ? ` · p.${img.page}` : img.timestamp_sec > 0 ? ` · ${fmtTime(img.timestamp_sec)}` : ''}
                         </span>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
+
               {summary.sources?.length > 0 && (
                 <div className="summary-sources">
                   Sources: {summary.sources.join(' · ')}
@@ -151,46 +129,22 @@ export default function SearchPage() {
         </div>
       )}
 
-      {/* Results */}
-      {results && !loading && (
-        <div className="results-list">
-          {results.length === 0 ? (
-            <div className="empty-state">
-              <h3>No results found</h3>
-              <p>Try different keywords or broaden your search</p>
+      {/* Lightbox */}
+      {lightbox && (
+        <div className="lightbox-overlay" onClick={() => setLightbox(null)}>
+          <div className="lightbox-content" onClick={e => e.stopPropagation()}>
+            <button className="lightbox-close" onClick={() => setLightbox(null)}>
+              <X size={20} />
+            </button>
+            <img
+              src={authImg(lightbox.url)}
+              alt={lightbox.source_file}
+            />
+            <div className="lightbox-caption">
+              {lightbox.source_file}
+              {lightbox.page > 0 ? ` · Page ${lightbox.page}` : lightbox.timestamp_sec > 0 ? ` · ${fmtTime(lightbox.timestamp_sec)}` : ''}
             </div>
-          ) : (
-            results.map((r, i) => (
-              <div key={i} className="result-card">
-                <div className="result-source">
-                  <span className="result-rank">{r.rank}</span>
-                  <FileText size={14} style={{ color: 'var(--accent)' }} />
-                  <span className="filename">{r.source_file}</span>
-                  {r.page > 0 && <span className="location">p.{r.page}</span>}
-                  {r.start_sec > 0 && (
-                    <span className="location">
-                      <Clock size={10} /> {fmtTime(r.start_sec)}
-                    </span>
-                  )}
-                  {r.timestamp_sec > 0 && (
-                    <span className="location">
-                      <Clock size={10} /> {fmtTime(r.timestamp_sec)}
-                    </span>
-                  )}
-                </div>
-                {r.frame_url ? (
-                  <div className="result-image">
-                    <img src={authImg(r.frame_url)} alt={r.source_file} loading="lazy" />
-                  </div>
-                ) : (
-                  <div className="result-text">{r.text}</div>
-                )}
-                <div className="result-score">
-                  {(r.score * 100).toFixed(0)}% match
-                </div>
-              </div>
-            ))
-          )}
+          </div>
         </div>
       )}
     </div>
