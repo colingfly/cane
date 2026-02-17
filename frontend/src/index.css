@@ -767,6 +767,7 @@ select.form-input {
   font-size: 0.9375rem;
   border-radius: var(--radius);
   margin-top: 8px;
+  justify-content: center;
 }
 
 .login-error {
