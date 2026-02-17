@@ -60,7 +60,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=python-deps /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=python-deps /usr/local/bin /usr/local/bin
 COPY --from=python-deps /root/.cache/huggingface /root/.cache/huggingface
-COPY --from=python-deps /root/.cache/torch /root/.cache/torch
 
 # Copy backend code
 COPY backend/ ./
