@@ -38,7 +38,7 @@ async function request(path, options = {}) {
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))
-    throw new Error(data.detail || `Request failed: ${res.status}`)
+    throw new Error(data.detail || data.error || `Request failed: ${res.status}`)
   }
 
   return res.json()

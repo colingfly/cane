@@ -31,7 +31,7 @@ class Tenant(Base):
     id = Column(String(36), primary_key=True, default=_uuid)
     name = Column(String(255), nullable=False)                  # "Coral Gables Dental"
     slug = Column(String(100), unique=True, nullable=False)     # "coral-gables-dental"
-    plan = Column(String(50), default="business")               # "business" | "personal" (future)
+    plan = Column(String(50), default="free")                    # "free" | "pro" | "business"
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

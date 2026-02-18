@@ -51,6 +51,50 @@ from security import (
     MAX_FILE_SIZE,
 )
 
+# -- Plan Limits --
+PLAN_LIMITS = {
+    "free":     {"max_agents": 1,  "max_documents": 3,  "max_searches_month": 50},
+    "pro":      {"max_agents": 3,  "max_documents": -1, "max_searches_month": -1},   # -1 = unlimited
+    "business": {"max_agents": -1, "max_documents": -1, "max_searches_month": -1},
+}
+
+def _get_plan_limits(plan: str) -> dict:
+    return PLAN_LIMITS.get(plan, PLAN_LIMITS["free"])
+
+def _check_agent_limit(tenant_id: str, plan: str, db: Session) -> str | None:
+    limits = _get_plan_limits(plan)
+    if limits["max_agents"] == -1:
+        return None
+    count = db.query(Workspace).filter(
+        Workspace.tenant_id == tenant_id,
+        Workspace.is_default == False,
+    ).count()
+    if count >= limits["max_agents"]:
+        return f"Free plan allows {limits['max_agents']} agent. Delete an existing agent or upgrade to Pro."
+    return None
+
+def _check_document_limit(tenant_id: str, plan: str, db: Session) -> str | None:
+    limits = _get_plan_limits(plan)
+    if limits["max_documents"] == -1:
+        return None
+    count = db.query(Document).filter(Document.tenant_id == tenant_id).count()
+    if count >= limits["max_documents"]:
+        return f"Free plan allows {limits['max_documents']} documents. Delete existing documents or upgrade to Pro."
+    return None
+
+def _check_search_limit(tenant_id: str, plan: str, db: Session) -> str | None:
+    limits = _get_plan_limits(plan)
+    if limits["max_searches_month"] == -1:
+        return None
+    first_of_month = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    count = db.query(SearchLog).filter(
+        SearchLog.tenant_id == tenant_id,
+        SearchLog.created_at >= first_of_month,
+    ).count()
+    if count >= limits["max_searches_month"]:
+        return f"Free plan allows {limits['max_searches_month']} searches per month. Upgrade to Pro for unlimited searches."
+    return None
+
 # â”€â”€ Boot â”€â”€
 ensure_dirs()
 init_db()
@@ -217,6 +261,7 @@ def login(request: Request, email: str = Form(...), password: str = Form(...), d
             "id": tenant.id,
             "name": tenant.name,
             "slug": tenant.slug,
+            "plan": tenant.plan or "free",
         },
     }
 
@@ -238,6 +283,7 @@ def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
             "id": tenant.id,
             "name": tenant.name,
             "slug": tenant.slug,
+            "plan": tenant.plan or "free",
         },
         "workspaces": [
             {
@@ -345,6 +391,7 @@ def register(
             "id": tenant.id,
             "name": tenant.name,
             "slug": tenant.slug,
+            "plan": tenant.plan or "free",
         },
     }
 
@@ -503,6 +550,12 @@ async def upload_and_ingest(
     ).first()
     if not ws:
         raise HTTPException(400, "Invalid workspace")
+
+    # Plan limit check
+    tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+    limit_err = _check_document_limit(user.tenant_id, tenant.plan if tenant else "free", db)
+    if limit_err:
+        raise HTTPException(403, limit_err)
 
     # Validate file type
     ext = Path(file.filename).suffix.lower()
@@ -816,6 +869,13 @@ def search(
     q = sanitize_query(q)
     if not q:
         return {"results": [], "mode": mode, "query": ""}
+
+    # Plan limit check
+    tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+    limit_err = _check_search_limit(user.tenant_id, tenant.plan if tenant else "free", db)
+    if limit_err:
+        return JSONResponse({"error": limit_err}, status_code=403)
+
     if mode not in ("text", "visual", "fusion"):
         mode = "text"
 
@@ -1144,6 +1204,12 @@ def ask(
     if not q:
         return {"status": "error", "error": "Query is required"}
 
+    # Plan limit check
+    tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+    limit_err = _check_search_limit(user.tenant_id, tenant.plan if tenant else "free", db)
+    if limit_err:
+        return JSONResponse({"error": limit_err}, status_code=403)
+
     if not ANTHROPIC_API_KEY:
         return {"status": "no_llm", "error": "Anthropic API key not configured. Set ANTHROPIC_API_KEY."}
 
@@ -1389,6 +1455,12 @@ def ask_stream(
     q = sanitize_query(q)
     if not q:
         return JSONResponse({"status": "error", "error": "Query is required"})
+
+    # Plan limit check
+    tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+    limit_err = _check_search_limit(user.tenant_id, tenant.plan if tenant else "free", db)
+    if limit_err:
+        return JSONResponse({"error": limit_err}, status_code=403)
 
     if not ANTHROPIC_API_KEY:
         return JSONResponse({"status": "no_llm", "error": "Anthropic API key not configured."})
@@ -1741,6 +1813,12 @@ def create_agent(
     db: Session = Depends(get_db),
 ):
     """Create a new agent workspace from a template or custom."""
+    # Plan limit check
+    tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+    limit_err = _check_agent_limit(user.tenant_id, tenant.plan if tenant else "free", db)
+    if limit_err:
+        return JSONResponse({"error": limit_err}, status_code=403)
+
     template = get_template(agent_type)
     if template:
         name = name or template["name"]
@@ -2203,6 +2281,11 @@ async def create_api_key_endpoint(
     db: Session = Depends(get_db),
 ):
     """Generate a new API key. Returns the full key ONCE — it cannot be retrieved again."""
+    # Plan check — free users cannot create API keys
+    tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+    if tenant and tenant.plan == "free":
+        raise HTTPException(403, "API access requires a Pro plan. Upgrade to generate API keys.")
+
     try:
         body = await request.json()
     except Exception:

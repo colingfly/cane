@@ -205,12 +205,22 @@ export default function SettingsPage() {
       </div>
 
       {/* API Keys */}
-      {isOwner && (
+      {isOwner && tenant?.plan !== 'free' && (
         <div className="card" style={{ marginBottom: 24 }}>
           <div className="card-header">
             <h3><Key size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} /> API Keys</h3>
           </div>
           <ApiKeysSection workspaces={workspaces} />
+        </div>
+      )}
+      {isOwner && tenant?.plan === 'free' && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <div className="card-header">
+            <h3><Key size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} /> API Keys</h3>
+          </div>
+          <div style={{ padding: '20px 24px', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+            API access is available on the Pro plan. <a href="mailto:hello@cane.fyi" style={{ color: 'var(--accent)' }}>Contact us</a> to upgrade.
+          </div>
         </div>
       )}
 

@@ -35,6 +35,7 @@ export default function AgentBuilder() {
   const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [customName, setCustomName] = useState('')
   const [customDesc, setCustomDesc] = useState('')
+  const [error, setError] = useState('')
   const navigate = useNavigate()
 
   useEffect(() => { loadData() }, [])
@@ -54,6 +55,7 @@ export default function AgentBuilder() {
   const handleCreateFromTemplate = async () => {
     if (creating || !selectedTemplate) return
     setCreating(true)
+    setError('')
     try {
       const res = await createAgent({ agent_type: selectedTemplate.type })
       if (res.id) {
@@ -61,7 +63,8 @@ export default function AgentBuilder() {
         navigate(`/agents/${res.id}`)
       }
     } catch (e) {
-      console.error('Failed to create agent:', e)
+      setError(e.message)
+      setSelectedTemplate(null)
     } finally {
       setCreating(false)
     }
@@ -70,6 +73,7 @@ export default function AgentBuilder() {
   const handleCreateCustom = async () => {
     if (!customName.trim() || creating) return
     setCreating(true)
+    setError('')
     try {
       const res = await createAgent({
         agent_type: 'custom',
@@ -83,7 +87,8 @@ export default function AgentBuilder() {
         navigate(`/agents/${res.id}`)
       }
     } catch (e) {
-      console.error('Failed to create custom agent:', e)
+      setError(e.message)
+      setShowCustomModal(false)
     } finally {
       setCreating(false)
     }
@@ -131,6 +136,20 @@ export default function AgentBuilder() {
           Create AI agents specialized for your documents. Choose a template or build your own.
         </p>
       </div>
+
+      {/* Plan limit error */}
+      {error && (
+        <div style={{
+          background: 'rgba(196,78,63,0.08)', border: '1px solid rgba(196,78,63,0.2)',
+          borderRadius: 10, padding: '14px 20px', marginBottom: 24,
+          fontSize: '0.8125rem', color: 'var(--error)', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <span>{error}</span>
+          <button onClick={() => setError('')} style={{
+            background: 'none', border: 'none', color: 'var(--error)', cursor: 'pointer', fontSize: '1rem', padding: '0 4px',
+          }}>x</button>
+        </div>
+      )}
 
       {/* Templates */}
       <h3 style={{ fontSize: '0.8125rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 16 }}>
