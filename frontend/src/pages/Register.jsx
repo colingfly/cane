@@ -31,11 +31,17 @@ export default function Register() {
 
   return (
     <div className="login-page">
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 48, padding: '40px 20px' }}>
-        <div className="login-card">
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 32, padding: '40px 20px' }}>
+        <div className="login-card" style={{
+          background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+          borderRadius: 16, padding: 40,
+        }}>
           <div className="login-brand">
             <h1>Cane</h1>
             <p>Create your account</p>
+            <p style={{ color: 'var(--cane-600)', fontSize: '0.75rem', marginTop: 6 }}>
+              Turn your documents into AI-powered experts
+            </p>
           </div>
 
           <form onSubmit={onSubmit}>
@@ -155,8 +161,8 @@ export default function Register() {
             </div>
           </div>
 
-          <p style={{ textAlign: 'center', color: 'var(--cane-600)', fontSize: '0.75rem', marginTop: 16 }}>
-            Need a custom setup? <a href="mailto:hello@cane.fyi" style={{ color: 'var(--accent)' }}>Contact us</a>
+          <p style={{ textAlign: 'center', color: 'var(--cane-500)', fontSize: '0.8125rem', marginTop: 20 }}>
+            For teams and enterprises — <a href="mailto:hello@cane.fyi" style={{ color: 'var(--accent)' }}>contact us</a> for a custom setup
           </p>
         </div>
       </div>
