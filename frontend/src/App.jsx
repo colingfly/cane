@@ -45,6 +45,12 @@ export default function App() {
 
       <Route path="/" element={
         <ProtectedRoute>
+          <Layout><AgentBuilder /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/search" element={
+        <ProtectedRoute>
           <Layout><SearchPage /></Layout>
         </ProtectedRoute>
       } />
@@ -52,12 +58,6 @@ export default function App() {
       <Route path="/documents" element={
         <ProtectedRoute>
           <Layout><Documents /></Layout>
-        </ProtectedRoute>
-      } />
-
-      <Route path="/agents" element={
-        <ProtectedRoute>
-          <Layout><AgentBuilder /></Layout>
         </ProtectedRoute>
       } />
 

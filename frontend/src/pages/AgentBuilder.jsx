@@ -35,6 +35,7 @@ export default function AgentBuilder() {
   const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [customName, setCustomName] = useState('')
   const [customDesc, setCustomDesc] = useState('')
+  const [showWelcome, setShowWelcome] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => { loadData() }, [])
@@ -42,13 +43,23 @@ export default function AgentBuilder() {
   const loadData = async () => {
     try {
       const [agentRes, templateRes] = await Promise.all([getAgents(), getAgentTemplates()])
-      setAgents(agentRes.agents || [])
+      const agentList = agentRes.agents || []
+      setAgents(agentList)
       setTemplates(templateRes.templates || [])
+      // Show welcome banner if user has no agents and hasn't dismissed it
+      if (agentList.length === 0 && !sessionStorage.getItem('cane_welcome_dismissed')) {
+        setShowWelcome(true)
+      }
     } catch (e) {
       console.error('Failed to load agents:', e)
     } finally {
       setLoading(false)
     }
+  }
+
+  const dismissWelcome = () => {
+    setShowWelcome(false)
+    sessionStorage.setItem('cane_welcome_dismissed', '1')
   }
 
   const handleCreateFromTemplate = async () => {
@@ -104,6 +115,32 @@ export default function AgentBuilder() {
 
   return (
     <div className="fade-in">
+      {/* Welcome banner for first-time users */}
+      {showWelcome && (
+        <div style={{
+          background: 'var(--accent-muted)', border: '1px solid rgba(200,150,62,0.2)',
+          borderRadius: 12, padding: '20px 24px', marginBottom: 28,
+          display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16,
+        }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '0.9375rem', marginBottom: 4, fontFamily: 'var(--font-display)' }}>
+              Welcome to Cane
+            </div>
+            <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              Start by choosing a template or creating a custom agent. Upload your documents, and your agent will be ready to answer questions in minutes.
+            </div>
+          </div>
+          <button
+            onClick={dismissWelcome}
+            style={{
+              background: 'none', border: 'none', color: 'var(--text-muted)',
+              cursor: 'pointer', fontSize: '1.125rem', padding: '0 4px', flexShrink: 0, lineHeight: 1,
+            }}
+            title="Dismiss"
+          >x</button>
+        </div>
+      )}
+
       <div style={{ marginBottom: 32 }}>
         <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-display)' }}>
           Agent Builder

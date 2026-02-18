@@ -17,12 +17,6 @@ export default function Layout({ children }) {
 
         <nav className="sidebar-nav">
           <NavLink to="/" end>
-            <Search /> Search
-          </NavLink>
-          <NavLink to="/documents">
-            <FileText /> Documents
-          </NavLink>
-          <NavLink to="/agents">
             <Bot />
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               Agent Builder
@@ -31,6 +25,12 @@ export default function Layout({ children }) {
                 padding: '1px 5px', borderRadius: 6, letterSpacing: '0.04em', lineHeight: 1.4,
               }}>BETA</span>
             </span>
+          </NavLink>
+          <NavLink to="/search">
+            <Search /> Search
+          </NavLink>
+          <NavLink to="/documents">
+            <FileText /> Documents
           </NavLink>
           <NavLink to="/dashboard">
             <BarChart3 /> Dashboard
