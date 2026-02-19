@@ -177,7 +177,26 @@ print(f"""
 """)
 
 chroma_client = chromadb.PersistentClient(path=DB_PATH)
-ef = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=TEXT_EMBED_MODEL)
+
+# Embedding model — uses OpenAI if key is set, otherwise local BGE
+from config import get_embedding_function, get_active_embed_id
+ef = get_embedding_function()
+
+# Detect embedding model change — incompatible vectors need re-ingestion
+_embed_marker_path = Path(DB_PATH) / ".embed_model"
+_active_embed = get_active_embed_id()
+_prev_embed = _embed_marker_path.read_text().strip() if _embed_marker_path.exists() else None
+
+if _prev_embed and _prev_embed != _active_embed:
+    print(f"\n  ⚠️  EMBEDDING MODEL CHANGED: {_prev_embed} → {_active_embed}")
+    print(f"  Clearing old embeddings — documents must be re-uploaded.\n")
+    try:
+        chroma_client.delete_collection(TEXT_COLLECTION)
+    except Exception:
+        pass
+
+_embed_marker_path.write_text(_active_embed)
+
 text_col = chroma_client.get_or_create_collection(TEXT_COLLECTION, embedding_function=ef)
 
 try:
@@ -672,6 +691,13 @@ def _run_ingestion_background(
             doc.image_count = len(result.images)
             doc.processed_at = datetime.utcnow()
             print(f"  [BG] Done: {doc.filename} -> {doc.chunk_count} chunks, {doc.image_count} images")
+
+            # Invalidate BM25 keyword index so it rebuilds with new content
+            try:
+                from hybrid_search import invalidate_index
+                invalidate_index(tenant_id, workspace_id)
+            except Exception:
+                pass
         else:
             doc.status = "error"
             doc.error_message = result.error
@@ -753,6 +779,13 @@ def delete_document(
 
     db.delete(doc)
     db.commit()
+
+    # Invalidate BM25 keyword index
+    try:
+        from hybrid_search import invalidate_index
+        invalidate_index(user.tenant_id, doc.workspace_id or "")
+    except Exception:
+        pass
 
     return {"status": "deleted", "filename": doc.filename}
 
@@ -915,44 +948,80 @@ def _search_text(q, n, where):
     if text_col.count() == 0:
         return {"results": [], "mode": "text", "total": 0}
 
+    # ── Vector search ──
     fetch_n = min(n * 3, text_col.count())
     kwargs = {"query_texts": [q], "n_results": fetch_n, "include": ["documents", "metadatas", "distances"]}
     if where:
         kwargs["where"] = where
 
+    vector_results = []
     try:
         r = text_col.query(**kwargs)
+        rank = 0
+        for i, (doc, meta, dist) in enumerate(zip(r["documents"][0], r["metadatas"][0], r["distances"][0])):
+            display = meta.get("display_text", doc) if meta else doc
+            if not display or not _is_quality_chunk(display):
+                continue
+            score = max(0, 1 - dist)
+            rank += 1
+            vector_results.append({
+                "rank": rank,
+                "text": _clean_transcript(display[:500]),
+                "score": round(score, 4),
+                "source_file": meta.get("source_file", ""),
+                "source_type": meta.get("source_type", ""),
+                "workspace_id": meta.get("workspace_id", ""),
+                "document_id": meta.get("document_id", ""),
+                "location": meta.get("location", ""),
+                "page": meta.get("page", 0),
+                "start_sec": meta.get("start_sec", 0),
+                "end_sec": meta.get("end_sec", 0),
+            })
     except Exception:
-        # If where filter fails (empty collection for tenant), return empty
-        return {"results": [], "mode": "text", "total": 0}
+        pass
 
-    results = []
-    rank = 0
-    for i, (doc, meta, dist) in enumerate(zip(r["documents"][0], r["metadatas"][0], r["distances"][0])):
-        display = meta.get("display_text", doc) if meta else doc
-        if not display or not _is_quality_chunk(display):
-            continue
-        score = max(0, 1 - dist)
-        rank += 1
-        results.append({
-            "rank": rank,
-            "text": _clean_transcript(display[:500]),
-            "score": round(score, 4),
-            "source_file": meta.get("source_file", ""),
-            "source_type": meta.get("source_type", ""),
-            "workspace_id": meta.get("workspace_id", ""),
-            "document_id": meta.get("document_id", ""),
-            "location": meta.get("location", ""),
-            "page": meta.get("page", 0),
-            "start_sec": meta.get("start_sec", 0),
-            "end_sec": meta.get("end_sec", 0),
-        })
+    # ── BM25 keyword search ──
+    keyword_results = []
+    try:
+        from hybrid_search import keyword_search, hybrid_merge
+        # Extract tenant_id and workspace_id from the where clause
+        tenant_id = ""
+        workspace_id = ""
+        if isinstance(where, dict):
+            if "$and" in where:
+                for cond in where["$and"]:
+                    if "tenant_id" in cond:
+                        tenant_id = cond["tenant_id"]
+                    if "workspace_id" in cond:
+                        workspace_id = cond["workspace_id"]
+            elif "tenant_id" in where:
+                tenant_id = where["tenant_id"]
+
+        if tenant_id:
+            keyword_results = keyword_search(q, n * 2, tenant_id, workspace_id)
+    except Exception as ex:
+        print(f"  [Search] BM25 error (non-fatal): {ex}")
+
+    # ── Merge with RRF ──
+    if keyword_results:
+        from hybrid_search import hybrid_merge
+        results = hybrid_merge(vector_results, keyword_results)
+        print(f"  [Search] Hybrid: {len(vector_results)} vector + {len(keyword_results)} keyword → {len(results)} merged")
+    else:
+        results = vector_results
 
     results = _dedup_results(results)
     results = _rerank_results(q, results)
-    results = [r for r in results if r["score"] >= TEXT_SCORE_THRESHOLD]
 
-    return {"results": results[:n], "mode": "text", "total": text_col.count()}
+    # Filter by score threshold — for hybrid results, keep anything that made it through RRF
+    if keyword_results:
+        # Hybrid mode: RRF already ranked by relevance, just keep top n
+        # But still filter pure vector results by score if they're low
+        results = [r for r in results if r.get("rrf_score", 0) > 0 or r.get("score", 0) >= TEXT_SCORE_THRESHOLD]
+    else:
+        results = [r for r in results if r.get("score", 0) >= TEXT_SCORE_THRESHOLD]
+
+    return {"results": results[:n], "mode": "hybrid" if keyword_results else "text", "total": text_col.count()}
 
 
 def _search_visual(q, n, where):
