@@ -90,25 +90,29 @@ def auto_generate_prompt(document_previews: list[dict]) -> str:
 
     docs_text = "\n\n".join(doc_descriptions)
 
-    meta_prompt = f"""Analyze the following document previews and generate a specialized system prompt for a Q&A assistant that will answer questions about this content.
+    meta_prompt = f"""Analyze the following document previews and generate a specialized system prompt for a RAG (retrieval-augmented generation) Q&A assistant that will answer questions about this content.
 
 DOCUMENTS:
 {docs_text}
 
 Generate a system prompt that:
 1. Identifies the domain/field these documents cover
-2. Lists key concepts, terminology, and entities found in the content
-3. Specifies how the assistant should handle domain-specific terms
+2. Lists key concepts, terminology, and named entities found in the content (programs, initiatives, tools, people, organizations)
+3. Specifies how the assistant should handle domain-specific terms — use exact names from the documents
 4. Defines the appropriate answer style (technical depth, tone, format)
-5. Notes any special considerations (e.g., formulas, code, legal language)
+5. Notes any special considerations (e.g., government language, acronyms, technical specs)
 
-IMPORTANT:
-- The prompt should instruct the assistant to answer ONLY based on provided document excerpts
-- Include specific terminology from the documents so the assistant handles domain jargon correctly
+CRITICAL RULES TO INCLUDE IN THE PROMPT:
+- The assistant answers ONLY based on provided document excerpts — never fabricate
+- When listing items, the assistant must search ALL provided excerpts before presenting a list, and should say "Based on the available excerpts" rather than presenting a partial list as definitive
+- Before concluding that information is not in the documents, the assistant must carefully check all excerpts — do not say "not documented" after checking only a subset
+- If information might be incomplete due to retrieval, acknowledge this rather than presenting partial info as complete
+- Include specific terminology and named entities from the documents so the assistant handles domain jargon correctly
+
+FORMAT:
 - Keep the prompt under 500 words — concise and actionable
 - Start directly with "You are..." — no preamble
-
-Return ONLY the system prompt text, nothing else."""
+- Return ONLY the system prompt text, nothing else."""
 
     payload = {
         "model": "claude-sonnet-4-20250514",
