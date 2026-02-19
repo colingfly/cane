@@ -60,12 +60,27 @@ IS_PRODUCTION = os.getenv("CANE_ENV", "development").lower() == "production"
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL = os.getenv("CANE_CLAUDE_MODEL", "claude-haiku-4-5-20251001")
 
+# ── Embedding Model ──
+# BGE-large is 3x better retrieval than BGE-base, still runs locally
+TEXT_EMBED_MODEL = os.getenv("CANE_EMBED_MODEL", "BAAI/bge-large-en-v1.5")
+
+def get_embedding_function():
+    """Return the embedding function."""
+    from chromadb.utils import embedding_functions
+    print(f"  [Embeddings] Using local {TEXT_EMBED_MODEL}")
+    return embedding_functions.SentenceTransformerEmbeddingFunction(
+        model_name=TEXT_EMBED_MODEL
+    )
+
+def get_active_embed_id() -> str:
+    """Return a string identifying the active embedding model (for change detection)."""
+    return f"local:{TEXT_EMBED_MODEL}"
+
 # ── Collections ──
 TEXT_COLLECTION = "cane_chunks"
 IMAGE_COLLECTION = "cane_images"
 
 # ── Models ──
-TEXT_EMBED_MODEL = "BAAI/bge-base-en-v1.5"
 CLIP_MODEL = "openai/clip-vit-base-patch32"
 WHISPER_MODEL = os.getenv("CANE_WHISPER_MODEL", "base")  # base=fast/light, medium=better accuracy
 
