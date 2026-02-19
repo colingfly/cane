@@ -62,7 +62,7 @@ CLAUDE_MODEL = os.getenv("CANE_CLAUDE_MODEL", "claude-haiku-4-5-20251001")
 
 # ── Embedding Model ──
 # BGE-large is 3x better retrieval than BGE-base, still runs locally
-TEXT_EMBED_MODEL = os.getenv("CANE_EMBED_MODEL", "BAAI/bge-large-en-v1.5")
+TEXT_EMBED_MODEL = os.getenv("CANE_EMBED_MODEL", "BAAI/bge-base-en-v1.5")
 
 def get_embedding_function():
     """Return the embedding function."""
