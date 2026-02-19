@@ -125,12 +125,8 @@ export default function AgentBuilder() {
       )}
 
       <div style={{ marginBottom: 32 }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-display)' }}>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: 4, fontFamily: 'var(--font-display)' }}>
           Agent Builder
-          <span style={{
-            fontSize: '0.6rem', fontWeight: 600, background: 'var(--accent)', color: 'white',
-            padding: '2px 8px', borderRadius: 10, letterSpacing: '0.05em', textTransform: 'uppercase',
-          }}>Beta</span>
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
           Create AI agents specialized for your files. Choose a template or build your own.

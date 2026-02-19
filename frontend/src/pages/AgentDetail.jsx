@@ -169,14 +169,8 @@ export default function AgentDetail() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <AgentIcon icon={agent.agent_icon} size={48} />
           <div>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 700, fontFamily: 'var(--font-display)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 700, fontFamily: 'var(--font-display)' }}>
               {agent.name}
-              {agent.agent_type === 'custom' && (
-                <span style={{
-                  fontSize: '0.6rem', fontWeight: 600, background: 'var(--accent)', color: 'white',
-                  padding: '2px 8px', borderRadius: 10, letterSpacing: '0.05em', textTransform: 'uppercase',
-                }}>Beta</span>
-              )}
             </h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
               {agent.agent_description || 'No description'}
