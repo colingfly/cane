@@ -30,7 +30,7 @@ export default function Layout({ children }) {
             <Search /> Search
           </NavLink>
           <NavLink to="/documents">
-            <FileText /> Documents
+            <FileText /> Files
           </NavLink>
           <NavLink to="/dashboard">
             <BarChart3 /> Dashboard

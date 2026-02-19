@@ -26,7 +26,7 @@ export default function Dashboard() {
       <div className="stat-grid">
         <div className="stat-card">
           <div className="stat-value">{stats.documents}</div>
-          <div className="stat-label"><FileText size={13} style={{ verticalAlign: 'middle' }} /> Documents</div>
+          <div className="stat-label"><FileText size={13} style={{ verticalAlign: 'middle' }} /> Files</div>
         </div>
         <div className="stat-card">
           <div className="stat-value">{stats.chunks.toLocaleString()}</div>

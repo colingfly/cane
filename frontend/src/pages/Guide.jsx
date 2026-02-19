@@ -36,11 +36,11 @@ const sections = [
   {
     id: 'searching',
     icon: Search,
-    title: 'Searching Your Documents',
+    title: 'Searching Your Files',
     content: [
       {
         q: 'How do I search?',
-        a: 'Go to the Search page (home). Type your question in plain English \u2014 for example, "What is our PTO policy?" or "How do I configure the API?" Cane searches across all your documents and gives you an AI-generated answer with sources cited.',
+        a: 'Go to the Search page (home). Type your question in plain English \u2014 for example, "What is our PTO policy?" or "How do I configure the API?" Cane searches across all your files and gives you an AI-generated answer with sources cited.',
       },
       {
         q: 'Can I search a specific workspace or agent?',
@@ -52,34 +52,34 @@ const sections = [
       },
       {
         q: 'How does Cane find answers?',
-        a: 'Cane uses semantic search to find the most relevant sections of your documents, then uses AI to synthesize a clear answer. It shows which documents the answer came from so you can verify.',
+        a: 'Cane uses semantic search to find the most relevant sections of your files, then uses AI to synthesize a clear answer. It shows which files the answer came from so you can verify.',
       },
     ],
   },
   {
     id: 'documents',
     icon: Upload,
-    title: 'Uploading Documents',
+    title: 'Uploading Files',
     content: [
       {
         q: 'What file types can I upload?',
-        a: 'PDFs, Word documents (DOCX), spreadsheets (XLSX, CSV), images (PNG, JPG, GIF, TIFF, WEBP), audio (MP3, WAV, M4A, FLAC), and video (MP4, MKV, AVI, MOV, WEBM).',
+        a: 'PDFs, Word docs (DOCX), spreadsheets (XLSX, CSV), images (PNG, JPG, GIF, TIFF, WEBP), audio (MP3, WAV, M4A, FLAC), and video (MP4, MKV, AVI, MOV, WEBM).',
       },
       {
         q: 'How do I upload?',
-        a: 'Go to the Documents page. Drag and drop files into the upload area, or click to browse. You can upload multiple files at once. Select which workspace to upload to using the dropdown.',
+        a: 'Go to the Files page. Drag and drop files into the upload area, or click to browse. You can upload multiple files at once. Select which workspace to upload to using the dropdown.',
       },
       {
         q: 'How long does processing take?',
-        a: 'Most documents process in under a minute. Audio and video files take longer because they need to be transcribed. You will see a status indicator while processing is in progress. You can keep working while files process in the background.',
+        a: 'Most files process in under a minute. Audio and video files take longer because they need to be transcribed. You will see a status indicator while processing is in progress. You can keep working while files process in the background.',
       },
       {
         q: 'What happens during processing?',
-        a: 'Cane extracts text from your documents, splits it into searchable chunks, and creates embeddings for semantic search. For images, it runs OCR to extract visible text. For audio and video, it generates a transcript.',
+        a: 'Cane extracts text from your files, splits it into searchable chunks, and creates embeddings for semantic search. For images, it runs OCR to extract visible text. For audio and video, it generates a transcript.',
       },
       {
-        q: 'Can I delete a document?',
-        a: 'Yes. On the Documents page, click the trash icon next to any document. This removes the document and all its indexed content. This action cannot be undone.',
+        q: 'Can I delete a file?',
+        a: 'Yes. On the Files page, click the trash icon next to any file. This removes the file and all its indexed content. This action cannot be undone.',
       },
     ],
   },
@@ -90,15 +90,15 @@ const sections = [
     content: [
       {
         q: 'What is a workspace?',
-        a: 'A workspace is a collection of documents grouped by topic, department, or project. When you search within a workspace, only documents in that workspace are searched.',
+        a: 'A workspace is a collection of files grouped by topic, department, or project. When you search within a workspace, only files in that workspace are searched.',
       },
       {
         q: 'How do I create a workspace?',
-        a: 'Go to Settings and look for the Workspaces section. Click "Add Workspace" and give it a name. You can then upload documents directly to that workspace.',
+        a: 'Go to Settings and look for the Workspaces section. Click "Add Workspace" and give it a name. You can then upload files directly to that workspace.',
       },
       {
         q: 'When should I use multiple workspaces?',
-        a: 'Use separate workspaces when you have distinct document collections that should not overlap in search results. For example: one workspace for HR policies, another for product documentation, another for training materials.',
+        a: 'Use separate workspaces when you have distinct file collections that should not overlap in search results. For example: one workspace for HR policies, another for product documentation, another for training materials.',
       },
     ],
   },
@@ -109,7 +109,7 @@ const sections = [
     content: [
       {
         q: 'What is an agent?',
-        a: 'An agent is a specialized AI assistant trained on a specific set of documents. It has a custom prompt that tells the AI how to interpret and respond to questions about those documents. Think of it as an expert that only knows about one topic.',
+        a: 'An agent is a specialized AI assistant trained on a specific set of files. It has a custom prompt that tells the AI how to interpret and respond to questions about those files. Think of it as an expert that only knows about one topic.',
       },
       {
         q: 'What templates are available?',
@@ -117,15 +117,15 @@ const sections = [
       },
       {
         q: 'How do I create an agent?',
-        a: 'Go to Agent Builder in the sidebar. Click a template or "Create Your Own." After creating the agent, upload documents and optionally customize the AI prompt. Then click "Ask this agent" to start querying.',
+        a: 'Go to Agent Builder in the sidebar. Click a template or "Create Your Own." After creating the agent, upload files and optionally customize the AI prompt. Then click "Ask this agent" to start querying.',
       },
       {
         q: 'What does "Auto-generate" do?',
-        a: 'For custom agents, the Auto-generate button analyzes your uploaded documents and writes a specialized prompt based on the domain, terminology, and content it finds. You can edit the generated prompt before saving.',
+        a: 'For custom agents, the Auto-generate button analyzes your uploaded files and writes a specialized prompt based on the domain, terminology, and content it finds. You can edit the generated prompt before saving.',
       },
       {
         q: 'How do I use an agent from the Search page?',
-        a: 'Agents appear in the Search page dropdown under the "Agents" group. Select one to scope your search to that agent\'s documents and specialized prompt. You can also click "Ask this agent" from the agent detail page.',
+        a: 'Agents appear in the Search page dropdown under the "Agents" group. Select one to scope your search to that agent\'s files and specialized prompt. You can also click "Ask this agent" from the agent detail page.',
       },
     ],
   },
@@ -136,7 +136,7 @@ const sections = [
     content: [
       {
         q: 'What can I do with the API?',
-        a: 'The Cane API lets you query your documents programmatically from any external app \u2014 a Slack bot, customer support widget, internal portal, or custom integration. Any agent you build in Cane can be accessed via API.',
+        a: 'The Cane API lets you query your files programmatically from any external app \u2014 a Slack bot, customer support widget, internal portal, or custom integration. Any agent you build in Cane can be accessed via API.',
       },
       {
         q: 'How do I get an API key?',
@@ -144,22 +144,22 @@ const sections = [
       },
       {
         q: 'How do I ask a question via API?',
-        a: 'Send a POST request to /v1/ask with your question. The response includes an AI-generated answer and source documents.',
+        a: 'Send a POST request to /v1/ask with your question. The response includes an AI-generated answer and source files.',
         code: 'curl -X POST https://cane.fyi/v1/ask \\\n  -H "Authorization: Bearer cane_your_key_here" \\\n  -H "Content-Type: application/json" \\\n  -d \'{\n    "query": "What is our PTO policy?",\n    "workspace_id": "optional-workspace-id"\n  }\'',
       },
       {
         q: 'What does the response look like?',
-        a: 'The /v1/ask endpoint returns a JSON object with the answer, source documents, and metadata.',
+        a: 'The /v1/ask endpoint returns a JSON object with the answer, source files, and metadata.',
         code: '{\n  "answer": "According to the employee handbook...",\n  "sources": ["employee-handbook.pdf"],\n  "chunks_used": 5,\n  "model": "claude-haiku-4-5-20251001"\n}',
       },
       {
         q: 'How do I search without AI synthesis?',
-        a: 'Use /v1/search to get raw document chunks with relevance scores \u2014 useful when you want to build your own UI or processing pipeline on top of the results.',
+        a: 'Use /v1/search to get raw content chunks with relevance scores \u2014 useful when you want to build your own UI or processing pipeline on top of the results.',
         code: 'curl -X POST https://cane.fyi/v1/search \\\n  -H "Authorization: Bearer cane_your_key_here" \\\n  -H "Content-Type: application/json" \\\n  -d \'{\n    "query": "onboarding procedures",\n    "max_results": 5\n  }\'',
       },
       {
         q: 'Can I scope a key to one agent?',
-        a: 'Yes. When generating an API key in Settings, select a workspace or agent from the scope dropdown. All requests using that key will automatically be scoped to that agent\'s documents and prompt \u2014 no need to pass workspace_id on every request.',
+        a: 'Yes. When generating an API key in Settings, select a workspace or agent from the scope dropdown. All requests using that key will automatically be scoped to that agent\'s files and prompt \u2014 no need to pass workspace_id on every request.',
       },
       {
         q: 'What are the rate limits?',
@@ -198,11 +198,11 @@ const sections = [
     content: [
       {
         q: 'How do I invite team members?',
-        a: 'Go to Settings and use the team invite section. Enter their email address and they will receive access. Team members can search and upload documents to shared workspaces.',
+        a: 'Go to Settings and use the team invite section. Enter their email address and they will receive access. Team members can search and upload files to shared workspaces.',
       },
       {
         q: 'What are the different roles?',
-        a: 'Owners can manage the team, workspaces, agents, and all documents. Members can upload documents and search. Everyone on the team searches the same document pool.',
+        a: 'Owners can manage the team, workspaces, agents, and all files. Members can upload files and search. Everyone on the team searches the same file pool.',
       },
       {
         q: 'How do I change my password?',

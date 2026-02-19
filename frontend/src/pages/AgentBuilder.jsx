@@ -96,7 +96,7 @@ export default function AgentBuilder() {
 
   const handleDelete = async (e, agentId) => {
     e.stopPropagation()
-    if (!confirm('Delete this agent and all its documents?')) return
+    if (!confirm('Delete this agent and all its files?')) return
     try {
       await deleteAgent(agentId)
       setAgents(prev => prev.filter(a => a.id !== agentId))
@@ -119,7 +119,7 @@ export default function AgentBuilder() {
             Welcome to Cane
           </div>
           <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-            Start by choosing a template or creating a custom agent. Upload your documents, and your agent will be ready to answer questions in minutes.
+            Start by choosing a template or creating a custom agent. Upload your files, and your agent will be ready to answer questions in minutes.
           </div>
         </div>
       )}
@@ -133,7 +133,7 @@ export default function AgentBuilder() {
           }}>Beta</span>
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-          Create AI agents specialized for your documents. Choose a template or build your own.
+          Create AI agents specialized for your files. Choose a template or build your own.
         </p>
       </div>
 
@@ -246,7 +246,7 @@ export default function AgentBuilder() {
                 <div style={{ display: 'flex', gap: 20, marginTop: 4 }}>
                   <div>
                     <div style={{ fontSize: '1.125rem', fontWeight: 700, fontFamily: 'var(--font-display)' }}>{a.document_count}</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Documents</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Files</div>
                   </div>
                   <div style={{ marginTop: 4 }}>
                     <div style={{ fontSize: '0.7rem', color: a.system_prompt ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>
@@ -276,7 +276,7 @@ export default function AgentBuilder() {
               </div>
             </div>
             <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 24 }}>
-              {selectedTemplate.description} This will create a new agent workspace with a pre-configured prompt. You can upload documents and customize the prompt after creation.
+              {selectedTemplate.description} This will create a new agent workspace with a pre-configured prompt. You can upload files and customize the prompt after creation.
             </p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button className="btn btn-ghost" onClick={() => setSelectedTemplate(null)}>Cancel</button>

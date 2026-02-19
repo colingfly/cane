@@ -185,7 +185,7 @@ export default function Documents() {
   return (
     <div className="fade-in">
       <div className="page-header">
-        <h2>Documents</h2>
+        <h2>Files</h2>
         <p>Upload and manage your knowledge base</p>
       </div>
 
@@ -413,7 +413,7 @@ export default function Documents() {
       ) : (
         <div className="empty-state">
           <FileText size={32} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
-          <h3>No documents yet</h3>
+          <h3>No files yet</h3>
           <p>Upload files above to start building your searchable knowledge base</p>
         </div>
       )}

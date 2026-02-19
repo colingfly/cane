@@ -460,7 +460,7 @@ function ApiKeysSection({ workspaces }) {
   return (
     <div style={{ padding: '16px 0' }}>
       <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 16 }}>
-        API keys let external apps query your documents programmatically. Keys are scoped to your tenant and optionally to a specific workspace or agent.
+        API keys let external apps query your files programmatically. Keys are scoped to your tenant and optionally to a specific workspace or agent.
       </p>
 
       {/* Revealed key banner */}

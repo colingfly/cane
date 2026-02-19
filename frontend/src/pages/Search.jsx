@@ -85,7 +85,7 @@ export default function SearchPage() {
           What are you looking for?
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-          Search across all your documents
+          Search across all your files
         </p>
       </div>
 
@@ -96,7 +96,7 @@ export default function SearchPage() {
             <input
               type="text"
               className="search-input"
-              placeholder={history.length > 0 ? "Ask a follow-up..." : "Ask anything about your documents..."}
+              placeholder={history.length > 0 ? "Ask a follow-up..." : "Ask anything about your files..."}
               value={query}
               onChange={e => setQuery(e.target.value)}
               autoFocus

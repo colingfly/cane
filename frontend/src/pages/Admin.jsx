@@ -53,7 +53,7 @@ export default function Admin() {
 
   async function handleDeleteTenant() {
     if (!confirm(`Delete "${detail.tenant.name}" and ALL its data? This cannot be undone.`)) return
-    if (!confirm(`Are you absolutely sure? This will delete all users, documents, and search history for this tenant.`)) return
+    if (!confirm(`Are you absolutely sure? This will delete all users, files, and search history for this tenant.`)) return
     try {
       await adminDeleteTenant(selectedTenant.id)
       setSelectedTenant(null)
@@ -239,7 +239,7 @@ function TenantDetail({ detail, selectedTenant, editingTenant, tenantName, tenan
         </div>
         <div className="stat-card">
           <div className="stat-value">{detail.documents?.length || 0}</div>
-          <div className="stat-label"><FileText size={13} style={{ verticalAlign: 'middle' }} /> Documents</div>
+          <div className="stat-label"><FileText size={13} style={{ verticalAlign: 'middle' }} /> Files</div>
         </div>
         <div className="stat-card">
           <div className="stat-value">{detail.search_volume || 0}</div>
@@ -380,7 +380,7 @@ function TenantDetail({ detail, selectedTenant, editingTenant, tenantName, tenan
       </div>
 
       <div className="card">
-        <div className="card-header"><h3>Documents</h3></div>
+        <div className="card-header"><h3>Files</h3></div>
         {detail.documents?.length > 0 ? detail.documents.map((d, i) => (
           <div key={i} style={{
             display: 'flex',
@@ -396,7 +396,7 @@ function TenantDetail({ detail, selectedTenant, editingTenant, tenantName, tenan
             </div>
           </div>
         )) : (
-          <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', padding: '12px 0' }}>No documents uploaded yet</p>
+          <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', padding: '12px 0' }}>No files uploaded yet</p>
         )}
       </div>
     </div>

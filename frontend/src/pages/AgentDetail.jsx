@@ -98,7 +98,7 @@ export default function AgentDetail() {
   }
 
   const handleDelete = async (docId) => {
-    if (!confirm('Delete this document?')) return
+    if (!confirm('Delete this file?')) return
     try {
       await deleteDocument(docId)
       setDocuments(prev => prev.filter(d => d.id !== docId))
@@ -218,9 +218,9 @@ export default function AgentDetail() {
         </div>
       )}
 
-      {/* Documents */}
+      {/* Files */}
       <div className="card" style={{ marginBottom: 24 }}>
-        <h3 style={{ marginBottom: 16 }}>Documents</h3>
+        <h3 style={{ marginBottom: 16 }}>Files</h3>
 
         <div
           style={{
@@ -295,7 +295,7 @@ export default function AgentDetail() {
           </div>
         ) : (
           <div style={{ textAlign: 'center', padding: 16, color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-            No documents yet. Upload files to train this agent.
+            No files yet. Upload files to train this agent.
           </div>
         )}
       </div>
@@ -318,7 +318,7 @@ export default function AgentDetail() {
                 className="btn btn-ghost"
                 onClick={handleGenerate}
                 disabled={generating}
-                title="Auto-generate prompt from documents"
+                title="Auto-generate prompt from files"
               >
                 <Sparkles size={14} />
                 {generating ? 'Generating...' : 'Auto-generate'}
@@ -336,7 +336,7 @@ export default function AgentDetail() {
           value={editPrompt}
           onChange={e => { setEditPrompt(e.target.value); setPromptDirty(e.target.value !== (agent.system_prompt || '')) }}
           placeholder={agent.agent_type === 'custom'
-            ? 'Upload documents and click "Auto-generate" to create a specialized prompt, or write your own...'
+            ? 'Upload files and click "Auto-generate" to create a specialized prompt, or write your own...'
             : 'This agent uses a pre-built prompt. Edit below to customize...'
           }
           style={{
@@ -354,7 +354,7 @@ export default function AgentDetail() {
           }}
         />
         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 8 }}>
-          This prompt tells the AI how to interpret and answer questions about the documents in this agent.
+          This prompt tells the AI how to interpret and answer questions about the files in this agent.
         </div>
       </div>
     </div>

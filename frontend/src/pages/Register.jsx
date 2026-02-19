@@ -40,7 +40,7 @@ export default function Register() {
             <h1>Cane</h1>
             <p>Create your account</p>
             <p style={{ color: 'var(--cane-600)', fontSize: '0.75rem', marginTop: 6 }}>
-              Turn your documents into AI-powered experts
+              Turn your files into AI-powered experts
             </p>
           </div>
 
@@ -127,7 +127,7 @@ export default function Register() {
                 <span style={{ color: 'var(--cane-500)', fontSize: '0.8125rem' }}>/month</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: '0.8125rem', color: 'var(--cane-300)' }}>
-                <div>3 documents</div>
+                <div>3 files</div>
                 <div>1 agent</div>
                 <div>50 searches / month</div>
                 <div>Web UI access</div>
@@ -152,7 +152,7 @@ export default function Register() {
                 <span style={{ color: 'var(--cane-500)', fontSize: '0.8125rem' }}>/month</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: '0.8125rem', color: 'var(--cane-300)' }}>
-                <div>Unlimited documents</div>
+                <div>Unlimited files</div>
                 <div>3 agents</div>
                 <div>Unlimited searches</div>
                 <div>Web UI access</div>
