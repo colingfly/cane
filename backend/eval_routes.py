@@ -1,0 +1,482 @@
+"""
+eval_routes.py — API endpoints for the Environments system.
+
+Phase 1: CRUD for environments, test cases, judge criteria, and custom rules.
+Phase 2 will add: run execution, judge pipeline, auto-generate.
+"""
+import json
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from database import get_db
+from auth import get_current_user
+from db_models import User, Workspace
+from eval_models import (
+    Environment, TestCase, JudgeCriteria, JudgeCustomRule, EvalRun,
+)
+
+router = APIRouter(prefix="/api/environments", tags=["environments"])
+
+
+# ─── Default criteria seeded on new environments ───
+
+DEFAULT_CRITERIA = [
+    {"key": "accuracy", "label": "Accuracy", "description": "Answer correctness against source files", "weight": 40, "is_enabled": True, "sort_order": 0},
+    {"key": "citation", "label": "Citation Quality", "description": "Properly references source material", "weight": 20, "is_enabled": True, "sort_order": 1},
+    {"key": "tone", "label": "Tone & Style", "description": "Appropriate professional tone", "weight": 15, "is_enabled": True, "sort_order": 2},
+    {"key": "hallucination", "label": "Hallucination Check", "description": "No fabricated information", "weight": 25, "is_enabled": True, "sort_order": 3},
+    {"key": "completeness", "label": "Completeness", "description": "Covers all aspects of the question", "weight": 0, "is_enabled": False, "sort_order": 4},
+    {"key": "conciseness", "label": "Conciseness", "description": "No unnecessary filler or repetition", "weight": 0, "is_enabled": False, "sort_order": 5},
+]
+
+
+# ─── Helpers ───
+
+def _get_env(env_id: str, tenant_id: str, db: Session) -> Environment:
+    """Fetch environment scoped to tenant, or 404."""
+    env = db.query(Environment).filter(
+        Environment.id == env_id,
+        Environment.tenant_id == tenant_id,
+        Environment.is_active == True,
+    ).first()
+    if not env:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    return env
+
+
+def _serialize_env(env: Environment, include_details=False) -> dict:
+    """Convert Environment to JSON-safe dict."""
+    data = {
+        "id": env.id,
+        "name": env.name,
+        "description": env.description or "",
+        "workspace_id": env.workspace_id,
+        "workspace_name": env.workspace.name if env.workspace else "",
+        "test_case_count": len(env.test_cases),
+        "run_count": len(env.runs),
+        "last_score": None,
+        "created_at": env.created_at.isoformat() if env.created_at else None,
+        "updated_at": env.updated_at.isoformat() if env.updated_at else None,
+    }
+
+    # Get most recent completed run score
+    completed = [r for r in env.runs if r.status == "completed"]
+    if completed:
+        latest = max(completed, key=lambda r: r.created_at)
+        data["last_score"] = latest.overall_score
+
+    if include_details:
+        data["test_cases"] = [_serialize_case(tc) for tc in sorted(env.test_cases, key=lambda x: x.sort_order)]
+        data["criteria"] = [_serialize_criteria(c) for c in sorted(env.criteria, key=lambda x: x.sort_order)]
+        data["custom_rules"] = [_serialize_rule(r) for r in sorted(env.custom_rules, key=lambda x: x.sort_order)]
+        data["runs"] = [_serialize_run_summary(r) for r in sorted(env.runs, key=lambda x: x.created_at, reverse=True)[:10]]
+
+    return data
+
+
+def _serialize_case(tc: TestCase) -> dict:
+    tags = []
+    if tc.tags:
+        try:
+            tags = json.loads(tc.tags)
+        except (json.JSONDecodeError, TypeError):
+            tags = []
+    return {
+        "id": tc.id,
+        "question": tc.question,
+        "expected_answer": tc.expected_answer or "",
+        "tags": tags,
+        "sort_order": tc.sort_order,
+    }
+
+
+def _serialize_criteria(c: JudgeCriteria) -> dict:
+    return {
+        "id": c.id,
+        "key": c.key,
+        "label": c.label,
+        "description": c.description or "",
+        "weight": c.weight,
+        "is_enabled": c.is_enabled,
+        "sort_order": c.sort_order,
+    }
+
+
+def _serialize_rule(r: JudgeCustomRule) -> dict:
+    return {
+        "id": r.id,
+        "rule_text": r.rule_text,
+        "sort_order": r.sort_order,
+    }
+
+
+def _serialize_run_summary(r: EvalRun) -> dict:
+    return {
+        "id": r.id,
+        "status": r.status,
+        "total_cases": r.total_cases,
+        "passed": r.passed,
+        "warned": r.warned,
+        "failed": r.failed,
+        "overall_score": r.overall_score,
+        "started_at": r.started_at.isoformat() if r.started_at else None,
+        "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+        "created_at": r.created_at.isoformat() if r.created_at else None,
+    }
+
+
+# ═══════════════════════════════════════════
+#  ENVIRONMENTS CRUD
+# ═══════════════════════════════════════════
+
+@router.get("")
+def list_environments(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List all environments for the current tenant."""
+    envs = db.query(Environment).filter(
+        Environment.tenant_id == user.tenant_id,
+        Environment.is_active == True,
+    ).order_by(Environment.created_at.desc()).all()
+
+    return {"environments": [_serialize_env(e) for e in envs]}
+
+
+@router.post("", status_code=201)
+def create_environment(
+    name: str,
+    workspace_id: str,
+    description: str = "",
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create a new environment linked to an agent."""
+    # Verify workspace belongs to tenant
+    ws = db.query(Workspace).filter(
+        Workspace.id == workspace_id,
+        Workspace.tenant_id == user.tenant_id,
+    ).first()
+    if not ws:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Agent not found")
+
+    env = Environment(
+        tenant_id=user.tenant_id,
+        workspace_id=workspace_id,
+        name=name.strip(),
+        description=description.strip(),
+        created_by=user.id,
+    )
+    db.add(env)
+    db.flush()  # get env.id
+
+    # Seed default judge criteria
+    for c in DEFAULT_CRITERIA:
+        db.add(JudgeCriteria(
+            environment_id=env.id,
+            **c,
+        ))
+
+    db.commit()
+    db.refresh(env)
+
+    return _serialize_env(env, include_details=True)
+
+
+@router.get("/{env_id}")
+def get_environment(
+    env_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get environment with all details."""
+    env = _get_env(env_id, user.tenant_id, db)
+    return _serialize_env(env, include_details=True)
+
+
+@router.put("/{env_id}")
+def update_environment(
+    env_id: str,
+    name: str = None,
+    description: str = None,
+    workspace_id: str = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update environment details."""
+    env = _get_env(env_id, user.tenant_id, db)
+
+    if name is not None:
+        env.name = name.strip()
+    if description is not None:
+        env.description = description.strip()
+    if workspace_id is not None:
+        ws = db.query(Workspace).filter(
+            Workspace.id == workspace_id,
+            Workspace.tenant_id == user.tenant_id,
+        ).first()
+        if not ws:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Agent not found")
+        env.workspace_id = workspace_id
+
+    db.commit()
+    db.refresh(env)
+    return _serialize_env(env, include_details=True)
+
+
+@router.delete("/{env_id}")
+def delete_environment(
+    env_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Soft-delete an environment."""
+    env = _get_env(env_id, user.tenant_id, db)
+    env.is_active = False
+    db.commit()
+    return {"ok": True}
+
+
+# ═══════════════════════════════════════════
+#  TEST CASES
+# ═══════════════════════════════════════════
+
+@router.post("/{env_id}/cases", status_code=201)
+def add_test_case(
+    env_id: str,
+    question: str,
+    expected_answer: str = "",
+    tags: str = "[]",
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Add a test case to an environment."""
+    env = _get_env(env_id, user.tenant_id, db)
+
+    # Validate tags JSON
+    try:
+        parsed_tags = json.loads(tags) if tags else []
+        if not isinstance(parsed_tags, list):
+            parsed_tags = []
+    except (json.JSONDecodeError, TypeError):
+        parsed_tags = []
+
+    max_order = max([tc.sort_order for tc in env.test_cases], default=-1) + 1
+
+    tc = TestCase(
+        environment_id=env.id,
+        question=question.strip(),
+        expected_answer=expected_answer.strip() if expected_answer else None,
+        tags=json.dumps(parsed_tags),
+        sort_order=max_order,
+    )
+    db.add(tc)
+    db.commit()
+    db.refresh(tc)
+
+    return _serialize_case(tc)
+
+
+@router.put("/{env_id}/cases/{case_id}")
+def update_test_case(
+    env_id: str,
+    case_id: str,
+    question: str = None,
+    expected_answer: str = None,
+    tags: str = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update a test case."""
+    env = _get_env(env_id, user.tenant_id, db)
+    tc = db.query(TestCase).filter(TestCase.id == case_id, TestCase.environment_id == env.id).first()
+    if not tc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Test case not found")
+
+    if question is not None:
+        tc.question = question.strip()
+    if expected_answer is not None:
+        tc.expected_answer = expected_answer.strip() if expected_answer else None
+    if tags is not None:
+        try:
+            parsed = json.loads(tags)
+            tc.tags = json.dumps(parsed if isinstance(parsed, list) else [])
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    db.commit()
+    db.refresh(tc)
+    return _serialize_case(tc)
+
+
+@router.delete("/{env_id}/cases/{case_id}")
+def delete_test_case(
+    env_id: str,
+    case_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a test case."""
+    env = _get_env(env_id, user.tenant_id, db)
+    tc = db.query(TestCase).filter(TestCase.id == case_id, TestCase.environment_id == env.id).first()
+    if not tc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Test case not found")
+
+    db.delete(tc)
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/{env_id}/cases/bulk", status_code=201)
+def bulk_add_test_cases(
+    env_id: str,
+    cases: str,  # JSON array of {question, expected_answer, tags}
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Import multiple test cases at once."""
+    env = _get_env(env_id, user.tenant_id, db)
+
+    try:
+        case_list = json.loads(cases)
+        if not isinstance(case_list, list):
+            raise ValueError
+    except (json.JSONDecodeError, ValueError, TypeError):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "cases must be a JSON array")
+
+    max_order = max([tc.sort_order for tc in env.test_cases], default=-1) + 1
+    added = []
+
+    for i, c in enumerate(case_list):
+        q = c.get("question", "").strip()
+        if not q:
+            continue
+
+        tc = TestCase(
+            environment_id=env.id,
+            question=q,
+            expected_answer=c.get("expected_answer", "").strip() or None,
+            tags=json.dumps(c.get("tags", [])),
+            sort_order=max_order + i,
+        )
+        db.add(tc)
+        added.append(tc)
+
+    db.commit()
+    return {"added": len(added)}
+
+
+# ═══════════════════════════════════════════
+#  JUDGE CRITERIA
+# ═══════════════════════════════════════════
+
+@router.get("/{env_id}/criteria")
+def get_criteria(
+    env_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get all judge criteria for an environment."""
+    env = _get_env(env_id, user.tenant_id, db)
+    return {"criteria": [_serialize_criteria(c) for c in sorted(env.criteria, key=lambda x: x.sort_order)]}
+
+
+@router.put("/{env_id}/criteria")
+def update_criteria(
+    env_id: str,
+    criteria: str,  # JSON array of {id, weight, is_enabled}
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Bulk update criteria weights and enabled status."""
+    env = _get_env(env_id, user.tenant_id, db)
+
+    try:
+        updates = json.loads(criteria)
+        if not isinstance(updates, list):
+            raise ValueError
+    except (json.JSONDecodeError, ValueError, TypeError):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "criteria must be a JSON array")
+
+    criteria_map = {c.id: c for c in env.criteria}
+
+    for u in updates:
+        cid = u.get("id")
+        if cid not in criteria_map:
+            continue
+        c = criteria_map[cid]
+        if "weight" in u:
+            c.weight = max(0, min(100, int(u["weight"])))
+        if "is_enabled" in u:
+            c.is_enabled = bool(u["is_enabled"])
+
+    db.commit()
+
+    return {"criteria": [_serialize_criteria(c) for c in sorted(env.criteria, key=lambda x: x.sort_order)]}
+
+
+# ═══════════════════════════════════════════
+#  CUSTOM RULES
+# ═══════════════════════════════════════════
+
+@router.post("/{env_id}/rules", status_code=201)
+def add_custom_rule(
+    env_id: str,
+    rule_text: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Add a custom judge rule."""
+    env = _get_env(env_id, user.tenant_id, db)
+
+    max_order = max([r.sort_order for r in env.custom_rules], default=-1) + 1
+
+    rule = JudgeCustomRule(
+        environment_id=env.id,
+        rule_text=rule_text.strip(),
+        sort_order=max_order,
+    )
+    db.add(rule)
+    db.commit()
+    db.refresh(rule)
+
+    return _serialize_rule(rule)
+
+
+@router.delete("/{env_id}/rules/{rule_id}")
+def delete_custom_rule(
+    env_id: str,
+    rule_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a custom judge rule."""
+    env = _get_env(env_id, user.tenant_id, db)
+    rule = db.query(JudgeCustomRule).filter(
+        JudgeCustomRule.id == rule_id,
+        JudgeCustomRule.environment_id == env.id,
+    ).first()
+    if not rule:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Rule not found")
+
+    db.delete(rule)
+    db.commit()
+    return {"ok": True}
+
+
+# ═══════════════════════════════════════════
+#  EVAL RUNS (read-only for Phase 1)
+# ═══════════════════════════════════════════
+
+@router.get("/{env_id}/runs")
+def list_runs(
+    env_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List all eval runs for an environment."""
+    env = _get_env(env_id, user.tenant_id, db)
+    runs = sorted(env.runs, key=lambda r: r.created_at, reverse=True)
+    return {"runs": [_serialize_run_summary(r) for r in runs]}

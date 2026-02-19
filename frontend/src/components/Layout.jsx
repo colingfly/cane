@@ -28,13 +28,7 @@ export default function Layout({ children }) {
           </NavLink>
           <NavLink to="/environments">
             <FlaskConical />
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              Environments
-              <span style={{
-                fontSize: '0.45rem', fontWeight: 700, background: 'var(--accent)', color: 'white',
-                padding: '1px 5px', borderRadius: 6, letterSpacing: '0.04em', lineHeight: 1.4,
-              }}>SOON</span>
-            </span>
+            Environments
           </NavLink>
           <NavLink to="/search">
             <Search /> Search

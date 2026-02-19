@@ -170,3 +170,12 @@ class ApiKey(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     tenant = relationship("Tenant")
+
+
+# ─────────────────────────────────────────
+#  Import eval models so they register with Base
+# ─────────────────────────────────────────
+from eval_models import (                                          # noqa: E402, F401
+    Environment, TestCase, JudgeCriteria, JudgeCustomRule,
+    EvalRun, EvalResult,
+)

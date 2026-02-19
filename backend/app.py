@@ -212,6 +212,11 @@ app.add_middleware(
 
 # â”€â”€ Score thresholds â”€â”€
 TEXT_SCORE_THRESHOLD = 0.70
+
+# -- Eval Routes (Environments) --
+from eval_routes import router as eval_router
+app.include_router(eval_router)
+
 FUSION_SCORE_THRESHOLD = 0.30
 
 # â”€â”€ Quality filter â”€â”€
