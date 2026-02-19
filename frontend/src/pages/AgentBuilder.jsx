@@ -152,24 +152,26 @@ export default function AgentBuilder() {
       )}
 
       {/* Templates */}
-      <h3 style={{ fontSize: '0.8125rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 16 }}>
-        Templates
-      </h3>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16, marginBottom: 40 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+        <div style={{ height: 1, flex: 1, background: 'var(--rule)' }} />
+        <span style={{ fontSize: '0.58rem', fontWeight: 800, letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Templates</span>
+        <div style={{ height: 1, flex: 1, background: 'var(--rule)' }} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14, marginBottom: 40 }}>
         {templates.map((t) => (
           <div
             key={t.type}
             className="card"
-            style={{ cursor: 'pointer', transition: 'all 0.15s', padding: 24 }}
+            style={{ cursor: 'pointer', transition: 'all 0.1s', padding: 20 }}
             onClick={() => setSelectedTemplate(t)}
-            onMouseOver={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
-            onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'translateY(0)' }}
+            onMouseOver={e => e.currentTarget.style.borderColor = 'var(--cane-500)'}
+            onMouseOut={e => e.currentTarget.style.borderColor = ''}
           >
-            <div style={{ marginBottom: 14 }}>
-              <AgentIcon icon={t.icon} size={44} />
+            <div style={{ marginBottom: 12 }}>
+              <AgentIcon icon={t.icon} size={40} />
             </div>
-            <div style={{ fontWeight: 600, fontSize: '0.9375rem', marginBottom: 6 }}>{t.name}</div>
-            <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+            <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: 4, fontFamily: 'var(--font-display)', letterSpacing: '-0.01em' }}>{t.name}</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
               {t.description}
             </div>
           </div>
@@ -179,30 +181,26 @@ export default function AgentBuilder() {
         <div
           className="card"
           style={{
-            cursor: 'pointer', transition: 'all 0.15s', padding: 24,
-            border: '2px dashed var(--border)', background: 'transparent',
+            cursor: 'pointer', transition: 'all 0.1s', padding: 20,
+            border: '2px dashed var(--rule)', background: 'transparent',
           }}
           onClick={() => setShowCustomModal(true)}
-          onMouseOver={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
-          onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'translateY(0)' }}
+          onMouseOver={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+          onMouseOut={e => e.currentTarget.style.borderColor = 'var(--rule)'}
         >
-          <div style={{ marginBottom: 14 }}>
+          <div style={{ marginBottom: 12 }}>
             <div style={{
-              width: 44, height: 44, borderRadius: 11,
-              border: '2px dashed var(--cane-400)', color: 'var(--cane-400)',
+              width: 40, height: 40, borderRadius: 4,
+              border: '2px dashed var(--cane-500)', color: 'var(--cane-500)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <Plus size={20} />
+              <Plus size={18} />
             </div>
           </div>
-          <div style={{ fontWeight: 600, fontSize: '0.9375rem', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: 4, fontFamily: 'var(--font-display)' }}>
             Create Your Own
-            <span style={{
-              fontSize: '0.55rem', fontWeight: 600, background: 'var(--accent)', color: 'white',
-              padding: '1px 6px', borderRadius: 8, letterSpacing: '0.05em',
-            }}>BETA</span>
           </div>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
             Upload docs and auto-generate a specialized AI agent.
           </div>
         </div>
@@ -211,49 +209,69 @@ export default function AgentBuilder() {
       {/* Existing Agents */}
       {agents.length > 0 && (
         <>
-          <h3 style={{ fontSize: '0.8125rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 16 }}>
-            Your Agents
-          </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-            {agents.map(a => (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+            <div style={{ height: 1, flex: 1, background: 'var(--rule)' }} />
+            <span style={{ fontSize: '0.58rem', fontWeight: 800, letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+              Your Agents
+            </span>
+            <div style={{ height: 1, flex: 1, background: 'var(--rule)' }} />
+          </div>
+          <div style={{ border: '1px solid var(--rule)', borderRadius: 8, overflow: 'hidden', background: 'var(--bg-card)' }}>
+            {agents.map((a, i) => (
               <div
                 key={a.id}
-                className="card"
-                style={{ cursor: 'pointer', transition: 'all 0.15s' }}
+                style={{
+                  display: 'flex', alignItems: 'center', padding: '14px 18px',
+                  background: 'transparent',
+                  borderBottom: i < agents.length - 1 ? '1px solid var(--rule-light)' : 'none',
+                  gap: 14, cursor: 'pointer', transition: 'background 0.1s',
+                }}
                 onClick={() => navigate(`/agents/${a.id}`)}
-                onMouseOver={e => e.currentTarget.style.borderColor = 'var(--accent)'}
-                onMouseOut={e => e.currentTarget.style.borderColor = 'var(--border)'}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
-                    <AgentIcon icon={a.agent_icon} size={36} />
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{a.name}</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        {a.agent_type === 'custom' ? 'Custom Agent' : a.agent_type?.replace('_', ' ')}
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    className="btn btn-ghost"
-                    style={{ padding: 4, opacity: 0.5 }}
-                    onClick={(e) => handleDelete(e, a.id)}
-                    title="Delete agent"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                {/* Icon square */}
+                <div style={{
+                  width: 38, height: 38, borderRadius: 8,
+                  background: 'var(--cane-900)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0, overflow: 'hidden',
+                }}>
+                  <AgentIcon icon={a.agent_icon} size={38} />
                 </div>
-                <div style={{ display: 'flex', gap: 20, marginTop: 4 }}>
-                  <div>
-                    <div style={{ fontSize: '1.125rem', fontWeight: 700, fontFamily: 'var(--font-display)' }}>{a.document_count}</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Files</div>
+
+                {/* Info */}
+                <div style={{ flex: 1 }}>
+                  <div style={{
+                    fontSize: '0.88rem', fontWeight: 700, color: 'var(--cane-900)',
+                    fontFamily: 'var(--font-display)', letterSpacing: '-0.01em',
+                  }}>
+                    {a.name}
                   </div>
-                  <div style={{ marginTop: 4 }}>
-                    <div style={{ fontSize: '0.7rem', color: a.system_prompt ? 'var(--success)' : 'var(--text-muted)', fontWeight: 600 }}>
-                      {a.system_prompt ? 'Prompt configured' : 'No prompt yet'}
-                    </div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--cane-400)', marginTop: 1 }}>
+                    {a.document_count} documents · {a.agent_type === 'custom' ? 'Custom' : a.agent_type?.replace('_', ' ')}
                   </div>
                 </div>
+
+                {/* Prompt status */}
+                <span style={{
+                  fontSize: '0.58rem', fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase',
+                  color: a.system_prompt ? 'var(--success)' : 'var(--text-faint)',
+                  padding: '4px 10px', borderRadius: 4,
+                  background: a.system_prompt ? 'var(--success-bg)' : 'rgba(30,16,8,0.04)',
+                }}>
+                  {a.system_prompt ? 'Active' : 'Draft'}
+                </span>
+
+                {/* Delete */}
+                <button
+                  className="btn btn-ghost"
+                  style={{ padding: 4, opacity: 0.4 }}
+                  onClick={(e) => handleDelete(e, a.id)}
+                  title="Delete agent"
+                >
+                  <Trash2 size={14} />
+                </button>
+
+                {/* Arrow */}
+                <span style={{ color: 'var(--text-faint)', fontSize: 16 }}>→</span>
               </div>
             ))}
           </div>

@@ -10,7 +10,7 @@ export default function Layout({ children }) {
       <aside className="sidebar">
         <div className="sidebar-brand">
           <h1>Cane</h1>
-          <p style={{ fontSize: '0.7rem', color: 'var(--cane-300, #b8a99a)', marginTop: 2, letterSpacing: '0.05em' }}>
+          <p style={{ fontSize: '0.56rem', color: 'var(--cane-700)', marginTop: 8, letterSpacing: '0.12em', fontWeight: 700, textTransform: 'uppercase' }}>
             Operational Intelligence
           </p>
         </div>
@@ -22,13 +22,7 @@ export default function Layout({ children }) {
           </NavLink>
           <NavLink to="/environments">
             <FlaskConical />
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              Environments
-              <span style={{
-                fontSize: '0.5rem', fontWeight: 700, background: 'var(--accent)', color: 'white',
-                padding: '1px 5px', borderRadius: 6, letterSpacing: '0.04em', lineHeight: 1.4,
-              }}>BETA</span>
-            </span>
+            <span>Environments</span>
           </NavLink>
           <NavLink to="/search">
             <Search /> Search

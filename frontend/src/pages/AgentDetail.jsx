@@ -163,7 +163,7 @@ export default function AgentDetail() {
     <div className="fade-in" style={{ maxWidth: 800, margin: '0 auto' }}>
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
-        <Link to="/agents" style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 12, textDecoration: 'none' }}>
+        <Link to="/" style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 12, textDecoration: 'none' }}>
           <ArrowLeft size={14} /> Back to Agent Builder
         </Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

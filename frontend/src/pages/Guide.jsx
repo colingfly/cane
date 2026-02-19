@@ -21,7 +21,7 @@ function CodeBlock({ code }) {
         {copied ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
       </button>
       <pre style={{
-        background: 'var(--cane-950)', color: 'var(--cane-200)', padding: 16,
+        background: '#1a1210', color: '#d4c4b0', padding: 16,
         borderRadius: 'var(--radius-sm)', fontSize: '0.78rem', lineHeight: 1.6,
         overflowX: 'auto', border: '1px solid var(--rule)', margin: 0,
         fontFamily: 'var(--font-mono)',
