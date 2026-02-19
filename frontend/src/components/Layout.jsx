@@ -18,17 +18,17 @@ export default function Layout({ children }) {
         <nav className="sidebar-nav">
           <NavLink to="/" end>
             <Bot />
+            Agent Builder
+          </NavLink>
+          <NavLink to="/environments">
+            <FlaskConical />
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              Agent Builder
+              Environments
               <span style={{
                 fontSize: '0.5rem', fontWeight: 700, background: 'var(--accent)', color: 'white',
                 padding: '1px 5px', borderRadius: 6, letterSpacing: '0.04em', lineHeight: 1.4,
               }}>BETA</span>
             </span>
-          </NavLink>
-          <NavLink to="/environments">
-            <FlaskConical />
-            Environments
           </NavLink>
           <NavLink to="/search">
             <Search /> Search
