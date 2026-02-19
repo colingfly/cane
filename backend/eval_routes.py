@@ -7,14 +7,14 @@ Phase 2 will add: run execution, judge pipeline, auto-generate.
 import json
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from database import get_db
 from auth import get_current_user
 from db_models import User, Workspace
 from eval_models import (
-    Environment, TestCase, JudgeCriteria, JudgeCustomRule, EvalRun,
+    Environment, TestCase, JudgeCriteria, JudgeCustomRule, EvalRun, EvalResult,
 )
 
 router = APIRouter(prefix="/api/environments", tags=["environments"])
@@ -480,3 +480,113 @@ def list_runs(
     env = _get_env(env_id, user.tenant_id, db)
     runs = sorted(env.runs, key=lambda r: r.created_at, reverse=True)
     return {"runs": [_serialize_run_summary(r) for r in runs]}
+
+
+@router.post("/{env_id}/run", status_code=202)
+def trigger_run(
+    env_id: str,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Trigger a new evaluation run."""
+    env = _get_env(env_id, user.tenant_id, db)
+
+    # Validate: need test cases and criteria
+    if not env.test_cases:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Add at least one test case before running")
+
+    enabled_criteria = [c for c in env.criteria if c.is_enabled]
+    if not enabled_criteria:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Enable at least one judge criterion")
+
+    total_weight = sum(c.weight for c in enabled_criteria)
+    if total_weight != 100:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Criteria weights must sum to 100 (currently {total_weight})")
+
+    # Check for already-running eval
+    active = [r for r in env.runs if r.status in ("pending", "running")]
+    if active:
+        raise HTTPException(status.HTTP_409_CONFLICT, "An evaluation is already running for this environment")
+
+    # Snapshot the agent prompt
+    ws = db.query(Workspace).filter(Workspace.id == env.workspace_id).first()
+    agent_prompt = ws.system_prompt if ws else ""
+
+    # Snapshot criteria
+    criteria_snapshot = json.dumps([
+        {"key": c.key, "label": c.label, "weight": c.weight, "is_enabled": c.is_enabled}
+        for c in env.criteria
+    ])
+
+    # Create run
+    run = EvalRun(
+        environment_id=env.id,
+        tenant_id=user.tenant_id,
+        status="pending",
+        total_cases=len(env.test_cases),
+        agent_prompt=agent_prompt,
+        criteria_snapshot=criteria_snapshot,
+        triggered_by=user.id,
+    )
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+
+    # Kick off in background
+    from eval_engine import execute_eval_run
+    from database import SessionLocal
+
+    def _run_eval():
+        """Run eval in a fresh DB session (background tasks need their own session)."""
+        session = SessionLocal()
+        try:
+            execute_eval_run(run.id, session)
+        finally:
+            session.close()
+
+    background_tasks.add_task(_run_eval)
+
+    return {"run_id": run.id, "status": "pending", "total_cases": len(env.test_cases)}
+
+
+@router.get("/{env_id}/runs/{run_id}")
+def get_run_detail(
+    env_id: str,
+    run_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get full run details with all results."""
+    env = _get_env(env_id, user.tenant_id, db)
+    run = db.query(EvalRun).filter(
+        EvalRun.id == run_id,
+        EvalRun.environment_id == env.id,
+    ).first()
+    if not run:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Run not found")
+
+    results = db.query(EvalResult).filter(
+        EvalResult.eval_run_id == run.id
+    ).order_by(EvalResult.created_at).all()
+
+    return {
+        **_serialize_run_summary(run),
+        "agent_prompt": run.agent_prompt or "",
+        "error_message": run.error_message,
+        "results": [
+            {
+                "id": r.id,
+                "question": r.question,
+                "expected_answer": r.expected_answer or "",
+                "agent_answer": r.agent_answer or "",
+                "sources_used": json.loads(r.sources_used) if r.sources_used else [],
+                "overall_score": r.overall_score,
+                "criteria_scores": json.loads(r.criteria_scores) if r.criteria_scores else {},
+                "judge_reasoning": r.judge_reasoning or "",
+                "status": r.status,
+                "response_time_ms": r.response_time_ms,
+            }
+            for r in results
+        ],
+    }

@@ -87,3 +87,7 @@ export const deleteCustomRule = (envId, ruleId) =>
 
 // -- Eval Runs --
 export const getRuns = (envId) => request(`/environments/${envId}/runs`)
+
+export const triggerRun = (envId) => request(`/environments/${envId}/run`, { method: 'POST' })
+
+export const getRunDetail = (envId, runId) => request(`/environments/${envId}/runs/${runId}`)
