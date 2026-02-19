@@ -73,6 +73,19 @@ WHISPER_MODEL = os.getenv("CANE_WHISPER_MODEL", "base")  # base=fast/light, medi
 CHUNK_SIZE = 2000
 CHUNK_OVERLAP = 400
 
+# ── RAG Base Rules (applied to every agent query) ──
+RAG_BASE_RULES = """
+Rules:
+- Excerpts marked "HIGHLY RELEVANT" were identified by visual/slide analysis as directly related to the question. Pay special attention to these.
+- Some excerpts contain [Slide text] (OCR'd from slides — accurate terminology) and [Spoken] (audio transcript — may have spelling errors). Trust slide text for exact terms and names.
+- Fix obvious transcription errors: audio transcripts may contain phonetic misspellings. Use context and slide text to correct these.
+- Answer strictly based on the provided content. Never fabricate information not present in the excerpts.
+- Give a clear, concise explanation. Lead with the direct answer.
+- COMPLETENESS: Search through ALL provided excerpts carefully before answering. When listing items, combine information found across multiple excerpts into one complete answer. If you find a partial list in one excerpt, check others for additional items before responding.
+- PARTIAL INFORMATION: If your answer may be incomplete because the excerpts don't cover everything, say "Based on the available excerpts..." rather than presenting a partial answer as definitive.
+- BEFORE SAYING SOMETHING ISN'T COVERED: Check every excerpt carefully. Do not conclude information is missing after reading only a subset of the excerpts. Only say "this is not covered" if you have thoroughly reviewed all provided content.
+- If the excerpts genuinely don't contain enough info, say what you can and clearly note the gap."""
+
 # ── Video keyframes ──
 SCENE_THRESHOLD = 30.0
 MIN_FRAME_GAP_SEC = 8

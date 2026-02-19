@@ -1363,15 +1363,8 @@ def ask(
         if ws and ws.system_prompt:
             agent_prompt = ws.system_prompt
 
-    base_rules = """
-Rules:
-- Excerpts marked "HIGHLY RELEVANT" were identified by visual/slide analysis as directly related to the question. Pay special attention to these.
-- Some excerpts contain [Slide text] (OCR'd from slides — accurate terminology) and [Spoken] (audio transcript — may have spelling errors). Trust slide text for exact terms and names.
-- Search through ALL provided excerpts carefully before concluding something is not covered.
-- Fix obvious transcription errors: audio transcripts may contain phonetic misspellings (e.g. "outcall chain" = "alkyl chain", "fee-nol" = "phenol"). Use context and slide text to correct these.
-- Answer strictly based on the provided content.
-- Give a clear, concise explanation.
-- If the excerpts don't contain enough info, say what you can and note the gap."""
+    from config import RAG_BASE_RULES
+    base_rules = RAG_BASE_RULES
 
     if agent_prompt:
         system_prompt = agent_prompt + "\n\nAdditional retrieval rules:" + base_rules
@@ -1582,14 +1575,8 @@ def ask_stream(
         if ws and ws.system_prompt:
             agent_prompt = ws.system_prompt
 
-    base_rules = """
-Rules:
-- Excerpts marked "HIGHLY RELEVANT" were identified by visual/slide analysis as directly related to the question. Pay special attention to these.
-- Some excerpts contain [Slide text] (OCR'd from slides) and [Spoken] (audio transcript). Trust slide text for exact terms.
-- Fix obvious transcription errors using context and slide text.
-- Answer strictly based on the provided content.
-- Give a clear, concise explanation.
-- If the excerpts don't contain enough info, say what you can and note the gap."""
+    from config import RAG_BASE_RULES
+    base_rules = RAG_BASE_RULES
 
     if agent_prompt:
         system_prompt = agent_prompt + "\n\nAdditional retrieval rules:" + base_rules
@@ -2432,10 +2419,8 @@ async def v1_ask(
         if ws and ws.system_prompt:
             agent_prompt = ws.system_prompt
 
-    base_rules = (
-        "You answer questions based ONLY on the document excerpts below. "
-        "If the answer isn't in the excerpts, say so. Cite source documents."
-    )
+    from config import RAG_BASE_RULES
+    base_rules = RAG_BASE_RULES
     rules = f"{agent_prompt}\n\nAdditional retrieval rules: {base_rules}" if agent_prompt else base_rules
 
     numbered = "\n\n".join(f"[{i+1}] {c}" for i, c in enumerate(context_chunks))

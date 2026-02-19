@@ -114,11 +114,8 @@ def _get_agent_answer(question: str, workspace_id: str, tenant_id: str, system_p
     sources = list(set(c.get("source_file", "") for c in chunks if c.get("source_file")))
 
     # Build prompt (same pattern as /ask)
-    base_rules = """
-Rules:
-- Answer strictly based on the provided content.
-- Give a clear, concise explanation.
-- If the excerpts don't contain enough info, say what you can and note the gap."""
+    from config import RAG_BASE_RULES
+    base_rules = RAG_BASE_RULES
 
     if system_prompt:
         sys = system_prompt + "\n\nAdditional retrieval rules:" + base_rules
