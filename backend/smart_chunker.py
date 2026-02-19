@@ -18,10 +18,10 @@ from typing import Optional
 
 
 # ── Config defaults (override via config.py if desired) ──
-DEFAULT_CHUNK_SIZE = 1500       # target chars per chunk
-DEFAULT_CHUNK_OVERLAP = 200     # overlap between consecutive chunks
+DEFAULT_CHUNK_SIZE = 2000       # target chars per chunk
+DEFAULT_CHUNK_OVERLAP = 400     # overlap between consecutive chunks
 MIN_CHUNK_SIZE = 80             # below this → merge with neighbor
-MIN_PAGE_MERGE_SIZE = 150       # pages shorter than this get merged with next page
+MIN_PAGE_MERGE_SIZE = 300       # pages shorter than this get merged with next page
 
 
 @dataclass

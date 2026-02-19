@@ -543,6 +543,11 @@ def _chunk_pages(page_texts: dict, source_file: str, source_type: str) -> list:
     """
     Chunk text from a page-keyed dict, preserving page numbers.
     Groups nearby pages when text is short, splits long pages.
+
+    Key improvements:
+    - List continuation detection: if a page ends mid-list, merge with next page
+    - Larger grouping: always try to keep 2-3 consecutive pages together
+    - Better overlap for information-dense documents
     """
     chunks = []
     chunk_idx = 0
@@ -550,8 +555,14 @@ def _chunk_pages(page_texts: dict, source_file: str, source_type: str) -> list:
     # Accumulate text across pages, flush when big enough
     buffer = ""
     buffer_start_page = 1
+    # Use a higher flush threshold to keep more context together
+    # Flush at 1.5x chunk size so we get bigger raw blocks, then let
+    # the smart chunker split them with proper overlap
+    flush_threshold = int(CHUNK_SIZE * 1.5)
 
-    for page_num in sorted(page_texts.keys()):
+    sorted_pages = sorted(page_texts.keys())
+
+    for i, page_num in enumerate(sorted_pages):
         text = page_texts[page_num].strip()
         if not text:
             continue
@@ -561,7 +572,13 @@ def _chunk_pages(page_texts: dict, source_file: str, source_type: str) -> list:
             buffer_start_page = page_num
         else:
             candidate = buffer + "\n\n" + text
-            if len(candidate) > CHUNK_SIZE:
+            # Check if buffer ends mid-list (bullets, numbers, dashes)
+            # If so, force merge regardless of size up to 2x threshold
+            ends_mid_list = _ends_mid_list(buffer)
+            next_continues_list = _starts_with_list_item(text)
+            force_merge = ends_mid_list or next_continues_list
+
+            if len(candidate) > flush_threshold and not force_merge:
                 # Flush buffer as chunk(s)
                 page_chunks = _split_to_chunks(
                     buffer, source_file, source_type,
@@ -571,6 +588,16 @@ def _chunk_pages(page_texts: dict, source_file: str, source_type: str) -> list:
                 chunk_idx += len(page_chunks)
                 buffer = text
                 buffer_start_page = page_num
+            elif len(candidate) > flush_threshold * 2:
+                # Even with force merge, don't let it grow unbounded
+                page_chunks = _split_to_chunks(
+                    candidate, source_file, source_type,
+                    buffer_start_page, chunk_idx
+                )
+                chunks.extend(page_chunks)
+                chunk_idx += len(page_chunks)
+                buffer = ""
+                buffer_start_page = page_num + 1
             else:
                 buffer = candidate
 
@@ -583,6 +610,25 @@ def _chunk_pages(page_texts: dict, source_file: str, source_type: str) -> list:
         chunks.extend(page_chunks)
 
     return chunks
+
+
+def _ends_mid_list(text: str) -> bool:
+    """Detect if text ends in the middle of a list (bullet points, numbers, dashes)."""
+    lines = text.strip().split('\n')
+    if not lines:
+        return False
+    # Check last 3 lines for list patterns
+    tail = lines[-3:] if len(lines) >= 3 else lines
+    list_pattern = re.compile(r'^\s*(?:[-•●▪]\s|(?:\d+[.)]\s)|(?:[a-zA-Z][.)]\s))')
+    list_lines = sum(1 for line in tail if list_pattern.match(line))
+    return list_lines >= 1
+
+
+def _starts_with_list_item(text: str) -> bool:
+    """Detect if text starts with a list item."""
+    first_line = text.strip().split('\n')[0] if text.strip() else ""
+    list_pattern = re.compile(r'^\s*(?:[-•●▪]\s|(?:\d+[.)]\s)|(?:[a-zA-Z][.)]\s))')
+    return bool(list_pattern.match(first_line))
 
 
 def _split_to_chunks(text: str, source_file: str, source_type: str,

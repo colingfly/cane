@@ -70,8 +70,8 @@ CLIP_MODEL = "openai/clip-vit-base-patch32"
 WHISPER_MODEL = os.getenv("CANE_WHISPER_MODEL", "base")  # base=fast/light, medium=better accuracy
 
 # ── Chunking ──
-CHUNK_SIZE = 1500
-CHUNK_OVERLAP = 200
+CHUNK_SIZE = 2000
+CHUNK_OVERLAP = 400
 
 # ── Video keyframes ──
 SCENE_THRESHOLD = 30.0
