@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { Search, FileText, Settings, BarChart3, Shield, Bot, HelpCircle } from 'lucide-react'
+import { Search, FileText, Settings, BarChart3, Shield, Bot, HelpCircle, FlaskConical } from 'lucide-react'
 
 export default function Layout({ children }) {
   const { user, tenant, handleLogout, isAdmin } = useAuth()
@@ -24,6 +24,16 @@ export default function Layout({ children }) {
                 fontSize: '0.5rem', fontWeight: 700, background: 'var(--accent)', color: 'white',
                 padding: '1px 5px', borderRadius: 6, letterSpacing: '0.04em', lineHeight: 1.4,
               }}>BETA</span>
+            </span>
+          </NavLink>
+          <NavLink to="/environments">
+            <FlaskConical />
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              Environments
+              <span style={{
+                fontSize: '0.45rem', fontWeight: 700, background: 'var(--accent)', color: 'white',
+                padding: '1px 5px', borderRadius: 6, letterSpacing: '0.04em', lineHeight: 1.4,
+              }}>SOON</span>
             </span>
           </NavLink>
           <NavLink to="/search">

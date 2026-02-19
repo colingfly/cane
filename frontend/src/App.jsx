@@ -11,6 +11,7 @@ import Admin from './pages/Admin'
 import AgentBuilder from './pages/AgentBuilder'
 import AgentDetail from './pages/AgentDetail'
 import Guide from './pages/Guide'
+import Environments from './pages/Environments'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -70,6 +71,12 @@ export default function App() {
       <Route path="/dashboard" element={
         <ProtectedRoute>
           <Layout><Dashboard /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/environments" element={
+        <ProtectedRoute>
+          <Layout><Environments /></Layout>
         </ProtectedRoute>
       } />
 
