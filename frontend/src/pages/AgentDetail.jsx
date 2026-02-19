@@ -211,7 +211,7 @@ export default function AgentDetail() {
           <button
             className="btn btn-primary"
             style={{ width: '100%', padding: 12, justifyContent: 'center', fontSize: '0.9375rem' }}
-            onClick={() => navigate(`/?workspace=${agentId}`)}
+            onClick={() => navigate(`/search?workspace=${agentId}`)}
           >
             <MessageSquare size={16} /> Ask this agent
           </button>
