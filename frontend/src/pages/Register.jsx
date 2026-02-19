@@ -115,7 +115,7 @@ export default function Register() {
             Start free. Upgrade when you need more.
           </p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
             {/* Free */}
             <div style={{
               background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
@@ -156,14 +156,32 @@ export default function Register() {
                 <div>3 agents</div>
                 <div>Unlimited searches</div>
                 <div>Web UI access</div>
-                <div>API access</div>
+                <div style={{ color: 'var(--cane-600)' }}>No API access</div>
               </div>
             </div>
-          </div>
 
-          <p style={{ textAlign: 'center', color: 'var(--cane-500)', fontSize: '0.8125rem', marginTop: 20 }}>
-            For teams and enterprises — <a href="mailto:hello@cane.fyi" style={{ color: 'var(--accent)' }}>contact us</a> for a custom setup
-          </p>
+            {/* Business */}
+            <div style={{
+              background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 12, padding: 28, display: 'flex', flexDirection: 'column',
+            }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--cane-400)', marginBottom: 8 }}>Business</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 16 }}>
+                <span style={{ fontSize: '2rem', fontWeight: 800, fontFamily: 'var(--font-display)', color: 'var(--cane-100)' }}>Custom</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: '0.8125rem', color: 'var(--cane-300)', flex: 1 }}>
+                <div>Usage tailored to your needs</div>
+                <div>Dedicated support</div>
+                <div>API access</div>
+              </div>
+              <a href="mailto:hello@cane.fyi" style={{
+                display: 'inline-block', marginTop: 20, padding: '8px 16px',
+                background: 'rgba(200,150,62,0.15)', border: '1px solid rgba(200,150,62,0.3)',
+                borderRadius: 8, color: 'var(--accent)', fontSize: '0.8125rem',
+                fontWeight: 600, textDecoration: 'none', textAlign: 'center',
+              }}>Contact Us</a>
+            </div>
+          </div>
         </div>
       </div>
     </div>
