@@ -15,7 +15,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from config import ANTHROPIC_API_KEY, CLAUDE_MODEL
-from eval_models import EvalRun, EvalResult, TestCase, JudgeCriteria, JudgeCustomRule
+from eval_models import Environment, EvalRun, EvalResult, TestCase, JudgeCriteria, JudgeCustomRule
 
 # Judge uses a stronger model than the agent
 JUDGE_MODEL = "claude-sonnet-4-5-20250929"
@@ -75,6 +75,7 @@ def _get_agent_answer(question: str, workspace_id: str, tenant_id: str, system_p
     # Search for relevant chunks
     text_results = _search_text(question, 10, where)
     chunks = text_results.get("results", [])
+    print(f"  [Eval] Search for '{question[:50]}...' → {len(chunks)} text hits, workspace={workspace_id}")
 
     # Also grab all chunks if small corpus (same logic as /ask)
     try:
@@ -86,6 +87,7 @@ def _get_agent_answer(question: str, workspace_id: str, tenant_id: str, system_p
 
         if 0 < tenant_doc_count <= 200:
             seen = {c.get("text", "")[:100] for c in chunks}
+            initial = len(chunks)
             docs = tenant_chunks.get("documents", [])
             metas = tenant_chunks.get("metadatas", [])
             for doc, meta in zip(docs, metas):
@@ -94,10 +96,11 @@ def _get_agent_answer(question: str, workspace_id: str, tenant_id: str, system_p
                 if display and len(display) >= 20 and display[:100] not in seen:
                     seen.add(display[:100])
                     chunks.append({
-                        "text": display[:500],
+                        "text": display[:2000],
                         "source_file": (meta or {}).get("source_file", ""),
                         "page": (meta or {}).get("page", 0),
                     })
+            print(f"  [Eval] Small corpus fallback: {tenant_doc_count} total chunks, added {len(chunks) - initial} supplementary")
     except Exception:
         pass
 
@@ -256,6 +259,17 @@ def execute_eval_run(run_id: str, db: Session):
 
     env_id = run.environment_id
 
+    # Load environment explicitly (don't rely on lazy relationship in background task)
+    env = db.query(Environment).filter(Environment.id == env_id).first()
+    if not env:
+        run.status = "failed"
+        run.error_message = "Environment not found"
+        db.commit()
+        return
+
+    workspace_id = env.workspace_id or ""
+    print(f"  [Eval] Starting run {run_id} — env={env_id}, workspace={workspace_id}, tenant={run.tenant_id}")
+
     # Load test cases
     test_cases = db.query(TestCase).filter(
         TestCase.environment_id == env_id
@@ -293,7 +307,7 @@ def execute_eval_run(run_id: str, db: Session):
             try:
                 agent_result = _get_agent_answer(
                     question=tc.question,
-                    workspace_id=run.environment.workspace_id if run.environment else "",
+                    workspace_id=workspace_id,
                     tenant_id=run.tenant_id,
                     system_prompt=run.agent_prompt or "",
                 )
@@ -346,10 +360,15 @@ def execute_eval_run(run_id: str, db: Session):
                 response_time_ms=agent_result.get("response_time_ms", 0),
             )
             db.add(result)
-            db.flush()
             results.append(result)
 
-            print(f"  [Eval] Score: {overall} ({status})")
+            # Commit after each result so polling picks up progress
+            run.passed = sum(1 for r in results if r.status == "pass")
+            run.warned = sum(1 for r in results if r.status == "warn")
+            run.failed = sum(1 for r in results if r.status == "fail")
+            db.commit()
+
+            print(f"  [Eval] Score: {overall} ({status}) — {len(results)}/{len(test_cases)} done")
 
         # Step 4: Finalize run
         run.passed = sum(1 for r in results if r.status == "pass")
