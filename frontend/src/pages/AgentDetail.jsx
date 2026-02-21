@@ -429,6 +429,168 @@ export default function AgentDetail() {
           This prompt tells the AI how to interpret and answer questions about the files in this agent.
         </div>
       </div>
+
+      {/* Publish to Marketplace */}
+      {agent.system_prompt && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          {published ? (
+            <div style={{ textAlign: 'center', padding: '8px 0' }}>
+              <div style={{
+                fontWeight: 700, fontSize: '0.95rem', color: 'var(--status-pass)',
+                fontFamily: 'var(--font-display)', marginBottom: 6,
+              }}>
+                Published to Marketplace!
+              </div>
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: 14 }}>
+                {published.name} is now live. Anyone can find, clone, and verify it.
+              </div>
+              <button
+                className="btn btn-outline"
+                style={{ fontSize: '0.82rem' }}
+                onClick={() => navigate(`/marketplace/${published.id}`)}
+              >
+                View Listing →
+              </button>
+            </div>
+          ) : !showPublish ? (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontWeight: 600, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Store size={15} /> Publish to Marketplace
+                </div>
+                <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                  Share this agent with the community. Others can clone and re-verify your eval scores.
+                </div>
+              </div>
+              <button className="btn btn-outline" onClick={handleOpenPublish}>
+                Publish
+              </button>
+            </div>
+          ) : (
+            <div>
+              <div style={{
+                fontWeight: 700, fontSize: '0.88rem', marginBottom: 16,
+                fontFamily: 'var(--font-display)',
+              }}>
+                Publish to Marketplace
+              </div>
+
+              {/* Category */}
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Category
+                </label>
+                <select
+                  value={pubCategory}
+                  onChange={e => setPubCategory(e.target.value)}
+                  style={{
+                    width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--rule)', fontSize: '0.84rem',
+                    fontFamily: 'var(--font-body)', background: 'white',
+                    color: 'var(--text)', outline: 'none',
+                  }}
+                >
+                  <option value="general">General</option>
+                  <option value="legal">Legal</option>
+                  <option value="healthcare">Healthcare</option>
+                  <option value="finance">Finance</option>
+                  <option value="engineering">Engineering</option>
+                  <option value="education">Education</option>
+                  <option value="operations">Operations</option>
+                </select>
+              </div>
+
+              {/* Pack Type */}
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  What to include
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {[
+                    { id: 'byod', label: 'BYOD', desc: 'Blueprint + eval spec only. Users upload their own docs.' },
+                    { id: 'open', label: 'Open Pack', desc: 'Include documents. Anyone can clone the full agent.' },
+                  ].map(p => (
+                    <label key={p.id} style={{
+                      display: 'flex', alignItems: 'flex-start', gap: 10,
+                      padding: '10px 14px', borderRadius: 'var(--radius-sm)',
+                      border: `1px solid ${pubPackType === p.id ? 'var(--cane-500)' : 'var(--rule)'}`,
+                      cursor: 'pointer', background: pubPackType === p.id ? 'var(--paper)' : 'white',
+                      transition: 'border-color 0.15s',
+                    }}>
+                      <input
+                        type="radio"
+                        name="packType"
+                        checked={pubPackType === p.id}
+                        onChange={() => setPubPackType(p.id)}
+                        style={{ marginTop: 2 }}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: '0.84rem' }}>{p.label}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{p.desc}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Environment (optional) */}
+              <div style={{ marginBottom: 18 }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Evaluation (optional)
+                </label>
+                {envs.length > 0 ? (
+                  <select
+                    value={pubEnvId}
+                    onChange={e => setPubEnvId(e.target.value)}
+                    style={{
+                      width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--rule)', fontSize: '0.84rem',
+                      fontFamily: 'var(--font-body)', background: 'white',
+                      color: 'var(--text)', outline: 'none',
+                    }}
+                  >
+                    <option value="">None — publish without eval scores</option>
+                    {envs.map(e => (
+                      <option key={e.id} value={e.id}>{e.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <div style={{
+                    fontSize: '0.8rem', color: 'var(--text-muted)',
+                    padding: '10px 14px', background: 'var(--paper)',
+                    borderRadius: 'var(--radius-sm)', border: '1px solid var(--rule)',
+                  }}>
+                    No evaluation environments found for this agent. You can still publish, but the listing won't have a performance card or re-verify capability.
+                  </div>
+                )}
+                {pubEnvId && (
+                  <div style={{
+                    fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 6,
+                    fontStyle: 'italic',
+                  }}>
+                    The best eval score, test cases, and criteria will be included in your listing.
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button className="btn btn-ghost" onClick={() => setShowPublish(false)}>
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={handlePublish}
+                  disabled={publishing}
+                >
+                  <Store size={14} />
+                  {publishing ? 'Publishing...' : 'Publish Agent'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
