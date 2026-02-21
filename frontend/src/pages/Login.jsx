@@ -78,6 +78,16 @@ export default function Login() {
           <div style={{ textAlign: 'center', marginTop: 16, fontSize: '0.875rem', color: 'var(--text-muted)' }}>
             Don't have an account? <Link to="/register" style={{ color: 'var(--accent)' }}>Create one</Link>
           </div>
+
+          <div style={{ textAlign: 'center', marginTop: 10 }}>
+            <Link to="/guide" style={{
+              color: 'var(--cane-500)', fontSize: '0.78rem', fontWeight: 500,
+              textDecoration: 'underline', textDecorationColor: 'rgba(255,255,255,0.1)',
+              textUnderlineOffset: 3,
+            }}>
+              What is Cane? →
+            </Link>
+          </div>
         </div>
 
         {/* Pricing */}

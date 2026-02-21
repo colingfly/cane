@@ -88,9 +88,20 @@ export default function App() {
       } />
 
       <Route path="/guide" element={
-        <ProtectedRoute>
+        user ? (
           <Layout><Guide /></Layout>
-        </ProtectedRoute>
+        ) : (
+          <div style={{ background: 'var(--bg)', minHeight: '100vh', padding: '28px 36px' }}>
+            <a href="/login" style={{
+              color: 'var(--text-muted)', fontSize: '0.8125rem',
+              textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
+              marginBottom: 16,
+            }}>
+              ← Back to login
+            </a>
+            <Guide />
+          </div>
+        )
       } />
 
       <Route path="/settings" element={

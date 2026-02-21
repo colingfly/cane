@@ -323,6 +323,11 @@ export default function AgentDetail() {
                 <Save size={14} /> {saving ? 'Saving...' : 'Save'}
               </button>
             )}
+            {!promptDirty && (
+              <button className="btn btn-outline" disabled style={{ opacity: 0.4 }}>
+                <Save size={14} /> Saved
+              </button>
+            )}
           </div>
         </div>
 
@@ -338,13 +343,14 @@ export default function AgentDetail() {
             minHeight: 200,
             padding: 12,
             borderRadius: 'var(--radius-sm)',
-            border: '1px solid var(--border)',
-            background: 'var(--surface)',
+            border: '1px solid var(--rule)',
+            background: 'var(--paper)',
             color: 'var(--text)',
             fontFamily: 'var(--font-body)',
             fontSize: '0.8125rem',
             lineHeight: 1.5,
             resize: 'vertical',
+            outline: 'none',
           }}
         />
         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 8 }}>

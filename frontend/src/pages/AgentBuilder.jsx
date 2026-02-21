@@ -102,6 +102,7 @@ export default function AgentBuilder() {
       setAgents(prev => prev.filter(a => a.id !== agentId))
     } catch (e) {
       console.error('Failed to delete agent:', e)
+      alert('Failed to delete agent. Please try again.')
     }
   }
 

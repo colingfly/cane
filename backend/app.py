@@ -1966,7 +1966,7 @@ def delete_agent(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete an agent and its workspace."""
+    """Delete an agent, its documents, and vector store chunks."""
     ws = db.query(Workspace).filter(
         Workspace.id == agent_id,
         Workspace.tenant_id == user.tenant_id,
@@ -1975,6 +1975,21 @@ def delete_agent(
 
     if not ws:
         return JSONResponse({"error": "Agent not found"}, status_code=404)
+
+    # Delete documents from DB
+    docs = db.query(Document).filter(Document.workspace_id == agent_id).all()
+    for doc in docs:
+        # Remove chunks from ChromaDB
+        try:
+            text_col.delete(where={"document_id": doc.id})
+        except Exception:
+            pass
+        try:
+            if image_col:
+                image_col.delete(where={"document_id": doc.id})
+        except Exception:
+            pass
+        db.delete(doc)
 
     db.delete(ws)
     db.commit()
