@@ -40,7 +40,9 @@ export default function AgentDetail() {
   const [generating, setGenerating] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editPrompt, setEditPrompt] = useState('')
-  const [promptDirty, setPromptDirty] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [dirty, setDirty] = useState(false)
   const [dragover, setDragover] = useState(false)
   const fileRef = useRef()
 
@@ -54,6 +56,9 @@ export default function AgentDetail() {
       ])
       setAgent(agentRes)
       setEditPrompt(agentRes.system_prompt || '')
+      setEditName(agentRes.name || '')
+      setEditDescription(agentRes.agent_description || '')
+      setDirty(false)
       setDocuments(docsRes.documents || [])
     } catch (e) {
       console.error('Failed to load agent:', e)
@@ -107,17 +112,30 @@ export default function AgentDetail() {
     }
   }
 
-  const handleSavePrompt = async () => {
+  const handleSave = async () => {
     setSaving(true)
     try {
-      await updateAgent(agentId, { system_prompt: editPrompt })
-      setAgent(prev => ({ ...prev, system_prompt: editPrompt }))
-      setPromptDirty(false)
+      const res = await updateAgent(agentId, {
+        name: editName,
+        agent_description: editDescription,
+        system_prompt: editPrompt,
+      })
+      setAgent(prev => ({ ...prev, name: editName, agent_description: editDescription, system_prompt: editPrompt }))
+      setDirty(false)
     } catch (e) {
-      console.error('Failed to save prompt:', e)
+      console.error('Failed to save agent:', e)
+      alert('Failed to save. Please try again.')
     } finally {
       setSaving(false)
     }
+  }
+
+  const markDirty = () => {
+    if (!agent) return
+    const changed = editName !== (agent.name || '') ||
+      editDescription !== (agent.agent_description || '') ||
+      editPrompt !== (agent.system_prompt || '')
+    setDirty(changed)
   }
 
   const handleGenerate = async () => {
@@ -128,7 +146,7 @@ export default function AgentDetail() {
       if (res.system_prompt) {
         setEditPrompt(res.system_prompt)
         setAgent(prev => ({ ...prev, system_prompt: res.system_prompt }))
-        setPromptDirty(false)
+        setDirty(false)
       }
     } catch (e) {
       alert(e.message || 'Failed to generate prompt')
@@ -166,16 +184,44 @@ export default function AgentDetail() {
         <Link to="/" style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 12, textDecoration: 'none' }}>
           <ArrowLeft size={14} /> Back to Agent Builder
         </Link>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
           <AgentIcon icon={agent.agent_icon} size={48} />
-          <div>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 700, fontFamily: 'var(--font-display)' }}>
-              {agent.name}
-            </h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-              {agent.agent_description || 'No description'}
-            </p>
+          <div style={{ flex: 1 }}>
+            <input
+              value={editName}
+              onChange={e => { setEditName(e.target.value); setTimeout(markDirty, 0) }}
+              placeholder="Agent name"
+              style={{
+                fontSize: '1.5rem', fontWeight: 700, fontFamily: 'var(--font-display)',
+                border: 'none', background: 'transparent', color: 'var(--text)',
+                width: '100%', padding: 0, outline: 'none',
+                borderBottom: '1px solid transparent',
+              }}
+              onFocus={e => e.target.style.borderBottomColor = 'var(--rule)'}
+              onBlur={e => e.target.style.borderBottomColor = 'transparent'}
+            />
+            <input
+              value={editDescription}
+              onChange={e => { setEditDescription(e.target.value); setTimeout(markDirty, 0) }}
+              placeholder="Add a description..."
+              style={{
+                color: 'var(--text-muted)', fontSize: '0.875rem',
+                border: 'none', background: 'transparent',
+                width: '100%', padding: 0, marginTop: 2, outline: 'none',
+                borderBottom: '1px solid transparent',
+              }}
+              onFocus={e => e.target.style.borderBottomColor = 'var(--rule)'}
+              onBlur={e => e.target.style.borderBottomColor = 'transparent'}
+            />
           </div>
+          <button
+            className={dirty ? "btn btn-primary" : "btn btn-outline"}
+            onClick={handleSave}
+            disabled={saving || !dirty}
+            style={{ flexShrink: 0, opacity: dirty ? 1 : 0.4 }}
+          >
+            <Save size={14} /> {saving ? 'Saving...' : dirty ? 'Save Agent' : 'Saved'}
+          </button>
         </div>
       </div>
 
@@ -318,22 +364,12 @@ export default function AgentDetail() {
                 {generating ? 'Generating...' : 'Auto-generate'}
               </button>
             )}
-            {promptDirty && (
-              <button className="btn btn-primary" onClick={handleSavePrompt} disabled={saving}>
-                <Save size={14} /> {saving ? 'Saving...' : 'Save'}
-              </button>
-            )}
-            {!promptDirty && (
-              <button className="btn btn-outline" disabled style={{ opacity: 0.4 }}>
-                <Save size={14} /> Saved
-              </button>
-            )}
           </div>
         </div>
 
         <textarea
           value={editPrompt}
-          onChange={e => { setEditPrompt(e.target.value); setPromptDirty(e.target.value !== (agent.system_prompt || '')) }}
+          onChange={e => { setEditPrompt(e.target.value); setTimeout(markDirty, 0) }}
           placeholder={agent.agent_type === 'custom'
             ? 'Upload files and click "Auto-generate" to create a specialized prompt, or write your own...'
             : 'This agent uses a pre-built prompt. Edit below to customize...'
