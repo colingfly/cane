@@ -163,6 +163,81 @@ try:
 except Exception as e:
     print(f"  [DB] api_keys migration skipped: {e}")
 
+# Migrate: create marketplace tables if missing
+def _migrate_marketplace_tables():
+    from sqlalchemy import inspect, text
+    from database import engine
+    insp = inspect(engine)
+    tables = insp.get_table_names()
+
+    if "marketplace_listings" not in tables:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                CREATE TABLE marketplace_listings (
+                    id VARCHAR(36) PRIMARY KEY,
+                    publisher_tenant_id VARCHAR(36) NOT NULL,
+                    publisher_user_id VARCHAR(36) NOT NULL,
+                    publisher_name VARCHAR(255) DEFAULT '',
+                    source_workspace_id VARCHAR(36) NOT NULL,
+                    source_environment_id VARCHAR(36),
+                    name VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    icon VARCHAR(10) DEFAULT '',
+                    system_prompt TEXT NOT NULL,
+                    agent_type VARCHAR(50) DEFAULT 'custom',
+                    category VARCHAR(100) DEFAULT 'general',
+                    tags TEXT,
+                    pack_type VARCHAR(20) DEFAULT 'byod',
+                    included_documents TEXT,
+                    document_count INT DEFAULT 0,
+                    overall_score FLOAT,
+                    eval_snapshot TEXT,
+                    test_cases_snapshot TEXT,
+                    criteria_snapshot TEXT,
+                    custom_rules_snapshot TEXT,
+                    test_case_count INT DEFAULT 0,
+                    clone_count INT DEFAULT 0,
+                    verify_count INT DEFAULT 0,
+                    avg_verify_score FLOAT,
+                    status VARCHAR(20) DEFAULT 'active',
+                    is_featured TINYINT(1) DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (publisher_tenant_id) REFERENCES tenants(id),
+                    FOREIGN KEY (publisher_user_id) REFERENCES users(id)
+                )
+            """))
+        print("  [DB] marketplace_listings table created")
+    else:
+        print("  [DB] marketplace_listings table already exists")
+
+    if "marketplace_clones" not in tables:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                CREATE TABLE marketplace_clones (
+                    id VARCHAR(36) PRIMARY KEY,
+                    listing_id VARCHAR(36) NOT NULL,
+                    cloned_by_tenant_id VARCHAR(36) NOT NULL,
+                    cloned_by_user_id VARCHAR(36) NOT NULL,
+                    cloned_workspace_id VARCHAR(36),
+                    cloned_environment_id VARCHAR(36),
+                    verify_score FLOAT,
+                    verified_at DATETIME,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (listing_id) REFERENCES marketplace_listings(id) ON DELETE CASCADE,
+                    FOREIGN KEY (cloned_by_tenant_id) REFERENCES tenants(id),
+                    FOREIGN KEY (cloned_by_user_id) REFERENCES users(id)
+                )
+            """))
+        print("  [DB] marketplace_clones table created")
+    else:
+        print("  [DB] marketplace_clones table already exists")
+
+try:
+    _migrate_marketplace_tables()
+except Exception as e:
+    print(f"  [DB] marketplace migration skipped: {e}")
+
 # Auto-seed admin on first deploy
 from auto_seed import auto_seed
 auto_seed()

@@ -81,7 +81,10 @@ def browse_marketplace(
         )
 
     if sort == "score":
-        q = q.order_by(MarketplaceListing.overall_score.desc().nullslast())
+        q = q.order_by(
+            MarketplaceListing.overall_score.is_(None),
+            MarketplaceListing.overall_score.desc(),
+        )
     elif sort == "clones":
         q = q.order_by(MarketplaceListing.clone_count.desc())
     else:  # newest
