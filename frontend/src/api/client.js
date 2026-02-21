@@ -313,9 +313,10 @@ export async function getMarketplaceListing(listingId) {
   return request(`/marketplace/${listingId}`)
 }
 
-export async function publishToMarketplace(workspaceId, environmentId, category, tags, packType) {
+export async function publishToMarketplace(workspaceId, environmentId, runId, category, tags, packType) {
   const qs = new URLSearchParams({ workspace_id: workspaceId, category, tags: JSON.stringify(tags), pack_type: packType })
   if (environmentId) qs.set('environment_id', environmentId)
+  if (runId) qs.set('run_id', runId)
   return request(`/marketplace/publish?${qs.toString()}`, { method: 'POST' })
 }
 

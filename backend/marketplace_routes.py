@@ -9,14 +9,18 @@ Endpoints:
   DELETE /api/marketplace/:id          — delist (publisher only)
 """
 import json
+import shutil
+import traceback
+from pathlib import Path
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, BackgroundTasks
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from database import get_db
 from auth import get_current_user
+from config import UPLOAD_DIR
 from db_models import User, Workspace, Document, Tenant
 from eval_models import Environment, TestCase, JudgeCriteria, JudgeCustomRule, EvalRun, EvalResult
 from marketplace_models import MarketplaceListing, MarketplaceClone
@@ -104,6 +108,7 @@ def browse_marketplace(
 def publish_agent(
     workspace_id: str = Query(...),
     environment_id: str = Query(None),
+    run_id: str = Query(None),
     category: str = Query("general"),
     tags: str = Query("[]"),
     pack_type: str = Query("byod"),
@@ -155,11 +160,18 @@ def publish_agent(
         ).first()
 
         if env:
-            # Find best completed run
-            best_run = db.query(EvalRun).filter(
-                EvalRun.environment_id == environment_id,
-                EvalRun.status == "completed",
-            ).order_by(EvalRun.overall_score.desc()).first()
+            # Find the run to use for performance card
+            if run_id:
+                best_run = db.query(EvalRun).filter(
+                    EvalRun.id == run_id,
+                    EvalRun.environment_id == environment_id,
+                    EvalRun.status == "completed",
+                ).first()
+            else:
+                best_run = db.query(EvalRun).filter(
+                    EvalRun.environment_id == environment_id,
+                    EvalRun.status == "completed",
+                ).order_by(EvalRun.overall_score.desc()).first()
 
             if best_run:
                 overall_score = best_run.overall_score
@@ -289,9 +301,62 @@ def get_listing(listing_id: str, db: Session = Depends(get_db)):
 
 # ─── Clone ───
 
+def _ingest_cloned_doc(doc_id, filepath, tenant_id, workspace_id, tenant_name, workspace_name):
+    """Background task: ingest a cloned document into the new tenant's ChromaDB namespace."""
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        doc = db.query(Document).filter(Document.id == doc_id).first()
+        if not doc:
+            print(f"  [Clone] Document {doc_id} not found, aborting")
+            return
+
+        print(f"  [Clone] Ingesting {doc.filename} for tenant={tenant_id}...")
+
+        from ingestor import Ingestor
+        ing = Ingestor()
+
+        result = ing.ingest(
+            filepath=filepath,
+            tenant_id=tenant_id,
+            workspace_id=workspace_id,
+            document_id=doc_id,
+            company_name=tenant_name,
+            workspace_name=workspace_name,
+            force=True,
+        )
+
+        if result.ok:
+            doc.status = "ready"
+            doc.chunk_count = len(result.chunks)
+            doc.image_count = len(result.images)
+            doc.processed_at = datetime.utcnow()
+            print(f"  [Clone] Done: {doc.filename} -> {doc.chunk_count} chunks, {doc.image_count} images")
+        else:
+            doc.status = "error"
+            doc.error_message = result.error
+            print(f"  [Clone] Error: {doc.filename} -> {result.error}")
+
+        db.commit()
+    except Exception as e:
+        print(f"  [Clone] Ingestion failed for {doc_id}: {e}")
+        traceback.print_exc()
+        try:
+            doc = db.query(Document).filter(Document.id == doc_id).first()
+            if doc:
+                doc.status = "error"
+                doc.error_message = str(e)[:500]
+                db.commit()
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
 @router.post("/{listing_id}/clone")
 def clone_listing(
     listing_id: str,
+    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -327,6 +392,58 @@ def clone_listing(
     )
     db.add(new_ws)
     db.flush()  # get the ID
+
+    # ─── Transfer documents for open/licensed packs ───
+    docs_transferred = 0
+    if listing.pack_type in ("open", "licensed"):
+        source_dir = UPLOAD_DIR / listing.publisher_tenant_id
+        dest_dir = UPLOAD_DIR / user.tenant_id
+        dest_dir.mkdir(parents=True, exist_ok=True)
+
+        # Get tenant/workspace names for ingestion metadata
+        cloner_tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+        cloner_tenant_name = cloner_tenant.name if cloner_tenant else ""
+
+        doc_meta = json.loads(listing.included_documents or "[]")
+        for dm in doc_meta:
+            filename = dm.get("filename", "")
+            if not filename:
+                continue
+
+            source_file = source_dir / filename
+            if not source_file.exists():
+                print(f"  [Clone] Source file not found: {source_file}")
+                continue
+
+            # Copy file to cloner's upload directory
+            dest_file = dest_dir / filename
+            shutil.copy2(str(source_file), str(dest_file))
+
+            # Create document record
+            new_doc = Document(
+                tenant_id=user.tenant_id,
+                workspace_id=new_ws.id,
+                uploaded_by=user.id,
+                filename=filename,
+                file_type=dm.get("file_type", ""),
+                file_size_bytes=source_file.stat().st_size,
+                status="processing",
+            )
+            db.add(new_doc)
+            db.flush()
+
+            # Queue background ingestion
+            background_tasks.add_task(
+                _ingest_cloned_doc,
+                doc_id=new_doc.id,
+                filepath=str(dest_file),
+                tenant_id=user.tenant_id,
+                workspace_id=new_ws.id,
+                tenant_name=cloner_tenant_name,
+                workspace_name=new_ws.name,
+            )
+            docs_transferred += 1
+            print(f"  [Clone] Queued ingestion: {filename}")
 
     # ─── Create eval environment with test cases + criteria ───
     new_env_id = None
@@ -390,13 +507,14 @@ def clone_listing(
 
     db.commit()
 
-    print(f"  [Marketplace] Cloned: {listing.name} → tenant={user.tenant_id}, agent={new_ws.id}, env={new_env_id}")
+    print(f"  [Marketplace] Cloned: {listing.name} → tenant={user.tenant_id}, agent={new_ws.id}, env={new_env_id}, docs={docs_transferred}")
 
     return {
         "status": "cloned",
         "agent_id": new_ws.id,
         "environment_id": new_env_id,
         "listing_name": listing.name,
+        "documents_transferred": docs_transferred,
     }
 
 

@@ -6,7 +6,7 @@ import {
   getDocuments, uploadDocument, deleteDocument, getDocumentStatus,
   publishToMarketplace,
 } from '../api/client'
-import { getEnvironments } from '../api/eval'
+import { getEnvironments, getRuns } from '../api/eval'
 
 const ICON_COLORS = {
   OG: { bg: '#c8963e' },
@@ -56,6 +56,8 @@ export default function AgentDetail() {
   const [pubEnvId, setPubEnvId] = useState('')
   const [pubCategory, setPubCategory] = useState('general')
   const [pubPackType, setPubPackType] = useState('byod')
+  const [pubRuns, setPubRuns] = useState([])
+  const [pubRunId, setPubRunId] = useState('')
 
   useEffect(() => { loadAgent() }, [agentId])
 
@@ -186,19 +188,40 @@ export default function AgentDetail() {
     setShowPublish(true)
     try {
       const res = await getEnvironments()
-      // Filter to envs linked to this agent
       const agentEnvs = (res.environments || res || []).filter(e => e.workspace_id === agentId)
       setEnvs(agentEnvs)
-      if (agentEnvs.length > 0) setPubEnvId(agentEnvs[0].id)
+      if (agentEnvs.length > 0) {
+        setPubEnvId(agentEnvs[0].id)
+        loadRunsForEnv(agentEnvs[0].id)
+      }
     } catch (e) {
       console.error('Failed to load environments:', e)
     }
   }
 
+  const loadRunsForEnv = async (envId) => {
+    setPubRuns([])
+    setPubRunId('')
+    if (!envId) return
+    try {
+      const res = await getRuns(envId)
+      const completed = (res.runs || res || []).filter(r => r.status === 'completed')
+      setPubRuns(completed)
+      if (completed.length > 0) setPubRunId(completed[0].id)
+    } catch (e) {
+      console.error('Failed to load runs:', e)
+    }
+  }
+
+  const handleEnvChange = (envId) => {
+    setPubEnvId(envId)
+    loadRunsForEnv(envId)
+  }
+
   const handlePublish = async () => {
     setPublishing(true)
     try {
-      const res = await publishToMarketplace(agentId, pubEnvId || null, pubCategory, [], pubPackType)
+      const res = await publishToMarketplace(agentId, pubEnvId || null, pubRunId || null, pubCategory, [], pubPackType)
       setPublished(res)
     } catch (e) {
       alert(e.message || 'Failed to publish')
@@ -534,14 +557,14 @@ export default function AgentDetail() {
               </div>
 
               {/* Environment (optional) */}
-              <div style={{ marginBottom: 18 }}>
+              <div style={{ marginBottom: 14 }}>
                 <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   Evaluation (optional)
                 </label>
                 {envs.length > 0 ? (
                   <select
                     value={pubEnvId}
-                    onChange={e => setPubEnvId(e.target.value)}
+                    onChange={e => handleEnvChange(e.target.value)}
                     style={{
                       width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-sm)',
                       border: '1px solid var(--rule)', fontSize: '0.84rem',
@@ -563,15 +586,48 @@ export default function AgentDetail() {
                     No evaluation environments found for this agent. You can still publish, but the listing won't have a performance card or re-verify capability.
                   </div>
                 )}
-                {pubEnvId && (
+              </div>
+
+              {/* Run picker */}
+              {pubEnvId && pubRuns.length > 0 && (
+                <div style={{ marginBottom: 18 }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Eval Run
+                  </label>
+                  <select
+                    value={pubRunId}
+                    onChange={e => setPubRunId(e.target.value)}
+                    style={{
+                      width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--rule)', fontSize: '0.84rem',
+                      fontFamily: 'var(--font-body)', background: 'white',
+                      color: 'var(--text)', outline: 'none',
+                    }}
+                  >
+                    {pubRuns.map(r => (
+                      <option key={r.id} value={r.id}>
+                        Score: {Math.round(r.overall_score)} — {new Date(r.created_at).toLocaleDateString()} {new Date(r.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </option>
+                    ))}
+                  </select>
                   <div style={{
                     fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 6,
                     fontStyle: 'italic',
                   }}>
-                    The best eval score, test cases, and criteria will be included in your listing.
+                    This run's score, test cases, and criteria will be published with your listing.
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+              {pubEnvId && pubRuns.length === 0 && (
+                <div style={{
+                  fontSize: '0.8rem', color: 'var(--text-muted)',
+                  padding: '10px 14px', background: 'var(--paper)',
+                  borderRadius: 'var(--radius-sm)', border: '1px solid var(--rule)',
+                  marginBottom: 18,
+                }}>
+                  No completed eval runs found. Run an evaluation first to include a performance card.
+                </div>
+              )}
 
               {/* Actions */}
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
