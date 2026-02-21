@@ -11,6 +11,8 @@ import Admin from './pages/Admin'
 import AgentBuilder from './pages/AgentBuilder'
 import AgentDetail from './pages/AgentDetail'
 import Guide from './pages/Guide'
+import Marketplace from './pages/Marketplace'
+import MarketplaceDetail from './pages/MarketplaceDetail'
 import Environments from './pages/Environments'
 import EnvironmentDetail from './pages/EnvironmentDetail'
 
@@ -100,6 +102,40 @@ export default function App() {
               ← Back to login
             </a>
             <Guide />
+          </div>
+        )
+      } />
+
+      <Route path="/marketplace" element={
+        user ? (
+          <Layout><Marketplace /></Layout>
+        ) : (
+          <div style={{ background: 'var(--bg)', minHeight: '100vh', padding: '28px 36px' }}>
+            <a href="/login" style={{
+              color: 'var(--text-muted)', fontSize: '0.8125rem',
+              textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
+              marginBottom: 16,
+            }}>
+              ← Back to login
+            </a>
+            <Marketplace />
+          </div>
+        )
+      } />
+
+      <Route path="/marketplace/:listingId" element={
+        user ? (
+          <Layout><MarketplaceDetail /></Layout>
+        ) : (
+          <div style={{ background: 'var(--bg)', minHeight: '100vh', padding: '28px 36px' }}>
+            <a href="/login" style={{
+              color: 'var(--text-muted)', fontSize: '0.8125rem',
+              textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
+              marginBottom: 16,
+            }}>
+              ← Back to login
+            </a>
+            <MarketplaceDetail />
           </div>
         )
       } />

@@ -298,3 +298,31 @@ export async function createApiKey(name, workspaceId = null) {
 export async function deleteApiKey(keyId) {
   return request(`/api-keys/${keyId}`, { method: 'DELETE' })
 }
+
+// -- Marketplace --
+
+export async function browseMarketplace(params = {}) {
+  const qs = new URLSearchParams()
+  if (params.category) qs.set('category', params.category)
+  if (params.search) qs.set('search', params.search)
+  if (params.sort) qs.set('sort', params.sort)
+  return request(`/marketplace?${qs.toString()}`)
+}
+
+export async function getMarketplaceListing(listingId) {
+  return request(`/marketplace/${listingId}`)
+}
+
+export async function publishToMarketplace(workspaceId, environmentId, category, tags, packType) {
+  const qs = new URLSearchParams({ workspace_id: workspaceId, category, tags: JSON.stringify(tags), pack_type: packType })
+  if (environmentId) qs.set('environment_id', environmentId)
+  return request(`/marketplace/publish?${qs.toString()}`, { method: 'POST' })
+}
+
+export async function cloneFromMarketplace(listingId) {
+  return request(`/marketplace/${listingId}/clone`, { method: 'POST' })
+}
+
+export async function delistFromMarketplace(listingId) {
+  return request(`/marketplace/${listingId}`, { method: 'DELETE' })
+}

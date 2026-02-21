@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Upload, Trash2, FileText, Sparkles, Save, ToggleLeft, ToggleRight, MessageSquare } from 'lucide-react'
+import { ArrowLeft, Upload, Trash2, FileText, Sparkles, Save, ToggleLeft, ToggleRight, MessageSquare, Store } from 'lucide-react'
 import {
   getAgent, updateAgent, generateAgentPrompt,
   getDocuments, uploadDocument, deleteDocument, getDocumentStatus,
+  publishToMarketplace,
 } from '../api/client'
+import { getEnvironments } from '../api/eval'
 
 const ICON_COLORS = {
   OG: { bg: '#c8963e' },
@@ -45,6 +47,15 @@ export default function AgentDetail() {
   const [dirty, setDirty] = useState(false)
   const [dragover, setDragover] = useState(false)
   const fileRef = useRef()
+
+  // Publish flow
+  const [showPublish, setShowPublish] = useState(false)
+  const [publishing, setPublishing] = useState(false)
+  const [published, setPublished] = useState(null)
+  const [envs, setEnvs] = useState([])
+  const [pubEnvId, setPubEnvId] = useState('')
+  const [pubCategory, setPubCategory] = useState('general')
+  const [pubPackType, setPubPackType] = useState('byod')
 
   useEffect(() => { loadAgent() }, [agentId])
 
@@ -169,6 +180,31 @@ export default function AgentDetail() {
     e.preventDefault()
     setDragover(false)
     handleUpload(e.dataTransfer.files)
+  }
+
+  const handleOpenPublish = async () => {
+    setShowPublish(true)
+    try {
+      const res = await getEnvironments()
+      // Filter to envs linked to this agent
+      const agentEnvs = (res.environments || res || []).filter(e => e.workspace_id === agentId)
+      setEnvs(agentEnvs)
+      if (agentEnvs.length > 0) setPubEnvId(agentEnvs[0].id)
+    } catch (e) {
+      console.error('Failed to load environments:', e)
+    }
+  }
+
+  const handlePublish = async () => {
+    setPublishing(true)
+    try {
+      const res = await publishToMarketplace(agentId, pubEnvId || null, pubCategory, [], pubPackType)
+      setPublished(res)
+    } catch (e) {
+      alert(e.message || 'Failed to publish')
+    } finally {
+      setPublishing(false)
+    }
   }
 
   if (loading) return <div className="loading-center"><div className="spinner" /></div>
