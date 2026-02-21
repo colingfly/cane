@@ -95,22 +95,6 @@ def browse_marketplace(
     }
 
 
-# ─── Detail ───
-
-@router.get("/{listing_id}")
-def get_listing(listing_id: str, db: Session = Depends(get_db)):
-    """Get full listing detail with performance card. Public."""
-    listing = db.query(MarketplaceListing).filter(
-        MarketplaceListing.id == listing_id,
-        MarketplaceListing.status == "active",
-    ).first()
-
-    if not listing:
-        return JSONResponse({"error": "Listing not found"}, status_code=404)
-
-    return _listing_to_dict(listing, detail=True)
-
-
 # ─── Publish ───
 
 @router.post("/publish")
@@ -280,6 +264,22 @@ def publish_agent(
     db.refresh(listing)
 
     print(f"  [Marketplace] Published: {listing.name} (score={overall_score}, {test_case_count} tests, {len(docs)} docs)")
+
+    return _listing_to_dict(listing, detail=True)
+
+
+# ─── Detail ───
+
+@router.get("/{listing_id}")
+def get_listing(listing_id: str, db: Session = Depends(get_db)):
+    """Get full listing detail with performance card. Public."""
+    listing = db.query(MarketplaceListing).filter(
+        MarketplaceListing.id == listing_id,
+        MarketplaceListing.status == "active",
+    ).first()
+
+    if not listing:
+        return JSONResponse({"error": "Listing not found"}, status_code=404)
 
     return _listing_to_dict(listing, detail=True)
 
