@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { Copy, Check } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Copy, Check, Search, Bot, FlaskConical, FileText, Upload, Zap, Shield } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 
 function CodeBlock({ code }) {
   const [copied, setCopied] = useState(false)
@@ -79,37 +81,165 @@ function SectionBlock({ title, children }) {
 
 // ─── TAB CONTENT ───
 
+function FeatureCard({ icon: Icon, title, description, detail }) {
+  return (
+    <div style={{
+      padding: '20px 22px',
+      background: 'var(--paper)',
+      border: '1px solid var(--rule)',
+      borderRadius: 'var(--radius)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: 8,
+          background: 'var(--cane-900)', color: 'var(--cane-400)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}>
+          <Icon size={16} />
+        </div>
+        <div style={{
+          fontWeight: 700, fontSize: '0.88rem', color: 'var(--text)',
+          fontFamily: 'var(--font-display)', letterSpacing: '-0.01em',
+        }}>
+          {title}
+        </div>
+      </div>
+      <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: detail ? 10 : 0 }}>
+        {description}
+      </div>
+      {detail && (
+        <div style={{
+          fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.6,
+          fontFamily: 'var(--font-mono)', padding: '8px 12px',
+          background: 'rgba(0,0,0,0.03)', borderRadius: 6,
+        }}>
+          {detail}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function GettingStarted() {
   return (
     <div>
-      <SectionBlock title="Overview">
-        <QA
-          q="What is Cane?"
-          a="Cane is an AI-powered knowledge platform. Upload your files — PDFs, docs, spreadsheets, audio, video — and Cane makes them searchable with natural language. Ask questions in plain English and get answers with sources cited. Build specialized AI agents for different use cases, then evaluate their quality with automated testing."
+      {/* Hero */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{
+          fontSize: '1.15rem', fontWeight: 800, color: 'var(--text)',
+          fontFamily: 'var(--font-display)', letterSpacing: '-0.02em',
+          lineHeight: 1.4, marginBottom: 10,
+        }}>
+          Your documents, answering questions.
+        </div>
+        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.7, maxWidth: 560 }}>
+          Cane turns your files into a searchable knowledge base you can ask questions in plain English.
+          Upload documents, build specialized AI agents, and evaluate whether they're giving the right answers — all in one platform.
+        </div>
+      </div>
+
+      {/* Feature grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 32 }}>
+        <FeatureCard
+          icon={Search}
+          title="Semantic Search"
+          description="Ask questions in natural language and get answers with sources cited. No keywords, no digging through folders."
+          detail="Hybrid retrieval: dense vectors (BGE) + sparse matching (BM25) + LLM reranking"
         />
-        <QA
-          q="How does it work?"
-          a="Cane extracts text from your files, splits it into chunks, and creates vector embeddings for semantic search. When you ask a question, Cane finds the most relevant chunks and uses an LLM to synthesize a clear answer grounded in your documents. No hallucination — every answer is tied to source material."
+        <FeatureCard
+          icon={Bot}
+          title="Custom AI Agents"
+          description="Build agents scoped to specific files with custom behavior — an HR agent, a compliance agent, a product expert. Each with its own knowledge base and instructions."
+          detail="Auto-generated system prompts from corpus analysis"
         />
+        <FeatureCard
+          icon={FlaskConical}
+          title="Built-in Evaluations"
+          description="Write test cases, define scoring criteria, and run automated evaluations. Cane scores every answer on accuracy, completeness, relevance, and faithfulness."
+          detail="LLM-as-Judge with weighted criteria and failure classification"
+        />
+        <FeatureCard
+          icon={FileText}
+          title="Multimodal Ingestion"
+          description="PDFs, Word docs, spreadsheets, images, audio, video — Cane processes it all. OCR for images, Whisper for transcription, smart chunking for everything."
+          detail="Supports PDF, DOCX, XLSX, CSV, PNG, JPG, MP3, WAV, MP4"
+        />
+      </div>
+
+      {/* How it works */}
+      <SectionBlock title="How It Works">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {[
+            {
+              step: '1',
+              icon: Upload,
+              title: 'Upload your files',
+              desc: 'Drag and drop files into Cane. Text is extracted, split into chunks, and embedded for semantic search. Most files process in under a minute.',
+            },
+            {
+              step: '2',
+              icon: Search,
+              title: 'Search with natural language',
+              desc: 'Ask a question like "What is our PTO policy?" or "How do I configure the API?" — Cane finds the most relevant chunks across your files and synthesizes a clear answer with sources.',
+            },
+            {
+              step: '3',
+              icon: Bot,
+              title: 'Build a specialized agent',
+              desc: 'Pick a template or create your own. Upload domain-specific files, customize the AI prompt (or let Cane auto-generate one), and deploy an agent that knows exactly one thing deeply.',
+            },
+            {
+              step: '4',
+              icon: FlaskConical,
+              title: 'Evaluate and improve',
+              desc: 'Write test cases with expected answers. Run an evaluation. Cane scores every response and shows you exactly where the agent gets it right and where it falls short — so you can iterate with data, not guesses.',
+            },
+          ].map(s => (
+            <div key={s.step} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: 8,
+                background: 'var(--cane-900)', color: 'var(--accent)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.75rem',
+                flexShrink: 0, marginTop: 2,
+              }}>
+                {s.step}
+              </div>
+              <div>
+                <div style={{
+                  fontWeight: 700, fontSize: '0.86rem', color: 'var(--text)',
+                  fontFamily: 'var(--font-display)', marginBottom: 4,
+                }}>
+                  {s.title}
+                </div>
+                <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                  {s.desc}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </SectionBlock>
 
-      <SectionBlock title="First Steps">
-        <QA
-          q="1. Upload your files"
-          a='Go to the Files page from the sidebar. Drag and drop files into the upload area, or click to browse. You can upload multiple files at once. Supported types: PDF, DOCX, XLSX, CSV, PNG, JPG, MP3, WAV, MP4, and more. Most files process in under a minute. Audio and video take longer due to transcription.'
-        />
-        <QA
-          q="2. Search your files"
-          a='Go to the Search page. Type a question in the search bar — "What is our PTO policy?" or "How do I configure the API?" — and Cane returns an AI-generated answer with the source documents cited below. Use the dropdown to search across all workspaces or scope to a specific one.'
-        />
-        <QA
-          q="3. Build an agent"
-          a="Go to Agent Builder and pick a template (Operations Guide, Academic Tutor, or Knowledge Base) or create your own. Upload files specific to that agent's domain. Optionally customize the AI prompt — or use Auto-generate to have Cane write one based on your files. Then ask the agent questions from Search."
-        />
-        <QA
-          q="4. Evaluate your agent"
-          a="Go to Environments and create a new one linked to your agent. Write test cases — questions with expected answers — and define judge criteria. Run an evaluation. Cane tests every question, scores the answers, and gives you a breakdown of what's working and what needs improvement."
-        />
+      {/* Under the hood */}
+      <SectionBlock title="Under the Hood">
+        <div style={{
+          padding: '16px 20px',
+          background: 'var(--paper)',
+          border: '1px solid var(--rule)',
+          borderRadius: 'var(--radius)',
+          fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7,
+        }}>
+          <p style={{ marginBottom: 12 }}>
+            Cane uses retrieval-augmented generation (RAG) to ground every answer in your source material. Files are chunked and embedded using BGE, stored in ChromaDB, and retrieved at query time using a hybrid pipeline that combines dense vector search with sparse keyword matching and reciprocal rank fusion.
+          </p>
+          <p style={{ marginBottom: 12 }}>
+            Answers are generated by Claude, Anthropic's language model, with a system prompt that enforces source grounding — the AI can only answer from what it finds in your documents. No hallucination by design.
+          </p>
+          <p style={{ margin: 0 }}>
+            Evaluations use an LLM-as-Judge architecture: a separate model scores each response on configurable criteria with weighted aggregation. Scores, judge reasoning, and per-criteria breakdowns are stored for every run so you can track improvement over time.
+          </p>
+        </div>
       </SectionBlock>
     </div>
   )
@@ -394,6 +524,7 @@ const tabs = [
 
 export default function Guide() {
   const [activeTab, setActiveTab] = useState('start')
+  const { user } = useAuth()
   const ActiveComponent = tabs.find(t => t.id === activeTab)?.Component || GettingStarted
 
   return (
@@ -446,16 +577,54 @@ export default function Guide() {
       {/* Active tab content */}
       <ActiveComponent />
 
-      {/* Footer */}
-      <div style={{
-        marginTop: 36, marginBottom: 20, padding: '16px 18px',
-        background: 'var(--paper)', borderRadius: 'var(--radius)',
-        border: '1px solid var(--rule)',
-        fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.6,
-      }}>
-        <strong style={{ color: 'var(--text)' }}>Need help?</strong> If you cannot find what you are looking for,
-        reach out to your team administrator. They can help with workspace setup, permissions, and account issues.
-      </div>
+      {/* Footer — context-aware */}
+      {user ? (
+        <div style={{
+          marginTop: 36, marginBottom: 20, padding: '16px 18px',
+          background: 'var(--paper)', borderRadius: 'var(--radius)',
+          border: '1px solid var(--rule)',
+          fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.6,
+        }}>
+          <strong style={{ color: 'var(--text)' }}>Need help?</strong> Reach out to your team admin or email us
+          at <a href="mailto:hello@cane.fyi" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>hello@cane.fyi</a>.
+        </div>
+      ) : (
+        <div style={{
+          marginTop: 36, marginBottom: 20, padding: '22px 24px',
+          background: 'var(--paper)', borderRadius: 'var(--radius)',
+          border: '1px solid var(--rule)',
+          textAlign: 'center',
+        }}>
+          <div style={{
+            fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)',
+            fontFamily: 'var(--font-display)', marginBottom: 6,
+          }}>
+            Ready to try it?
+          </div>
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.6 }}>
+            Create a free account and upload your first files in under a minute.
+          </div>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+            <Link to="/register" style={{
+              display: 'inline-block', padding: '10px 24px',
+              background: 'var(--accent)', color: 'white',
+              borderRadius: 'var(--radius-sm)', fontSize: '0.85rem',
+              fontWeight: 700, textDecoration: 'none',
+            }}>
+              Sign up free
+            </Link>
+            <Link to="/login" style={{
+              display: 'inline-block', padding: '10px 24px',
+              background: 'transparent', color: 'var(--text-secondary)',
+              borderRadius: 'var(--radius-sm)', fontSize: '0.85rem',
+              fontWeight: 600, textDecoration: 'none',
+              border: '1px solid var(--rule)',
+            }}>
+              Sign in
+            </Link>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
