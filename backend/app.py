@@ -236,6 +236,10 @@ TEXT_SCORE_THRESHOLD = 0.70
 from eval_routes import router as eval_router
 app.include_router(eval_router)
 
+# -- Marketplace Routes --
+from marketplace_routes import router as marketplace_router
+app.include_router(marketplace_router)
+
 FUSION_SCORE_THRESHOLD = 0.30
 
 # â”€â”€ Quality filter â”€â”€
