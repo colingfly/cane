@@ -619,29 +619,49 @@ function FAQTab() {
 // ─── TABS ───
 
 const tabs = [
-  { id: 'start', label: 'Getting Started', Component: GettingStarted },
-  { id: 'agents', label: 'Agents', Component: AgentsTab },
-  { id: 'tools', label: 'Tools', Component: ToolsTab },
-  { id: 'evals', label: 'Evaluations', Component: EvaluationsTab },
-  { id: 'deploy', label: 'Deploy', Component: DeployTab },
-  { id: 'marketplace', label: 'Marketplace', Component: MarketplaceTab },
+  { id: 'guide', label: 'User Guide', Component: UserGuideTab },
+  { id: 'api', label: 'API Docs', Component: APIDocsTab },
   { id: 'faq', label: 'FAQ', Component: FAQTab },
 ]
 
+function UserGuideTab() {
+  return (
+    <div>
+      <GettingStarted />
+      <SectionBlock title="Agents" />
+      <AgentsTab />
+      <SectionBlock title="Tools" />
+      <ToolsTab />
+      <SectionBlock title="Evaluations" />
+      <EvaluationsTab />
+      <SectionBlock title="Marketplace" />
+      <MarketplaceTab />
+    </div>
+  )
+}
+
+function APIDocsTab() {
+  return (
+    <div>
+      <DeployTab />
+    </div>
+  )
+}
+
 export default function Guide() {
-  const [activeTab, setActiveTab] = useState('start')
+  const [activeTab, setActiveTab] = useState('guide')
   const { user } = useAuth()
-  const ActiveComponent = tabs.find(t => t.id === activeTab)?.Component || GettingStarted
+  const ActiveComponent = tabs.find(t => t.id === activeTab)?.Component || UserGuideTab
 
   return (
-    <div className="fade-in" style={{ maxWidth: 720, margin: '0 auto' }}>
+    <div className="fade-in" style={{ maxWidth: 960, margin: '0 auto' }}>
       {/* Header */}
       <div style={{ marginBottom: 8 }}>
         <h2 style={{
           fontSize: '1.55rem', fontWeight: 800, marginBottom: 4,
           fontFamily: 'var(--font-display)', letterSpacing: '-0.03em',
         }}>
-          Guide
+          Docs
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
           Everything you need to know about building, evaluating, and deploying agents on Cane.

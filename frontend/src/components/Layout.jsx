@@ -34,7 +34,7 @@ export default function Layout({ children }) {
             <Store /> Marketplace
           </NavLink>
           <NavLink to="/guide">
-            <HelpCircle /> Guide
+            <HelpCircle /> Docs
           </NavLink>
           <NavLink to="/settings">
             <Settings /> Settings
