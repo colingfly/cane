@@ -72,8 +72,9 @@ body {
 
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-display);
-  font-weight: 600;
-  line-height: 1.2;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
 }
 
 a { color: var(--accent); text-decoration: none; }
@@ -138,7 +139,7 @@ a:hover { color: var(--accent-hover); }
   color: var(--cane-400);
   font-size: 0.875rem;
   font-weight: 500;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
   text-decoration: none;
 }
 
@@ -198,19 +199,19 @@ a:hover { color: var(--accent-hover); }
 .main-content {
   margin-left: var(--sidebar-width);
   flex: 1;
-  padding: 40px 48px;
+  padding: 48px 56px;
   max-width: calc(100vw - var(--sidebar-width));
   min-height: 100vh;
 }
 
 .page-header {
-  margin-bottom: 32px;
+  margin-bottom: 40px;
 }
 
 .page-header h2 {
-  font-size: 1.75rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
 }
 
 .page-header p {
@@ -225,6 +226,12 @@ a:hover { color: var(--accent-hover); }
   border-radius: var(--radius);
   padding: 24px;
   box-shadow: var(--shadow-sm);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.card:hover {
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow);
 }
 
 .card-header {
@@ -235,8 +242,8 @@ a:hover { color: var(--accent-hover); }
 }
 
 .card-header h3 {
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 1.05rem;
+  font-weight: 700;
 }
 
 /* ── Buttons ── */
@@ -248,10 +255,10 @@ a:hover { color: var(--accent-hover); }
   border-radius: var(--radius-sm);
   font-family: var(--font-body);
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
   border: none;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
 }
 
 .btn-primary {
@@ -259,7 +266,11 @@ a:hover { color: var(--accent-hover); }
   color: white;
 }
 
-.btn-primary:hover { background: var(--accent-hover); }
+.btn-primary:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(200, 150, 62, 0.2);
+}
 
 .btn-secondary {
   background: transparent;
@@ -309,7 +320,7 @@ a:hover { color: var(--accent-hover); }
   font-size: 0.9rem;
   background: var(--bg-card);
   color: var(--text);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
   outline: none;
 }
 
@@ -359,6 +370,7 @@ select.form-input {
 .search-input:focus {
   border-color: var(--accent);
   box-shadow: var(--shadow-lg), var(--shadow-focus);
+  transform: translateY(-1px);
 }
 
 .search-icon {
@@ -672,6 +684,7 @@ select.form-input {
 .upload-zone:hover, .upload-zone.dragover {
   border-color: var(--accent);
   background: var(--accent-muted);
+  transform: translateY(-1px);
 }
 
 .upload-zone p {
@@ -697,14 +710,20 @@ select.form-input {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 20px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card:hover {
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow);
 }
 
 .stat-card .stat-value {
   font-family: var(--font-display);
   font-size: 2rem;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--text);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
 }
 
 .stat-card .stat-label {
@@ -736,10 +755,10 @@ select.form-input {
 
 .login-brand h1 {
   font-family: var(--font-display);
-  font-size: 2.25rem;
-  font-weight: 800;
+  font-size: 2.5rem;
+  font-weight: 900;
   color: var(--cane-100);
-  letter-spacing: -0.03em;
+  letter-spacing: -0.04em;
 }
 
 .login-brand p {
@@ -850,16 +869,34 @@ select.form-input {
 
 /* ── Animations ── */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 .fade-in {
-  animation: fadeIn 0.3s ease forwards;
+  animation: fadeIn 0.4s ease forwards;
 }
 
+/* Staggered card entrance */
+.fade-in .card {
+  opacity: 0;
+  animation: fadeInUp 0.4s ease forwards;
+}
+
+.fade-in .card:nth-child(1) { animation-delay: 0.05s; }
+.fade-in .card:nth-child(2) { animation-delay: 0.1s; }
+.fade-in .card:nth-child(3) { animation-delay: 0.15s; }
+.fade-in .card:nth-child(4) { animation-delay: 0.2s; }
+.fade-in .card:nth-child(5) { animation-delay: 0.25s; }
+.fade-in .card:nth-child(6) { animation-delay: 0.3s; }
+
 .results-list .result-card {
-  animation: fadeIn 0.3s ease forwards;
+  animation: fadeInUp 0.35s ease forwards;
   opacity: 0;
 }
 
@@ -873,4 +910,5 @@ select.form-input {
 @media (max-width: 768px) {
   .sidebar { display: none; }
   .main-content { margin-left: 0; padding: 24px; }
+  .fade-in .card { animation-delay: 0s !important; }
 }
