@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import Layout from './components/Layout'
+import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import SearchPage from './pages/Search'
@@ -48,9 +49,11 @@ export default function App() {
       } />
 
       <Route path="/" element={
-        <ProtectedRoute>
+        user ? (
           <Layout><AgentBuilder /></Layout>
-        </ProtectedRoute>
+        ) : (
+          <Landing />
+        )
       } />
 
       <Route path="/search" element={
@@ -94,12 +97,12 @@ export default function App() {
           <Layout><Guide /></Layout>
         ) : (
           <div style={{ background: 'var(--bg)', minHeight: '100vh', padding: '28px 36px' }}>
-            <a href="/login" style={{
+            <a href="/" style={{
               color: 'var(--text-muted)', fontSize: '0.8125rem',
               textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
               marginBottom: 16,
             }}>
-              ← Back to login
+              ← Back to home
             </a>
             <Guide />
           </div>
@@ -111,12 +114,12 @@ export default function App() {
           <Layout><Marketplace /></Layout>
         ) : (
           <div style={{ background: 'var(--bg)', minHeight: '100vh', padding: '28px 36px' }}>
-            <a href="/login" style={{
+            <a href="/" style={{
               color: 'var(--text-muted)', fontSize: '0.8125rem',
               textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
               marginBottom: 16,
             }}>
-              ← Back to login
+              ← Back to home
             </a>
             <Marketplace />
           </div>
@@ -128,12 +131,12 @@ export default function App() {
           <Layout><MarketplaceDetail /></Layout>
         ) : (
           <div style={{ background: 'var(--bg)', minHeight: '100vh', padding: '28px 36px' }}>
-            <a href="/login" style={{
+            <a href="/" style={{
               color: 'var(--text-muted)', fontSize: '0.8125rem',
               textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
               marginBottom: 16,
             }}>
-              ← Back to login
+              ← Back to home
             </a>
             <MarketplaceDetail />
           </div>
