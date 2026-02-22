@@ -486,23 +486,21 @@ export default function AgentDetail() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             AI Instructions
-            {agent.agent_type === 'custom' && (
-              <span style={{
-                fontSize: '0.55rem', fontWeight: 600, background: 'var(--accent)', color: 'white',
-                padding: '1px 6px', borderRadius: 8,
-              }}>AUTO-GENERATE</span>
-            )}
+            <span style={{
+              fontSize: '0.55rem', fontWeight: 600, background: 'var(--accent)', color: 'white',
+              padding: '1px 6px', borderRadius: 8,
+            }}>AUTO-GENERATE</span>
           </h3>
           <div style={{ display: 'flex', gap: 8 }}>
-            {agent.agent_type === 'custom' && readyDocs.length > 0 && (
+            {readyDocs.length > 0 && (
               <button
                 className="btn btn-ghost"
                 onClick={handleGenerate}
                 disabled={generating}
-                title="Auto-generate prompt from files"
+                title={agent.agent_type === 'custom' ? 'Auto-generate prompt from files' : 'Refine this prompt using your uploaded files'}
               >
                 <Sparkles size={14} />
-                {generating ? 'Generating...' : 'Auto-generate'}
+                {generating ? 'Generating...' : agent.agent_type === 'custom' ? 'Auto-generate' : 'Refine with files'}
               </button>
             )}
           </div>
@@ -513,7 +511,7 @@ export default function AgentDetail() {
           onChange={e => { setEditPrompt(e.target.value); setTimeout(markDirty, 0) }}
           placeholder={agent.agent_type === 'custom'
             ? 'Upload files and click "Auto-generate" to create a specialized prompt, or write your own...'
-            : 'This agent uses a pre-built prompt. Edit below to customize...'
+            : 'Template prompt loaded. Upload files and click "Refine with files" to specialize it for your documents...'
           }
           style={{
             width: '100%',
