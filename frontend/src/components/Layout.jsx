@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { Search, FileText, Settings, BarChart3, Shield, Bot, HelpCircle, FlaskConical, Store } from 'lucide-react'
+import { Search, Settings, Shield, Bot, HelpCircle, FlaskConical, Store } from 'lucide-react'
 
 export default function Layout({ children }) {
   const { user, tenant, handleLogout, isAdmin } = useAuth()
@@ -27,12 +27,9 @@ export default function Layout({ children }) {
           <NavLink to="/search">
             <Search /> Search
           </NavLink>
-          <NavLink to="/documents">
-            <FileText /> Files
-          </NavLink>
-          <NavLink to="/dashboard">
-            <BarChart3 /> Dashboard
-          </NavLink>
+
+          <div style={{ height: 1, background: 'var(--rule)', margin: '8px 12px', opacity: 0.4 }} />
+
           <NavLink to="/marketplace">
             <Store /> Marketplace
           </NavLink>
@@ -45,7 +42,7 @@ export default function Layout({ children }) {
 
           {isAdmin && (
             <>
-              <div style={{ height: 16 }} />
+              <div style={{ height: 1, background: 'var(--rule)', margin: '8px 12px', opacity: 0.4 }} />
               <NavLink to="/admin">
                 <Shield /> Admin
               </NavLink>
