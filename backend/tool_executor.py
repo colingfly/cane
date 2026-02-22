@@ -151,15 +151,19 @@ def call_claude_with_tools(
         clean = {k: v for k, v in t.items() if not k.startswith("_")}
         clean_tools.append(clean)
 
+    # Add instruction to always provide text answer
+    enhanced_system = system + "\n\nIMPORTANT: You MUST always provide a complete text answer to the user's question. If you also call tools, you must STILL include your full written answer."
+
     max_iterations = 3  # Safety limit on tool-use loops
     current_messages = list(messages)
+    all_text_parts = []  # Collect text across all iterations
 
     for iteration in range(max_iterations):
         payload = {
             "model": CLAUDE_MODEL,
             "max_tokens": 1024,
             "temperature": 0.3,
-            "system": system,
+            "system": enhanced_system,
             "messages": current_messages,
             "tools": clean_tools,
         }
@@ -176,30 +180,34 @@ def call_claude_with_tools(
             method="POST",
         )
 
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            result = json.loads(resp.read())
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                result = json.loads(resp.read())
+        except Exception as e:
+            print(f"  [Tools] Claude API error on iteration {iteration}: {e}")
+            break
 
         content = result.get("content", [])
         stop_reason = result.get("stop_reason", "")
+        print(f"  [Tools] Iteration {iteration}: stop_reason={stop_reason}, blocks={len(content)}")
 
-        # If no tool use, extract text and return
+        # Collect any text blocks from this response
+        for block in content:
+            if block.get("type") == "text" and block.get("text", "").strip():
+                all_text_parts.append(block["text"])
+                print(f"  [Tools] Got text: {block['text'][:80]}...")
+
+        # If no tool use, we're done
         if stop_reason != "tool_use":
-            return "".join(
-                block.get("text", "") for block in content if block.get("type") == "text"
-            ).strip()
+            break
 
         # Claude wants to use tools — process each tool_use block
-        # First, add Claude's response to messages
         current_messages.append({"role": "assistant", "content": content})
 
         tool_results = []
-        text_parts = []
 
         for block in content:
-            if block.get("type") == "text":
-                text_parts.append(block.get("text", ""))
-
-            elif block.get("type") == "tool_use":
+            if block.get("type") == "tool_use":
                 tool_name = block.get("name", "")
                 tool_input = block.get("input", {})
                 tool_use_id = block.get("id", "")
@@ -233,7 +241,7 @@ def call_claude_with_tools(
                 if tool_record.fire_and_forget:
                     result_content = json.dumps({
                         "status": "executed",
-                        "message": f"Webhook fired successfully to {tool_record.url}" if exec_result["status"] == "ok" else f"Webhook failed: {exec_result['body'][:200]}"
+                        "message": f"Webhook fired successfully" if exec_result["status"] == "ok" else f"Webhook failed: {exec_result['body'][:200]}"
                     })
                 else:
                     result_content = exec_result["body"][:2000] if exec_result["body"] else json.dumps(exec_result)
@@ -244,8 +252,9 @@ def call_claude_with_tools(
                     "content": result_content,
                 })
 
-        # Add tool results to messages and loop back for Claude's final response
+        # Add tool results to messages and loop back
         current_messages.append({"role": "user", "content": tool_results})
 
-    # If we exhausted iterations, return whatever text we have
-    return "".join(text_parts) if text_parts else "I attempted to use tools but couldn't complete the request."
+    final_text = " ".join(all_text_parts).strip()
+    print(f"  [Tools] Final text length: {len(final_text)}")
+    return final_text

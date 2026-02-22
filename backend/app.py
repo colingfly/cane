@@ -2717,17 +2717,47 @@ async def v1_ask(
             t.name.replace(" ", "_").lower()[:64]: t
             for t in workspace_tools
         }
+        # Add instruction so Claude always provides a text answer alongside tool calls
+        tool_system = rules
         messages = [{"role": "user", "content": user_msg}]
         try:
             answer = call_claude_with_tools(
                 messages=messages,
-                system=rules,
+                system=tool_system,
                 tools=claude_tools,
                 tool_lookup=tool_lookup,
                 db_session=db,
             )
         except Exception as e:
-            raise HTTPException(502, f"AI service error: {str(e)}")
+            print(f"  [v1/ask] Tool call failed, falling back: {e}")
+            answer = ""
+
+        # Fallback: if tool flow returned empty, do a plain call
+        if not answer or not answer.strip():
+            print("  [v1/ask] Tool response empty, falling back to plain call")
+            payload = {
+                "model": CLAUDE_MODEL,
+                "max_tokens": 1024,
+                "system": rules,
+                "messages": [{"role": "user", "content": user_msg}],
+            }
+            data = json.dumps(payload).encode()
+            req = urllib.request.Request(
+                "https://api.anthropic.com/v1/messages",
+                data=data,
+                headers={
+                    "Content-Type": "application/json",
+                    "x-api-key": ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                },
+                method="POST",
+            )
+            try:
+                resp = urllib.request.urlopen(req, timeout=30)
+                result = json.loads(resp.read().decode())
+                answer = result.get("content", [{}])[0].get("text", "").strip()
+            except Exception as e:
+                raise HTTPException(502, f"AI service error: {str(e)}")
     else:
         payload = {
             "model": CLAUDE_MODEL,
