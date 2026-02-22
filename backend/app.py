@@ -2291,7 +2291,9 @@ def admin_delete_tenant(
     # 2. Evals: results → runs → rules → criteria → test cases → environments
     env_ids = [e.id for e in db.query(Environment).filter(Environment.tenant_id == tenant_id).all()]
     if env_ids:
-        db.query(EvalResult).filter(EvalResult.environment_id.in_(env_ids)).delete(synchronize_session=False)
+        run_ids = [r.id for r in db.query(EvalRun).filter(EvalRun.environment_id.in_(env_ids)).all()]
+        if run_ids:
+            db.query(EvalResult).filter(EvalResult.eval_run_id.in_(run_ids)).delete(synchronize_session=False)
         db.query(EvalRun).filter(EvalRun.environment_id.in_(env_ids)).delete(synchronize_session=False)
         db.query(JudgeCustomRule).filter(JudgeCustomRule.environment_id.in_(env_ids)).delete(synchronize_session=False)
         db.query(JudgeCriteria).filter(JudgeCriteria.environment_id.in_(env_ids)).delete(synchronize_session=False)
