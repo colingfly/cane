@@ -38,7 +38,7 @@ from config import (
     ensure_dirs,
 )
 from database import get_db, init_db
-from db_models import Tenant, User, Workspace, Document, SearchLog
+from db_models import Tenant, User, Workspace, Document, SearchLog, ApiKey
 from auth import (
     get_current_user, require_owner, require_admin,
     hash_password, verify_password, create_token,
@@ -2277,7 +2277,21 @@ def admin_delete_tenant(
     if not tenant:
         raise HTTPException(404, "Tenant not found")
 
-    # Delete in order: search logs, documents, workspaces, users, tenant
+    # Delete in order: marketplace, evals, api keys, search logs, documents, workspaces, users, tenant
+    from marketplace_models import MarketplaceListing, MarketplaceClone
+    from eval_models import EvalResult, EvalRun, JudgeCustomRule, JudgeCriteria, TestCase, Environment
+    db.query(MarketplaceClone).filter(MarketplaceClone.cloned_by_tenant_id == tenant_id).delete()
+    db.query(MarketplaceListing).filter(MarketplaceListing.publisher_tenant_id == tenant_id).delete()
+    # Eval cleanup: results → runs → rules → criteria → test cases → environments
+    env_ids = [e.id for e in db.query(Environment).filter(Environment.tenant_id == tenant_id).all()]
+    if env_ids:
+        db.query(EvalResult).filter(EvalResult.environment_id.in_(env_ids)).delete(synchronize_session=False)
+        db.query(EvalRun).filter(EvalRun.environment_id.in_(env_ids)).delete(synchronize_session=False)
+        db.query(JudgeCustomRule).filter(JudgeCustomRule.environment_id.in_(env_ids)).delete(synchronize_session=False)
+        db.query(JudgeCriteria).filter(JudgeCriteria.environment_id.in_(env_ids)).delete(synchronize_session=False)
+        db.query(TestCase).filter(TestCase.environment_id.in_(env_ids)).delete(synchronize_session=False)
+    db.query(Environment).filter(Environment.tenant_id == tenant_id).delete()
+    db.query(ApiKey).filter(ApiKey.tenant_id == tenant_id).delete()
     db.query(SearchLog).filter(SearchLog.tenant_id == tenant_id).delete()
     db.query(Document).filter(Document.tenant_id == tenant_id).delete()
     db.query(Workspace).filter(Workspace.tenant_id == tenant_id).delete()

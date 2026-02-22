@@ -370,15 +370,6 @@ def clone_listing(
     if not listing:
         return JSONResponse({"error": "Listing not found"}, status_code=404)
 
-    # Check if already cloned by this tenant
-    existing = db.query(MarketplaceClone).filter(
-        MarketplaceClone.listing_id == listing_id,
-        MarketplaceClone.cloned_by_tenant_id == user.tenant_id,
-    ).first()
-
-    if existing:
-        return JSONResponse({"error": "Already cloned this agent"}, status_code=409)
-
     # ─── Create agent (workspace) ───
     new_ws = Workspace(
         tenant_id=user.tenant_id,
