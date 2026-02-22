@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Download, FlaskConical, FileText, Copy, Check, Shield, RefreshCw, Bot } from 'lucide-react'
+import { ArrowLeft, Download, FlaskConical, FileText, Copy, Check, Shield, RefreshCw, Bot, Trash2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { getMarketplaceListing, cloneFromMarketplace } from '../api/client'
+import { getMarketplaceListing, cloneFromMarketplace, delistFromMarketplace } from '../api/client'
 
 function ScoreRing({ score, size = 80 }) {
   const color = score >= 80 ? 'var(--status-pass)' : score >= 60 ? 'var(--status-warn)' : 'var(--status-fail)'
@@ -72,12 +72,13 @@ function CriteriaBar({ label, score, weight }) {
 export default function MarketplaceDetail() {
   const { listingId } = useParams()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, tenant } = useAuth()
   const [listing, setListing] = useState(null)
   const [loading, setLoading] = useState(true)
   const [cloning, setCloning] = useState(false)
   const [cloned, setCloned] = useState(null)
   const [promptExpanded, setPromptExpanded] = useState(false)
+  const [delisting, setDelisting] = useState(false)
 
   useEffect(() => {
     (async () => {
@@ -105,6 +106,19 @@ export default function MarketplaceDetail() {
       alert(e.message || 'Failed to clone')
     } finally {
       setCloning(false)
+    }
+  }
+
+  const handleDelist = async () => {
+    if (!confirm('Remove this agent from the marketplace? This cannot be undone.')) return
+    setDelisting(true)
+    try {
+      await delistFromMarketplace(listingId)
+      navigate('/marketplace')
+    } catch (e) {
+      alert(e.message || 'Failed to delist')
+    } finally {
+      setDelisting(false)
     }
   }
 
@@ -216,6 +230,21 @@ export default function MarketplaceDetail() {
             >
               <Download size={16} />
               {cloning ? 'Cloning...' : 'Clone Agent'}
+            </button>
+          )}
+          {tenant && listing.publisher_tenant_id === tenant.id && (
+            <button
+              className="btn btn-ghost"
+              onClick={handleDelist}
+              disabled={delisting}
+              style={{
+                fontSize: '0.75rem', marginTop: 8, width: '100%',
+                color: 'var(--status-fail)', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', gap: 6,
+              }}
+            >
+              <Trash2 size={13} />
+              {delisting ? 'Removing...' : 'Remove from Marketplace'}
             </button>
           )}
         </div>

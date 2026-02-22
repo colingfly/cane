@@ -2167,7 +2167,7 @@ def delete_agent(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete an agent, its documents, and vector store chunks."""
+    """Delete an agent, its documents, tools, evals, listings, and vector store chunks."""
     ws = db.query(Workspace).filter(
         Workspace.id == agent_id,
         Workspace.tenant_id == user.tenant_id,
@@ -2177,24 +2177,78 @@ def delete_agent(
     if not ws:
         return JSONResponse({"error": "Agent not found"}, status_code=404)
 
-    # Delete documents from DB
-    docs = db.query(Document).filter(Document.workspace_id == agent_id).all()
-    for doc in docs:
-        # Remove chunks from ChromaDB
-        try:
-            text_col.delete(where={"document_id": doc.id})
-        except Exception:
-            pass
-        try:
-            if image_col:
-                image_col.delete(where={"document_id": doc.id})
-        except Exception:
-            pass
-        db.delete(doc)
+    try:
+        # 1. Marketplace: delete clones OF this agent's listings, then listings
+        from marketplace_models import MarketplaceListing, MarketplaceClone
+        listing_ids = [l.id for l in db.query(MarketplaceListing).filter(
+            MarketplaceListing.workspace_id == agent_id
+        ).all()]
+        if listing_ids:
+            db.query(MarketplaceClone).filter(
+                MarketplaceClone.listing_id.in_(listing_ids)
+            ).delete(synchronize_session=False)
+            db.query(MarketplaceListing).filter(
+                MarketplaceListing.id.in_(listing_ids)
+            ).delete(synchronize_session=False)
 
-    db.delete(ws)
-    db.commit()
-    return {"status": "deleted"}
+        # Also delete clones BY this tenant of other listings that point to this workspace
+        db.query(MarketplaceClone).filter(
+            MarketplaceClone.cloned_workspace_id == agent_id
+        ).delete(synchronize_session=False)
+
+        # 2. Eval cascade: results → runs → rules → criteria → test cases → environments
+        from eval_models import Environment, TestCase, JudgeCriteria, JudgeCustomRule, EvalRun, EvalResult
+        env_ids = [e.id for e in db.query(Environment).filter(
+            Environment.workspace_id == agent_id
+        ).all()]
+        if env_ids:
+            run_ids = [r.id for r in db.query(EvalRun).filter(
+                EvalRun.environment_id.in_(env_ids)
+            ).all()]
+            if run_ids:
+                db.query(EvalResult).filter(EvalResult.eval_run_id.in_(run_ids)).delete(synchronize_session=False)
+            db.query(EvalRun).filter(EvalRun.environment_id.in_(env_ids)).delete(synchronize_session=False)
+            db.query(JudgeCustomRule).filter(JudgeCustomRule.environment_id.in_(env_ids)).delete(synchronize_session=False)
+            db.query(JudgeCriteria).filter(JudgeCriteria.environment_id.in_(env_ids)).delete(synchronize_session=False)
+
+            tc_ids = [t.id for t in db.query(TestCase).filter(
+                TestCase.environment_id.in_(env_ids)
+            ).all()]
+            db.query(TestCase).filter(TestCase.environment_id.in_(env_ids)).delete(synchronize_session=False)
+            db.query(Environment).filter(Environment.id.in_(env_ids)).delete(synchronize_session=False)
+
+        # 3. Tools
+        from tool_models import AgentTool
+        db.query(AgentTool).filter(AgentTool.workspace_id == agent_id).delete(synchronize_session=False)
+
+        # 4. Search logs
+        db.query(SearchLog).filter(SearchLog.workspace_id == agent_id).delete(synchronize_session=False)
+
+        # 5. Documents + vector chunks
+        docs = db.query(Document).filter(Document.workspace_id == agent_id).all()
+        for doc in docs:
+            try:
+                text_col.delete(where={"document_id": doc.id})
+            except Exception:
+                pass
+            try:
+                if image_col:
+                    image_col.delete(where={"document_id": doc.id})
+            except Exception:
+                pass
+            db.delete(doc)
+
+        # 6. Delete workspace
+        db.delete(ws)
+        db.commit()
+        print(f"  [Agent] Deleted agent {agent_id} with all cascaded data")
+        return {"status": "deleted"}
+
+    except Exception as e:
+        db.rollback()
+        print(f"  [Agent] Delete failed: {e}")
+        import traceback; traceback.print_exc()
+        return JSONResponse({"error": f"Delete failed: {str(e)}"}, status_code=500)
 
 
 @app.post("/api/agents/{agent_id}/generate-prompt")
