@@ -7,7 +7,7 @@ Phase 2 will add: run execution, judge pipeline, auto-generate.
 import json
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -368,6 +368,150 @@ def bulk_add_test_cases(
     return {"added": len(added)}
 
 
+@router.post("/{env_id}/cases/generate", status_code=201)
+def generate_test_cases(
+    env_id: str,
+    count: int = Query(10, ge=3, le=30),
+    difficulty: str = Query("mixed"),  # "easy", "mixed", "adversarial"
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Auto-generate test cases from the workspace's documents using an LLM."""
+    env = _get_env(env_id, user.tenant_id, db)
+
+    # Get the workspace and its system prompt
+    ws = db.query(Workspace).filter(Workspace.id == env.workspace_id).first()
+    if not ws:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Linked workspace not found")
+
+    # Fetch document chunks from ChromaDB
+    from app import text_col, _build_tenant_where
+    where = _build_tenant_where(user.tenant_id, env.workspace_id)
+
+    try:
+        get_kwargs = {"include": ["documents", "metadatas"]}
+        if where:
+            get_kwargs["where"] = where
+        results = text_col.get(**get_kwargs)
+        docs = results.get("documents", [])
+        metas = results.get("metadatas", [])
+    except Exception as e:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to fetch documents: {e}")
+
+    if not docs:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No documents found in this workspace. Upload files first.")
+
+    # Build a representative sample of document content (cap at ~12k tokens worth)
+    chunks_with_source = []
+    for doc, meta in zip(docs, metas):
+        text = (meta or {}).get("display_text", doc) or doc
+        source = (meta or {}).get("source_file", "unknown")
+        if text and len(text.strip()) > 30:
+            chunks_with_source.append({"text": text.strip()[:1500], "source": source})
+
+    # Cap total content to avoid exceeding context window
+    selected = chunks_with_source[:80]
+    content_block = "\n\n---\n\n".join(
+        f"[Source: {c['source']}]\n{c['text']}" for c in selected
+    )
+
+    # Difficulty instructions
+    diff_instructions = {
+        "easy": "Generate straightforward factual questions that can be directly answered from the documents. Focus on clearly stated facts, names, dates, and definitions.",
+        "mixed": "Generate a mix of: (1) straightforward factual questions, (2) synthesis questions requiring info from multiple parts, and (3) edge-case questions that test boundaries of what's in the docs. Include 2-3 adversarial questions that ask about plausible-sounding things NOT in the documents to test hallucination resistance.",
+        "adversarial": "Focus heavily on edge cases and trick questions. Generate questions about plausible-sounding topics NOT covered in the documents, questions with subtle misconceptions baked in, questions requiring careful distinction between similar concepts, and questions where the answer is 'this isn't covered in the available materials'. At least half should test hallucination resistance.",
+    }
+
+    difficulty_prompt = diff_instructions.get(difficulty, diff_instructions["mixed"])
+
+    system_prompt = ws.system_prompt or ""
+
+    generation_prompt = f"""You are an expert QA test engineer. Your job is to generate high-quality evaluation test cases for an AI agent.
+
+The agent has this system prompt:
+<system_prompt>
+{system_prompt[:2000]}
+</system_prompt>
+
+Here is the content from the agent's knowledge base documents:
+<documents>
+{content_block}
+</documents>
+
+Generate exactly {count} test cases. {difficulty_prompt}
+
+For each test case, provide:
+1. "question" — the question to ask the agent
+2. "expected_answer" — a detailed expected answer (what a correct response should include)
+3. "tags" — 1-3 relevant tags as an array
+
+CRITICAL RULES:
+- Expected answers should be specific and grounded in the document content
+- For adversarial/hallucination questions, the expected answer should state that the information is not available in the documents
+- Questions should be diverse — don't ask variations of the same thing
+- Questions should reflect real user queries, not trivia
+
+Return ONLY a JSON array with no other text:
+[
+  {{"question": "...", "expected_answer": "...", "tags": ["tag1", "tag2"]}},
+  ...
+]"""
+
+    # Call Claude to generate
+    from eval_engine import _call_claude, JUDGE_MODEL
+
+    try:
+        raw = _call_claude(generation_prompt, model=JUDGE_MODEL, max_tokens=4096)
+    except Exception as e:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"LLM generation failed: {e}")
+
+    # Parse response
+    # Strip markdown fences if present
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+    if cleaned.endswith("```"):
+        cleaned = cleaned[:-3]
+    cleaned = cleaned.strip()
+
+    try:
+        cases = json.loads(cleaned)
+        if not isinstance(cases, list):
+            raise ValueError("Response is not a list")
+    except (json.JSONDecodeError, ValueError) as e:
+        print(f"  [AutoGen] Failed to parse LLM response: {e}")
+        print(f"  [AutoGen] Raw response: {raw[:500]}")
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Failed to parse generated test cases. Try again.")
+
+    # Save to database
+    max_order = max([tc.sort_order for tc in env.test_cases], default=-1) + 1
+    added = []
+
+    for i, c in enumerate(cases):
+        q = c.get("question", "").strip()
+        if not q:
+            continue
+
+        tc = TestCase(
+            environment_id=env.id,
+            question=q,
+            expected_answer=c.get("expected_answer", "").strip() or None,
+            tags=json.dumps(c.get("tags", []) if isinstance(c.get("tags"), list) else []),
+            sort_order=max_order + i,
+        )
+        db.add(tc)
+        added.append(tc)
+
+    db.commit()
+
+    print(f"  [AutoGen] Generated {len(added)} test cases for env={env_id} (requested={count}, difficulty={difficulty})")
+
+    return {
+        "generated": len(added),
+        "cases": [_serialize_case(tc) for tc in added],
+    }
+
+
 # ═══════════════════════════════════════════
 #  JUDGE CRITERIA
 # ═══════════════════════════════════════════
@@ -590,3 +734,26 @@ def get_run_detail(
             for r in results
         ],
     }
+
+
+@router.delete("/{env_id}/runs/{run_id}")
+def delete_run(
+    env_id: str,
+    run_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete an eval run and its results."""
+    env = _get_env(env_id, user.tenant_id, db)
+    run = db.query(EvalRun).filter(
+        EvalRun.id == run_id,
+        EvalRun.environment_id == env.id,
+    ).first()
+    if not run:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Run not found")
+
+    # Delete results first (cascade should handle this but be explicit)
+    db.query(EvalResult).filter(EvalResult.eval_run_id == run.id).delete()
+    db.delete(run)
+    db.commit()
+    return {"deleted": True}

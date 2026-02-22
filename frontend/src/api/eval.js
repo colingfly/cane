@@ -68,6 +68,11 @@ export const bulkAddTestCases = (envId, cases) => {
   return request(`/environments/${envId}/cases/bulk?${params}`, { method: 'POST' })
 }
 
+export const generateTestCases = (envId, count = 10, difficulty = 'mixed') => {
+  const params = new URLSearchParams({ count: count.toString(), difficulty })
+  return request(`/environments/${envId}/cases/generate?${params}`, { method: 'POST' })
+}
+
 // -- Judge Criteria --
 export const getCriteria = (envId) => request(`/environments/${envId}/criteria`)
 
@@ -91,3 +96,5 @@ export const getRuns = (envId) => request(`/environments/${envId}/runs`)
 export const triggerRun = (envId) => request(`/environments/${envId}/run`, { method: 'POST' })
 
 export const getRunDetail = (envId, runId) => request(`/environments/${envId}/runs/${runId}`)
+
+export const deleteRun = (envId, runId) => request(`/environments/${envId}/runs/${runId}`, { method: 'DELETE' })

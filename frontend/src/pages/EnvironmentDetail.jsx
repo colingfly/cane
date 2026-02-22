@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   FlaskConical, ArrowLeft, Plus, Trash2, Check, X, Play,
-  SlidersHorizontal, ListChecks, BarChart3, Settings, Sparkles,
+  SlidersHorizontal, ListChecks, BarChart3, Settings, Sparkles, Wand2,
 } from 'lucide-react'
 import {
   getEnvironment, updateEnvironment,
   addTestCase, updateTestCase, deleteTestCase,
   updateCriteria, addCustomRule, deleteCustomRule,
-  getRuns, triggerRun, getRunDetail,
+  getRuns, triggerRun, getRunDetail, deleteRun,
+  generateTestCases,
 } from '../api/eval'
 import { getAgents } from '../api/client'
 
@@ -42,6 +43,12 @@ export default function EnvironmentDetail() {
 
   // Custom rule form
   const [newRule, setNewRule] = useState('')
+
+  // Auto-generate
+  const [showGenerate, setShowGenerate] = useState(false)
+  const [genCount, setGenCount] = useState(10)
+  const [genDifficulty, setGenDifficulty] = useState('mixed')
+  const [generating, setGenerating] = useState(false)
 
   // Run state
   const [running, setRunning] = useState(false)
@@ -143,6 +150,20 @@ export default function EnvironmentDetail() {
     }
   }
 
+  async function handleGenerate() {
+    setGenerating(true)
+    try {
+      const res = await generateTestCases(envId, genCount, genDifficulty)
+      setShowGenerate(false)
+      await loadEnv()
+      alert(`Generated ${res.generated} test cases!`)
+    } catch (err) {
+      alert(err.message || 'Generation failed')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
   async function handleCriteriaChange(id, field, value) {
     const updated = env.criteria.map(c =>
       c.id === id ? { ...c, [field]: value } : c
@@ -207,6 +228,18 @@ export default function EnvironmentDetail() {
       const detail = await getRunDetail(envId, runId)
       setRunDetail(detail)
       setExpandedResult(null)
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  async function handleDeleteRun(e, runId) {
+    e.stopPropagation()
+    if (!confirm('Delete this run?')) return
+    try {
+      await deleteRun(envId, runId)
+      if (runDetail?.id === runId) setRunDetail(null)
+      await loadEnv()
     } catch (err) {
       console.error(err)
     }
@@ -323,10 +356,89 @@ export default function EnvironmentDetail() {
             <div>
               <span style={{ fontWeight: 600 }}>{env.test_cases?.length || 0} test cases</span>
             </div>
-            <button className="btn btn-primary" onClick={() => setShowAddCase(!showAddCase)}>
-              <Plus size={14} /> Add Test Case
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => { setShowGenerate(!showGenerate); setShowAddCase(false) }}
+                disabled={generating}
+              >
+                <Wand2 size={14} /> {generating ? 'Generating...' : 'Auto-Generate'}
+              </button>
+              <button className="btn btn-primary" onClick={() => { setShowAddCase(!showAddCase); setShowGenerate(false) }}>
+                <Plus size={14} /> Add Test Case
+              </button>
+            </div>
           </div>
+
+          {/* Auto-generate panel */}
+          {showGenerate && (
+            <div className="card" style={{ marginBottom: 16, borderLeft: '3px solid var(--cane-500)' }}>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Wand2 size={16} style={{ color: 'var(--cane-600)' }} />
+                  Auto-Generate Test Cases
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  Reads your documents and generates Q&A pairs with expected answers automatically.
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Number of Test Cases
+                  </label>
+                  <select
+                    className="form-input"
+                    value={genCount}
+                    onChange={e => setGenCount(parseInt(e.target.value))}
+                  >
+                    <option value={5}>5 — Quick check</option>
+                    <option value={10}>10 — Standard</option>
+                    <option value={15}>15 — Thorough</option>
+                    <option value={20}>20 — Comprehensive</option>
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Difficulty
+                  </label>
+                  <select
+                    className="form-input"
+                    value={genDifficulty}
+                    onChange={e => setGenDifficulty(e.target.value)}
+                  >
+                    <option value="easy">Easy — Straightforward factual</option>
+                    <option value="mixed">Mixed — Facts + edge cases + adversarial</option>
+                    <option value="adversarial">Adversarial — Hallucination traps + tricks</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleGenerate}
+                  disabled={generating}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                  {generating ? (
+                    <>
+                      <span className="spinner" style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                      Generating {genCount} cases...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={14} /> Generate {genCount} Cases
+                    </>
+                  )}
+                </button>
+                <button className="btn btn-secondary" onClick={() => setShowGenerate(false)} disabled={generating}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Add form */}
           {showAddCase && (
@@ -421,11 +533,11 @@ export default function EnvironmentDetail() {
                 </div>
               ))}
             </div>
-          ) : !showAddCase ? (
+          ) : !showAddCase && !showGenerate ? (
             <div className="empty-state">
               <ListChecks size={28} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
               <h3>No test cases yet</h3>
-              <p>Add questions to evaluate your agent against.</p>
+              <p>Add questions manually or use Auto-Generate to create them from your documents.</p>
             </div>
           ) : null}
         </div>
@@ -552,16 +664,60 @@ export default function EnvironmentDetail() {
         <div>
           {/* Running indicator */}
           {running && (
-            <div className="card" style={{
-              marginBottom: 20, textAlign: 'center', padding: 32,
-              background: 'linear-gradient(135deg, var(--accent-muted), rgba(200,150,62,0.04))',
-              border: '1px solid rgba(200,150,62,0.2)',
+            <div style={{
+              marginBottom: 20, textAlign: 'center', padding: 24,
+              background: 'var(--cane-900)', borderRadius: 8, border: '1px solid var(--rule)',
+              position: 'relative', overflow: 'hidden',
             }}>
-              <div className="spinner" style={{ margin: '0 auto 16px', width: 28, height: 28 }} />
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>Evaluation running...</div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, var(--accent), var(--gold))' }} />
+              <div className="spinner" style={{ margin: '0 auto 12px', width: 24, height: 24, borderColor: 'var(--cane-800)', borderTopColor: 'var(--accent)' }} />
+              <div style={{ fontWeight: 700, marginBottom: 4, color: 'var(--text-inverse)' }}>Evaluation running...</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--cane-700)', marginBottom: 8 }}>
                 {runDetail?.results?.length || 0} / {env.test_cases?.length || 0} test cases complete
               </div>
+              {env.test_cases?.length > 0 && (
+                <div style={{ width: '60%', margin: '0 auto', height: 4, background: 'var(--cane-800)', borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${((runDetail?.results?.length || 0) / env.test_cases.length) * 100}%`,
+                    height: '100%', background: 'var(--accent)', borderRadius: 2,
+                    transition: 'width 0.5s ease',
+                  }} />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Streaming results while running */}
+          {running && runDetail?.results?.length > 0 && (
+            <div style={{ border: '1px solid var(--rule)', borderRadius: 8, overflow: 'hidden', marginBottom: 20, background: 'var(--bg-card)' }}>
+              {runDetail.results.map((r, i) => (
+                <div key={r.id} style={{
+                  display: 'grid', gridTemplateColumns: '72px 1fr 56px 80px',
+                  padding: '13px 18px', alignItems: 'center',
+                  borderBottom: '1px solid var(--rule-light)',
+                }}>
+                  <span style={{
+                    fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em',
+                    color: r.status === 'pass' ? 'var(--success)' : r.status === 'warn' ? 'var(--warning)' : 'var(--error)',
+                  }}>{r.status}</span>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 550 }}>{r.question}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-faint)', textAlign: 'right' }}>
+                    {r.response_time_ms > 0 ? `${(r.response_time_ms / 1000).toFixed(1)}s` : '—'}
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+                    <div style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--rule-light)', overflow: 'hidden' }}>
+                      <div style={{
+                        width: `${Math.round(r.overall_score)}%`, height: '100%', borderRadius: 2,
+                        background: r.overall_score >= 80 ? 'var(--success)' : r.overall_score >= 60 ? 'var(--warning)' : 'var(--error)',
+                      }} />
+                    </div>
+                    <span style={{
+                      fontFamily: 'var(--font-mono)', fontSize: '0.72rem', fontWeight: 700, minWidth: 24, textAlign: 'right',
+                      color: r.overall_score >= 80 ? 'var(--success)' : r.overall_score >= 60 ? 'var(--text-secondary)' : 'var(--error)',
+                    }}>{Math.round(r.overall_score)}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
@@ -570,21 +726,38 @@ export default function EnvironmentDetail() {
             <div>
               {/* Summary cards */}
               {runDetail.status === 'completed' && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'stretch', marginBottom: 22, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--rule)', background: 'var(--bg-card)' }}>
+                  {/* Big score — dark brown */}
+                  <div style={{
+                    background: 'var(--cane-900)', padding: '22px 28px',
+                    minWidth: 160, position: 'relative',
+                  }}>
+                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, var(--accent), var(--gold))' }} />
+                    <div style={{ fontSize: '0.58rem', color: 'var(--cane-700)', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>
+                      Overall Score
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                      <span style={{ fontFamily: 'var(--font-display)', fontSize: '2.6rem', fontWeight: 800, color: 'var(--text-inverse)', lineHeight: 1, letterSpacing: '-0.04em' }}>
+                        {Math.round(runDetail.overall_score || 0)}
+                      </span>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--cane-700)' }}>/100</span>
+                    </div>
+                  </div>
+                  {/* Stats inline */}
                   {[
-                    {
-                      label: 'Overall Score', value: Math.round(runDetail.overall_score || 0), suffix: '/100',
-                      color: (runDetail.overall_score || 0) >= 80 ? 'var(--success)' : (runDetail.overall_score || 0) >= 60 ? 'var(--warning)' : 'var(--error)',
-                    },
-                    { label: 'Passed', value: runDetail.passed, suffix: '', color: 'var(--success)' },
-                    { label: 'Warned', value: runDetail.warned, suffix: '', color: 'var(--warning)' },
-                    { label: 'Failed', value: runDetail.failed, suffix: '', color: 'var(--error)' },
+                    { label: 'Passed', value: runDetail.passed, color: 'var(--success)' },
+                    { label: 'Warned', value: runDetail.warned, color: 'var(--warning)' },
+                    { label: 'Failed', value: runDetail.failed, color: 'var(--error)' },
                   ].map((s, i) => (
-                    <div key={i} className="card" style={{ padding: 16 }}>
-                      <div style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
-                        <span style={{ fontSize: '1.5rem', fontWeight: 800, color: s.color, fontFamily: 'var(--font-display)', letterSpacing: '-0.02em' }}>{s.value}</span>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{s.suffix}</span>
+                    <div key={i} style={{
+                      flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center',
+                      padding: '22px 20px', borderLeft: '1px solid var(--rule-light)',
+                    }}>
+                      <div style={{ fontSize: '0.58rem', fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.1em', marginBottom: 10, textTransform: 'uppercase' }}>
+                        {s.label}
+                      </div>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.65rem', fontWeight: 800, color: s.color, lineHeight: 1 }}>
+                        {s.value}
                       </div>
                     </div>
                   ))}
@@ -598,84 +771,121 @@ export default function EnvironmentDetail() {
                 </div>
               )}
 
-              {/* Individual results */}
-              {runDetail.results?.map((r, i) => (
-                <div key={r.id} className="card" style={{
-                  marginBottom: 10, cursor: 'pointer',
-                  borderLeft: `3px solid ${r.status === 'pass' ? 'var(--success)' : r.status === 'warn' ? 'var(--warning)' : 'var(--error)'}`,
-                }} onClick={() => setExpandedResult(expandedResult === i ? null : i)}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                        <span style={{
-                          padding: '2px 8px', borderRadius: 10,
-                          fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em',
-                          background: r.status === 'pass' ? 'rgba(61,140,92,0.12)' : r.status === 'warn' ? 'rgba(200,150,62,0.12)' : 'rgba(196,78,63,0.12)',
-                          color: r.status === 'pass' ? 'var(--success)' : r.status === 'warn' ? 'var(--warning)' : 'var(--error)',
-                        }}>{r.status}</span>
-                        <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{r.question}</span>
-                      </div>
-                      {r.response_time_ms > 0 && (
-                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{(r.response_time_ms / 1000).toFixed(1)}s</span>
-                      )}
-                    </div>
-                    <span style={{
-                      fontSize: '1.4rem', fontWeight: 800,
-                      fontFamily: 'var(--font-display)',
-                      color: r.status === 'pass' ? 'var(--success)' : r.status === 'warn' ? 'var(--warning)' : 'var(--error)',
-                    }}>{Math.round(r.overall_score)}</span>
-                  </div>
-
-                  {expandedResult === i && (
-                    <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
-                        <div>
-                          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Agent's Answer</div>
-                          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.6, padding: 12, background: 'var(--cane-50)', borderRadius: 8, border: '1px solid var(--border)', maxHeight: 200, overflow: 'auto' }}>
-                            {r.agent_answer}
-                          </div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Expected Answer</div>
-                          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.6, padding: 12, background: 'var(--cane-50)', borderRadius: 8, border: '1px solid var(--border)', maxHeight: 200, overflow: 'auto' }}>
-                            {r.expected_answer || '(not specified)'}
-                          </div>
-                        </div>
-                      </div>
-
-                      {r.judge_reasoning && (
-                        <div style={{ marginBottom: 14 }}>
-                          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Judge Reasoning</div>
-                          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5, fontStyle: 'italic' }}>{r.judge_reasoning}</div>
-                        </div>
-                      )}
-
-                      <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>Score Breakdown</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                        {Object.entries(r.criteria_scores || {}).map(([key, val]) => {
-                          const score = typeof val === 'object' ? val.score : val
-                          return (
-                            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{ width: 90, fontSize: '0.78rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>{key}</span>
-                              <div style={{ flex: 1, height: 5, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
-                                <div style={{
-                                  width: `${score}%`, height: '100%',
-                                  background: score >= 80 ? 'var(--success)' : score >= 60 ? 'var(--warning)' : 'var(--error)',
-                                  borderRadius: 3,
-                                }} />
-                              </div>
-                              <span style={{
-                                fontSize: '0.75rem', fontWeight: 700, minWidth: 28, textAlign: 'right',
-                                color: score >= 80 ? 'var(--success)' : score >= 60 ? 'var(--warning)' : 'var(--error)',
-                              }}>{score}</span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
+              {/* Individual results — table style */}
+              <div style={{ border: '1px solid var(--rule)', borderRadius: 8, overflow: 'hidden', background: 'var(--bg-card)' }}>
+                {/* Table header */}
+                <div style={{
+                  display: 'grid', gridTemplateColumns: '72px 1fr 56px 80px',
+                  padding: '10px 18px',
+                  fontSize: '0.58rem', fontWeight: 800, color: 'var(--text-muted)',
+                  letterSpacing: '0.1em', textTransform: 'uppercase',
+                  borderBottom: '1px solid var(--rule)',
+                }}>
+                  <span>Status</span>
+                  <span>Question</span>
+                  <span style={{ textAlign: 'right' }}>Time</span>
+                  <span style={{ textAlign: 'right' }}>Score</span>
                 </div>
-              ))}
+
+                {runDetail.results?.map((r, i) => (
+                  <div key={r.id}>
+                    <div
+                      style={{
+                        display: 'grid', gridTemplateColumns: '72px 1fr 56px 80px',
+                        padding: '13px 18px', alignItems: 'center',
+                        background: 'transparent',
+                        borderBottom: '1px solid var(--rule-light)',
+                        cursor: 'pointer', transition: 'background 0.1s',
+                      }}
+                      onClick={() => setExpandedResult(expandedResult === i ? null : i)}
+                      onMouseOver={e => e.currentTarget.style.background = 'rgba(212,104,40,0.03)'}
+                      onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      {/* Status */}
+                      <span style={{
+                        fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em',
+                        color: r.status === 'pass' ? 'var(--success)' : r.status === 'warn' ? 'var(--warning)' : 'var(--error)',
+                      }}>{r.status}</span>
+
+                      {/* Question */}
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text)', fontWeight: 550 }}>
+                        {r.question}
+                      </span>
+
+                      {/* Time */}
+                      <span style={{
+                        fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-faint)', textAlign: 'right',
+                      }}>
+                        {r.response_time_ms > 0 ? `${(r.response_time_ms / 1000).toFixed(1)}s` : '—'}
+                      </span>
+
+                      {/* Score with bar */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+                        <div style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--rule-light)', overflow: 'hidden' }}>
+                          <div style={{
+                            width: `${Math.round(r.overall_score)}%`, height: '100%', borderRadius: 2,
+                            background: r.overall_score >= 80 ? 'var(--success)' : r.overall_score >= 60 ? 'var(--warning)' : 'var(--error)',
+                          }} />
+                        </div>
+                        <span style={{
+                          fontFamily: 'var(--font-mono)', fontSize: '0.72rem', fontWeight: 700, minWidth: 24, textAlign: 'right',
+                          color: r.overall_score >= 80 ? 'var(--success)' : r.overall_score >= 60 ? 'var(--text-secondary)' : 'var(--error)',
+                        }}>{Math.round(r.overall_score)}</span>
+                      </div>
+                    </div>
+
+                    {/* Expanded detail */}
+                    {expandedResult === i && (
+                      <div style={{ padding: '16px 18px 18px', background: 'var(--paper)', borderBottom: '1px solid var(--rule)' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
+                          <div>
+                            <div style={{ fontSize: '0.58rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Agent's Answer</div>
+                            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.6, padding: 12, background: 'var(--bg-card)', borderRadius: 6, border: '1px solid var(--rule-light)', maxHeight: 200, overflow: 'auto' }}>
+                              {r.agent_answer}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.58rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Expected Answer</div>
+                            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.6, padding: 12, background: 'var(--bg-card)', borderRadius: 6, border: '1px solid var(--rule-light)', maxHeight: 200, overflow: 'auto' }}>
+                              {r.expected_answer || '(not specified)'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {r.judge_reasoning && (
+                          <div style={{ marginBottom: 14 }}>
+                            <div style={{ fontSize: '0.58rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Judge Reasoning</div>
+                            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.5, fontStyle: 'italic' }}>{r.judge_reasoning}</div>
+                          </div>
+                        )}
+
+                        <div style={{ fontSize: '0.58rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Score Breakdown</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                          {Object.entries(r.criteria_scores || {}).map(([key, val]) => {
+                            const score = typeof val === 'object' ? val.score : val
+                            return (
+                              <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ width: 90, fontSize: '0.74rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>{key}</span>
+                                <div style={{ flex: 1, height: 4, background: 'var(--rule-light)', borderRadius: 2, overflow: 'hidden' }}>
+                                  <div style={{
+                                    width: `${score}%`, height: '100%',
+                                    background: score >= 80 ? 'var(--success)' : score >= 60 ? 'var(--warning)' : 'var(--error)',
+                                    borderRadius: 2,
+                                  }} />
+                                </div>
+                                <span style={{
+                                  fontSize: '0.68rem', fontWeight: 700, fontFamily: 'var(--font-mono)', minWidth: 24, textAlign: 'right',
+                                  color: score >= 80 ? 'var(--success)' : score >= 60 ? 'var(--warning)' : 'var(--error)',
+                                }}>{score}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -711,11 +921,31 @@ export default function EnvironmentDetail() {
                           </div>
                         </div>
                         {r.overall_score !== null && (
-                          <div style={{
-                            fontSize: '1.75rem', fontWeight: 800,
-                            fontFamily: 'var(--font-display)',
-                            color: r.overall_score >= 80 ? 'var(--success)' : r.overall_score >= 60 ? 'var(--warning)' : 'var(--error)',
-                          }}>{Math.round(r.overall_score)}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <div style={{
+                              fontSize: '1.75rem', fontWeight: 800,
+                              fontFamily: 'var(--font-display)',
+                              color: r.overall_score >= 80 ? 'var(--success)' : r.overall_score >= 60 ? 'var(--warning)' : 'var(--error)',
+                            }}>{Math.round(r.overall_score)}</div>
+                            <button
+                              className="btn btn-ghost"
+                              onClick={(e) => handleDeleteRun(e, r.id)}
+                              style={{ padding: 4, minWidth: 'auto', color: 'var(--text-muted)' }}
+                              title="Delete run"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        )}
+                        {r.overall_score === null && (
+                          <button
+                            className="btn btn-ghost"
+                            onClick={(e) => handleDeleteRun(e, r.id)}
+                            style={{ padding: 4, minWidth: 'auto', color: 'var(--text-muted)' }}
+                            title="Delete run"
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         )}
                       </div>
                     </div>
