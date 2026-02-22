@@ -304,7 +304,7 @@ _active_embed = get_active_embed_id()
 _prev_embed = _embed_marker_path.read_text().strip() if _embed_marker_path.exists() else None
 
 if _prev_embed and _prev_embed != _active_embed:
-    print(f"\n  ⚠️  EMBEDDING MODEL CHANGED: {_prev_embed} → {_active_embed}")
+    print(f"\n  [WARN] EMBEDDING MODEL CHANGED: {_prev_embed} → {_active_embed}")
     print(f"  Clearing old embeddings — documents must be re-uploaded.\n")
     try:
         chroma_client.delete_collection(TEXT_COLLECTION)

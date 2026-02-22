@@ -38,7 +38,7 @@ def _get_secret_key():
     if not key:
         import warnings
         warnings.warn(
-            "⚠️  CANE_SECRET_KEY not set! Using random key (tokens won't survive restarts). "
+            "CANE_SECRET_KEY not set! Using random key (tokens won't survive restarts). "
             "Set it: export CANE_SECRET_KEY=$(python -c 'import secrets; print(secrets.token_hex(32))')",
             stacklevel=2,
         )

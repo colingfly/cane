@@ -55,7 +55,7 @@ export default function SearchPage() {
       (text) => { fullText += text; setStreamText(fullText) },
       (metaData) => {
         if (metaData.type === 'tool_status') {
-          setStreamText(prev => prev || '⚡ ' + metaData.message + '\n\n')
+          setStreamText(prev => prev || metaData.message + '\n\n')
         } else {
           metaRef = metaData; setMeta(metaData)
         }

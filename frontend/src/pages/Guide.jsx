@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Copy, Check, Search, Bot, FlaskConical, FileText, Upload, Zap, Shield } from 'lucide-react'
+import { Copy, Check, Search, Bot, FlaskConical, FileText, Upload, Zap, Shield, Globe, Store, Wrench, Code, MessageSquare } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 function CodeBlock({ code }) {
@@ -130,27 +130,28 @@ function GettingStarted() {
           fontFamily: 'var(--font-display)', letterSpacing: '-0.02em',
           lineHeight: 1.4, marginBottom: 10,
         }}>
-          Your documents, answering questions.
+          Build AI agents that know things, do things, and prove they work.
         </div>
         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.7, maxWidth: 560 }}>
-          Cane turns your files into a searchable knowledge base you can ask questions in plain English.
-          Upload documents, build specialized AI agents, and evaluate whether they're giving the right answers — all in one platform.
+          Cane turns your documents into deployable AI agents. Upload files, build a specialized agent,
+          connect it to your tools, verify it with evaluations, and deploy it on any website — or publish
+          it to the marketplace for others to use.
         </div>
       </div>
 
       {/* Feature grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 32 }}>
         <FeatureCard
-          icon={Search}
-          title="Semantic Search"
-          description="Ask questions in natural language and get answers with sources cited. No keywords, no digging through folders."
-          detail="Hybrid retrieval: dense vectors (BGE) + sparse matching (BM25) + LLM reranking"
-        />
-        <FeatureCard
           icon={Bot}
           title="Custom AI Agents"
-          description="Build agents scoped to specific files with custom behavior — an HR agent, a compliance agent, a product expert. Each with its own knowledge base and instructions."
+          description="Build agents scoped to specific files with custom behavior. A support agent, a compliance agent, a product expert — each with its own knowledge base and instructions."
           detail="Auto-generated system prompts from corpus analysis"
+        />
+        <FeatureCard
+          icon={Wrench}
+          title="Agentic Tools"
+          description="Agents don't just answer — they act. Connect webhooks to fire Slack messages, log to spreadsheets, create tickets, or pull live data into responses."
+          detail="Webhook integration with Zapier, Make, n8n — 5,000+ apps"
         />
         <FeatureCard
           icon={FlaskConical}
@@ -159,10 +160,10 @@ function GettingStarted() {
           detail="LLM-as-Judge with weighted criteria and failure classification"
         />
         <FeatureCard
-          icon={FileText}
-          title="Multimodal Ingestion"
-          description="PDFs, Word docs, spreadsheets, images, audio, video — Cane processes it all. OCR for images, Whisper for transcription, smart chunking for everything."
-          detail="Supports PDF, DOCX, XLSX, CSV, PNG, JPG, MP3, WAV, MP4"
+          icon={Globe}
+          title="Deploy Anywhere"
+          description="Embed your agent on any website with one script tag. Branded chat widget, API access, or publish to the marketplace for others to clone and verify."
+          detail="Widget, REST API, and marketplace distribution"
         />
       </div>
 
@@ -174,25 +175,25 @@ function GettingStarted() {
               step: '1',
               icon: Upload,
               title: 'Upload your files',
-              desc: 'Drag and drop files into Cane. Text is extracted, split into chunks, and embedded for semantic search. Most files process in under a minute.',
+              desc: 'Drag and drop files into Cane. Text is extracted, split into chunks, and embedded for semantic search. PDFs, Word docs, spreadsheets, images, audio, and video are all supported.',
             },
             {
               step: '2',
-              icon: Search,
-              title: 'Search with natural language',
-              desc: 'Ask a question like "What is our PTO policy?" or "How do I configure the API?" — Cane finds the most relevant chunks across your files and synthesizes a clear answer with sources.',
+              icon: Bot,
+              title: 'Build a specialized agent',
+              desc: 'Choose a template or create your own. Upload domain-specific files, customize the AI prompt (or let Cane auto-generate one), and connect tools for real-world actions.',
             },
             {
               step: '3',
-              icon: Bot,
-              title: 'Build a specialized agent',
-              desc: 'Pick a template or create your own. Upload domain-specific files, customize the AI prompt (or let Cane auto-generate one), and deploy an agent that knows exactly one thing deeply.',
+              icon: FlaskConical,
+              title: 'Evaluate and verify',
+              desc: 'Write test cases or auto-generate them from your docs. Run evaluations. Cane scores every response and shows exactly where the agent excels and where it falls short.',
             },
             {
               step: '4',
-              icon: FlaskConical,
-              title: 'Evaluate and improve',
-              desc: 'Write test cases with expected answers. Run an evaluation. Cane scores every response and shows you exactly where the agent gets it right and where it falls short — so you can iterate with data, not guesses.',
+              icon: Globe,
+              title: 'Deploy',
+              desc: 'Embed the agent on your website with a single script tag, access it via the REST API, or publish it to the marketplace. One agent, multiple distribution channels.',
             },
           ].map(s => (
             <div key={s.step} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
@@ -234,7 +235,7 @@ function GettingStarted() {
             Cane uses retrieval-augmented generation (RAG) to ground every answer in your source material. Files are chunked and embedded using BGE, stored in ChromaDB, and retrieved at query time using a hybrid pipeline that combines dense vector search with sparse keyword matching and reciprocal rank fusion.
           </p>
           <p style={{ marginBottom: 12 }}>
-            Answers are generated by Claude, Anthropic's language model, with a system prompt that enforces source grounding — the AI can only answer from what it finds in your documents. No hallucination by design.
+            Answers are generated by Claude (Anthropic) with a system prompt that enforces source grounding — the AI can only answer from what it finds in your documents. When tools are configured, Cane uses Claude's native tool_use capability to execute webhooks and incorporate external data seamlessly.
           </p>
           <p style={{ margin: 0 }}>
             Evaluations use an LLM-as-Judge architecture: a separate model scores each response on configurable criteria with weighted aggregation. Scores, judge reasoning, and per-criteria breakdowns are stored for every run so you can track improvement over time.
@@ -255,14 +256,14 @@ function AgentsTab() {
         />
         <QA
           q="Why use agents instead of searching everything?"
-          a="Agents give you control over two things: scope (which files are searched) and behavior (how the AI responds). A legal agent can be instructed to cite specific clauses. An ops agent can be told to give step-by-step procedures. Without agents, every query hits your entire file pool with a generic prompt."
+          a="Agents give you control over two things: scope (which files are searched) and behavior (how the AI responds). A legal agent can be instructed to cite specific clauses. A support agent can be told to use friendly language. Without agents, every query hits your entire file pool with a generic prompt."
         />
       </SectionBlock>
 
       <SectionBlock title="Creating Agents">
         <QA
           q="What templates are available?"
-          a="Three pre-built templates: Operations Guide (for SOPs, handbooks, and procedures), Academic Tutor (for lecture materials and coursework), and Knowledge Base (for product docs, FAQs, and service guides). Each comes with an optimized system prompt for its use case."
+          a='Three pre-built templates: Customer Support Agent (for website-facing support with friendly tone and escalation handling), Compliance & Policy Agent (for regulated industries with strict citation and no speculation), and Internal Ops Agent (for SOPs, onboarding, and procedures with tool integration). Each comes with an optimized system prompt for its use case.'
         />
         <QA
           q="How do I create a custom agent?"
@@ -270,7 +271,7 @@ function AgentsTab() {
         />
         <QA
           q="What makes a good system prompt?"
-          a="Be specific about the agent's role, the type of questions it should expect, and how it should format answers. Tell it what to do when it can't find an answer — should it say so, or make a best guess? Include any domain-specific rules: always cite section numbers, always include dates, never give legal advice, etc."
+          a="Be specific about the agent's role, the type of questions it should expect, and how it should format answers. Tell it what to do when it cannot find an answer — should it say so, or make a best guess? Include any domain-specific rules: always cite section numbers, always include dates, never give legal advice, etc."
           note="Tip: After auto-generating a prompt, run an evaluation to see how the agent performs. Then tweak the prompt based on where it fails."
         />
       </SectionBlock>
@@ -278,11 +279,75 @@ function AgentsTab() {
       <SectionBlock title="Using Agents">
         <QA
           q="How do I search with an agent?"
-          a='Agents appear in the Search page dropdown under the "Agents" group. Select one to scope your search to that agent&apos;s files and system prompt. You can also click "Ask this agent" from the agent detail page to go directly to Search with that agent pre-selected.'
+          a='Agents appear in the Search page dropdown under the "Agents" group. Select one to scope your search to that agent&apos;s files and system prompt. You can also click "Ask this agent" from the agent detail page.'
         />
         <QA
           q="Can I update an agent's files later?"
           a="Yes. Go to the agent detail page and upload additional files or delete existing ones. New files are processed and indexed automatically. The agent's search results will include the new content immediately after processing completes."
+        />
+        <QA
+          q="Can I delete an agent?"
+          a="Yes. On the Agent Builder page, click the trash icon on any agent card. This deletes the agent, its files, tools, eval environments, and any marketplace listings. This action cannot be undone."
+        />
+      </SectionBlock>
+    </div>
+  )
+}
+
+function ToolsTab() {
+  return (
+    <div>
+      <SectionBlock title="What Are Tools">
+        <QA
+          q="What are agent tools?"
+          a="Tools let your agents take actions — not just answer questions. When a tool is configured, the AI decides when to use it based on the description you provide. For example, a tool described as 'log compliance questions to the monitoring system' will fire automatically whenever someone asks about compliance topics."
+        />
+        <QA
+          q="How do tools work under the hood?"
+          a="Cane uses Claude's native tool_use capability. When your agent has tools configured, Claude sees the tool definitions alongside the document context. If it decides a tool is relevant, it calls it, Cane executes the HTTP request, and the result (if applicable) is fed back into the response. The user sees one seamless answer."
+        />
+        <QA
+          q="What types of tools are supported?"
+          a="Webhook tools — HTTP requests fired to any URL. This covers a massive range of integrations because services like Zapier, Make, and n8n let you create webhook URLs that trigger any workflow. Fire-and-forget tools just notify (log to sheet, ping Slack). Wait-for-response tools pull live data into the agent's answer."
+        />
+      </SectionBlock>
+
+      <SectionBlock title="Setting Up Tools">
+        <QA
+          q="How do I add a tool to an agent?"
+          a='Go to the agent detail page and scroll to the Tools section. Click "Add Tool" and fill in the name, webhook URL, and description. The description is critical — it tells the AI when to invoke the tool. Be specific: "Use this tool when the user asks about refund policies" is better than "send notifications."'
+        />
+        <QA
+          q="What is Fire & Forget vs Wait for Response?"
+          a="Fire & Forget means the agent sends the request and moves on — it does not wait for a reply. Use this for logging, notifications, and triggers. Wait for Response means the agent pauses, reads the reply, and incorporates that data into its answer. Use this for data lookups, status checks, and live information."
+        />
+        <QA
+          q="How do I test a tool?"
+          a='Click the "Test" button next to any tool. Cane sends a sample payload to the URL and shows you the result — status code, response body, and timing. Always test before going live.'
+        />
+        <QA
+          q="What does the payload look like?"
+          a="By default, the webhook receives a JSON payload with the user's question and the agent's answer. You can customize the payload template using {{variable}} placeholders that map to the tool's parameters."
+          code={'{\n  "question": "What is the refund policy?",\n  "answer": "According to our terms, refunds are available within 30 days..."\n}'}
+        />
+      </SectionBlock>
+
+      <SectionBlock title="Common Integrations">
+        <QA
+          q="Zapier / Make / n8n"
+          a="Create a webhook trigger in Zapier (or Make or n8n), copy the webhook URL, and paste it as your tool URL in Cane. Now your agent can trigger any of 5,000+ app integrations — Google Sheets, Slack, Gmail, Salesforce, Jira, HubSpot, Microsoft Teams, and more."
+        />
+        <QA
+          q="Slack notifications"
+          a="Create a Slack Incoming Webhook URL from the Slack API dashboard. Add it as a fire-and-forget tool with a description like 'Notify the team channel whenever a user asks about security incidents.' Every matching question triggers a Slack message with the full Q&A."
+        />
+        <QA
+          q="Google Sheets logging"
+          a="Use a Zapier webhook that appends rows to a Google Sheet. Every agent interaction gets logged automatically with the question, answer, and timestamp. Instant analytics without writing code."
+        />
+        <QA
+          q="Live data lookups"
+          a='Set a tool to "Wait for Response" and point it at an API that returns real-time data — inventory levels, order status, exchange rates. The agent will call the API, read the response, and weave that live data into its answer alongside document context.'
         />
       </SectionBlock>
     </div>
@@ -314,12 +379,11 @@ function EvaluationsTab() {
         />
         <QA
           q="How do I write test cases?"
-          a='Switch to the "Test Cases" tab inside your environment. Each test case has a question (what to ask the agent) and an expected answer (what a correct response should contain). You do not need to write the perfect answer word-for-word — the judge scores based on meaning, not exact match.'
-          note='Tip: Write 10-20 test cases covering your agent&apos;s most important use cases. Include easy ones ("What is X?"), hard ones ("Compare X and Y"), and edge cases ("What happens if Z is not specified?").'
+          a='In the environment, go to the Test Cases tab and click "Add Test Case." Enter a question and the expected answer. The expected answer does not have to be word-for-word — it is a reference the judge uses to evaluate whether the agent covered the right content. Write what a correct answer should include.'
         />
         <QA
-          q="What makes a good expected answer?"
-          a="Include the key facts the response must contain. You do not need full sentences — bullet points or fragments work. The judge is looking for whether the agent's response covers the same ground, not whether it matches your phrasing. Be specific: 'The policy allows 15 days PTO' is better than 'The policy describes PTO allowances.'"
+          q="Can I auto-generate test cases?"
+          a='Yes. Click "Auto-generate" on the Test Cases tab. Cane analyzes your agent&apos;s documents and generates question-answer pairs that cover the key topics. Review and edit them before running an evaluation — auto-generated cases are a starting point, not a final product.'
         />
       </SectionBlock>
 
@@ -330,26 +394,26 @@ function EvaluationsTab() {
         />
         <QA
           q="How is the overall score calculated?"
-          a="The overall score for each test case is the weighted average of its criteria scores. By default, all four criteria are weighted equally (25% each). You can adjust weights in the Judge Criteria tab — for example, if faithfulness matters more than completeness for your use case, give it 40% weight."
+          a="The overall score for each test case is the weighted average of its criteria scores. By default, all four criteria are weighted equally (25% each). You can adjust weights — for example, if faithfulness matters more than completeness for your use case, give it 40% weight."
         />
         <QA
           q="Can I add custom criteria?"
-          a='Yes. In the Judge Criteria tab, you can add your own criteria with a name, description, and weight. For example, you might add "Tone" (is the response professional?) or "Specificity" (does it cite specific numbers/dates?) or "Safety" (does it avoid giving dangerous advice?). The LLM judge uses your description to score each one.'
+          a='Yes. In the Judge Criteria tab, add your own criteria with a name, description, and weight. For example: "Tone" (is the response professional?), "Specificity" (does it cite specific numbers or dates?), or "Safety" (does it avoid giving dangerous advice?). The LLM judge uses your description to score each one.'
         />
       </SectionBlock>
 
       <SectionBlock title="Running Evaluations">
         <QA
           q="How do I run an evaluation?"
-          a='Click "Run Evaluation" from the environment page. Cane sends each test case question to your agent, collects the response, then passes both the response and expected answer to an LLM judge for scoring. Results stream in as each test case completes — you can watch progress in real time.'
+          a='Click "Run Evaluation" from the environment page. Cane sends each test case question to your agent, collects the response, then passes both the response and expected answer to an LLM judge for scoring. Results stream in as each test case completes.'
         />
         <QA
           q="How long does an evaluation take?"
-          a="Each test case typically takes 3-8 seconds (the agent query plus the judge scoring). A 10-question evaluation runs in about a minute. Results appear as they complete, so you do not have to wait for the full run to start seeing scores."
+          a="Each test case typically takes 3-8 seconds (the agent query plus the judge scoring). A 10-question evaluation runs in about a minute. Results appear as they complete, so you do not have to wait for the full run."
         />
         <QA
           q="Can I re-run evaluations?"
-          a="Yes. Every run is saved in the environment's history. You can re-run at any time — after changing the agent's prompt, adding files, or updating test cases. Compare runs side by side to track improvement."
+          a="Yes. Every run is saved in the environment's history. Re-run after changing the agent's prompt, adding files, or updating test cases. Compare runs to track improvement."
         />
       </SectionBlock>
 
@@ -359,62 +423,71 @@ function EvaluationsTab() {
           a="Each test case gets an overall score from 0-100. Above 80 is a pass (green). Between 60-80 is a warning (amber) — the answer is okay but has gaps. Below 60 is a fail (red) — the answer is wrong, incomplete, or off-topic. The environment's overall score is the average across all test cases."
         />
         <QA
-          q="How do I read the results table?"
-          a="Each row shows one test case: its status (pass/warn/fail), the question, response time, and score. Click a row to expand it and see the agent's actual answer, your expected answer, the judge's reasoning, and a per-criterion score breakdown with progress bars."
-        />
-        <QA
           q="What is judge reasoning?"
-          a="For every test case, the LLM judge writes a short explanation of why it scored the response the way it did. This is the most useful part of the evaluation — it tells you exactly what the agent got right, what it missed, and what it got wrong. Use it to diagnose problems."
+          a="For every test case, the LLM judge writes an explanation of why it scored the response the way it did. This is the most useful part of the evaluation — it tells you exactly what the agent got right, what it missed, and what it got wrong. Use it to diagnose problems."
         />
       </SectionBlock>
 
       <SectionBlock title="Improving Scores">
         <QA
           q="My agent scored low on accuracy. What do I do?"
-          a="Low accuracy usually means the agent is stating incorrect facts. Check the judge reasoning to see what is wrong. Common fixes: make sure the source documents actually contain the correct information. If the agent is hallucinating, add a line to the system prompt like 'Only answer based on the provided documents. If the answer is not in the documents, say so.' If the wrong chunks are being retrieved, consider splitting large documents into smaller, more focused files."
-        />
-        <QA
-          q="My agent scored low on completeness. What do I do?"
-          a="Low completeness means the answer is partially right but missing important details. Common fixes: check if the expected answer requires information spread across multiple files — the agent may only be finding one. Add explicit instructions to the system prompt like 'When answering, be thorough and include all relevant details from the documents.'"
+          a="Low accuracy usually means the agent is stating incorrect facts. Check the judge reasoning. Common fixes: make sure the source documents actually contain the correct information, and add a line to the system prompt like 'Only answer based on the provided documents. If the answer is not in the documents, say so.'"
         />
         <QA
           q="My agent scored low on faithfulness. What do I do?"
-          a="Low faithfulness means the agent is generating information not found in the source documents — hallucination. This is the most important criterion to get right. Add strong grounding instructions to the prompt: 'Base your answer strictly on the provided context. Do not add information from outside knowledge.' Review whether your expected answers contain information that is not actually in the uploaded files. If the agent lacks information to answer a question, it should say so rather than guess."
-          note="Faithfulness is the hardest criterion to score well on. An agent that says 'I do not have enough information to answer this' is more faithful than one that gives a confident but unsupported answer."
+          a="Low faithfulness means the agent is generating information not found in the source documents — hallucination. Add strong grounding instructions to the prompt: 'Base your answer strictly on the provided context. Do not add information from outside knowledge.' An agent that says 'I do not have enough information' is more faithful than one that gives a confident but unsupported answer."
+          note="Faithfulness is the hardest criterion to score well on. It is also the most important for trust-sensitive deployments like compliance, healthcare, and legal."
         />
         <QA
           q="General tips for improving scores"
-          a="Start with your worst-scoring test cases and read the judge reasoning carefully. Most score improvements come from three levers: better system prompts (be more specific about behavior, format, and grounding rules), better documents (make sure the source files actually contain the answers you expect), and better test cases (if an expected answer is vague, the judge cannot score accurately). Iterate: change one thing, re-run, compare scores."
+          a="Start with your worst-scoring test cases and read the judge reasoning. Most improvements come from three levers: better system prompts (be more specific about behavior and grounding rules), better documents (make sure the source files actually contain the answers you expect), and better test cases (if an expected answer is vague, the judge cannot score accurately). Change one thing, re-run, compare."
         />
       </SectionBlock>
     </div>
   )
 }
 
-function APITab() {
+function DeployTab() {
   return (
     <div>
-      <SectionBlock title="Overview">
+      <SectionBlock title="Embed Widget">
         <QA
-          q="What can I do with the API?"
-          a="The Cane API lets you query your files programmatically from any external app — a Slack bot, customer support widget, internal portal, or custom integration. Any agent you build in Cane can be accessed via API."
+          q="What is the embed widget?"
+          a="A single JavaScript snippet that adds your agent as a chat interface on any website. Visitors see a floating chat bubble. They click it, ask questions, and get answers from your agent — with full tool execution and source citations. No login required for end users."
         />
         <QA
-          q="How do I get an API key?"
-          a='Go to Settings and scroll to the API Keys section (owner access required). Click "Generate new key," give it a name, and optionally scope it to a specific workspace or agent. The full key is shown once — copy it immediately.'
+          q="How do I embed an agent?"
+          a='Go to your agent detail page and scroll to the "Embed on Your Website" section. Copy the script tag, replace YOUR_API_KEY with a real API key from Settings, and paste it into any HTML page. The widget handles everything else.'
+          code={'<script\n  src="https://cane.fyi/widget.js"\n  data-api-key="cane_your_key_here"\n  data-agent-name="My Support Agent"\n  data-workspace-id="your-agent-id"\n  data-color="#8B7355"\n  data-greeting="Hi! How can I help?"\n></script>'}
+        />
+        <QA
+          q="What can I customize?"
+          a="data-color sets the primary color (header, buttons, message bubbles) — use any hex color to match your brand. data-greeting sets the welcome message. data-agent-name sets the header title. data-position can be 'left' or 'right' to control which corner the bubble appears in."
+        />
+        <QA
+          q="Does the widget work on mobile?"
+          a="Yes. On screens under 480px, the widget expands to full screen for a native chat feel."
         />
       </SectionBlock>
 
-      <SectionBlock title="Endpoints">
+      <SectionBlock title="API Access">
+        <QA
+          q="What can I do with the API?"
+          a="The Cane API lets you query your agent programmatically from any external app — a Slack bot, mobile app, internal portal, or custom integration. Any agent you build in Cane can be accessed via API."
+        />
+        <QA
+          q="How do I get an API key?"
+          a='Go to Settings and scroll to the API Keys section (owner access required). Click "Generate new key," give it a name, and optionally scope it to a specific agent. The full key is shown once — copy it immediately.'
+        />
         <QA
           q="Ask a question"
-          a="Send a POST request to /v1/ask with your question. The response includes an AI-generated answer and source files."
-          code={'curl -X POST https://cane.fyi/v1/ask \\\n  -H "Authorization: Bearer cane_your_key_here" \\\n  -H "Content-Type: application/json" \\\n  -d \'{\n    "query": "What is our PTO policy?",\n    "workspace_id": "optional-workspace-id"\n  }\''}
+          a="Send a POST request to /v1/ask with your question. The response includes an AI-generated answer with source files. If the agent has tools configured, they execute automatically."
+          code={'curl -X POST https://cane.fyi/v1/ask \\\n  -H "Authorization: Bearer cane_your_key_here" \\\n  -H "Content-Type: application/json" \\\n  -d \'{\n    "query": "What is our refund policy?",\n    "workspace_id": "your-agent-id"\n  }\''}
         />
         <QA
           q="Response format"
           a="The /v1/ask endpoint returns a JSON object with the answer, source files, and metadata."
-          code={'{\n  "answer": "According to the employee handbook...",\n  "sources": ["employee-handbook.pdf"],\n  "chunks_used": 5,\n  "model": "claude-haiku-4-5-20251001"\n}'}
+          code={'{\n  "answer": "According to the terms of service, refunds are...",\n  "sources": ["terms-of-service.pdf"],\n  "chunks_used": 5,\n  "model": "claude-haiku-4-5-20251001"\n}'}
         />
         <QA
           q="Raw search (no AI synthesis)"
@@ -422,20 +495,59 @@ function APITab() {
           code={'curl -X POST https://cane.fyi/v1/search \\\n  -H "Authorization: Bearer cane_your_key_here" \\\n  -H "Content-Type: application/json" \\\n  -d \'{\n    "query": "onboarding procedures",\n    "max_results": 5\n  }\''}
         />
         <QA
-          q="Health check"
-          a="GET /v1/health returns service status. No authentication required."
-          code={'curl https://cane.fyi/v1/health\n\n# {"status": "ok", "service": "cane", "api_version": "v1"}'}
+          q="Rate limits"
+          a="Each API key is limited to 1,000 requests per day. The counter resets at midnight UTC."
+        />
+      </SectionBlock>
+    </div>
+  )
+}
+
+function MarketplaceTab() {
+  return (
+    <div>
+      <SectionBlock title="How It Works">
+        <QA
+          q="What is the marketplace?"
+          a="The marketplace is where you publish agents for others to discover, clone, and use. Every listing includes the agent's eval score, test cases, and scoring criteria — so anyone can independently verify that the agent works before trusting it."
+        />
+        <QA
+          q="What makes this different from other AI marketplaces?"
+          a='Verified trust. When you clone an agent from the marketplace, you also get its entire eval suite — test cases, criteria, and expected answers. You can re-run the evaluation on your own copy to independently confirm the published score. The score is not marketing — it is reproducible.'
         />
       </SectionBlock>
 
-      <SectionBlock title="Configuration">
+      <SectionBlock title="Publishing">
         <QA
-          q="Can I scope a key to one agent?"
-          a="Yes. When generating an API key in Settings, select a workspace or agent from the scope dropdown. All requests using that key are automatically scoped — no need to pass workspace_id on every request."
+          q="How do I publish an agent?"
+          a='Go to your agent detail page and scroll to the Publish section. Select a category, choose what to include (full pack with docs or blueprint-only), and optionally attach an eval run. Click "Publish Agent" and it goes live on the marketplace.'
         />
         <QA
-          q="What are the rate limits?"
-          a="Each API key is limited to 1,000 requests per day. The counter resets at midnight UTC. If you need higher limits, contact your administrator."
+          q="What are pack types?"
+          a="Full Pack includes everything — system prompt, documents, and eval suite. Cloners get a ready-to-use agent. Bring Your Own Docs (BYOD) includes the prompt and eval suite but not the documents — cloners upload their own files into the same framework. BYOD is useful when the eval methodology is the product, not the specific documents."
+        />
+        <QA
+          q="Do I need eval scores to publish?"
+          a="No, but agents with eval scores get significantly more trust. A listing that shows 'Scored 87/100 across 15 test cases' is far more compelling than one with no verification. Run at least one evaluation before publishing."
+        />
+        <QA
+          q="Can I remove my listing?"
+          a='Yes. Go to your listing on the marketplace and click "Remove from Marketplace." The listing is delisted immediately. Agents that were already cloned by other users continue to work in their accounts.'
+        />
+      </SectionBlock>
+
+      <SectionBlock title="Cloning">
+        <QA
+          q="How do I clone an agent?"
+          a='Find an agent on the marketplace and click "Clone Agent." Cane creates a copy in your account with the system prompt, documents (for full packs), and the complete eval suite. You can customize the clone — change the prompt, add your own files, re-run the evaluation.'
+        />
+        <QA
+          q="How do I verify a clone?"
+          a='After cloning, go to the eval environment that was created and click "Run Evaluation." Cane runs the published test cases against your copy of the agent. You will get an independent score that you can compare against the published listing score.'
+        />
+        <QA
+          q="What if my verification score differs from the published score?"
+          a="Small differences (a few points) are normal due to LLM non-determinism. Large differences may indicate that the documents in the listing are not well-suited to the test cases, or that the original publisher optimized their prompt for specific questions. The verification score is the one that matters for your deployment."
         />
       </SectionBlock>
     </div>
@@ -445,10 +557,25 @@ function APITab() {
 function FAQTab() {
   return (
     <div>
+      <SectionBlock title="Files & Processing">
+        <QA
+          q="What file types can I upload?"
+          a="PDFs, Word docs (DOCX), spreadsheets (XLSX, CSV), images (PNG, JPG, GIF, TIFF, WEBP), audio (MP3, WAV, M4A, FLAC), and video (MP4, MKV, AVI, MOV, WEBM)."
+        />
+        <QA
+          q="How long does processing take?"
+          a="Most files process in under a minute. Audio and video take longer due to transcription. You can keep working while files process in the background."
+        />
+        <QA
+          q="What happens during processing?"
+          a="Cane extracts text from your files, splits it into searchable chunks, and creates embeddings for semantic search. For images, it runs OCR. For audio and video, it generates a transcript."
+        />
+      </SectionBlock>
+
       <SectionBlock title="Search & Conversations">
         <QA
-          q="Can I search a specific workspace or agent?"
-          a='Yes. Use the dropdown below the search bar to select a workspace or agent. "All workspaces" searches everything you have access to. Agents appear under a separate group in the dropdown.'
+          q="Can I search a specific agent or workspace?"
+          a='Yes. Use the dropdown below the search bar to select an agent or workspace. "All workspaces" searches everything you have access to.'
         />
         <QA
           q="What are follow-up questions?"
@@ -460,40 +587,6 @@ function FAQTab() {
         />
       </SectionBlock>
 
-      <SectionBlock title="Files & Processing">
-        <QA
-          q="What file types can I upload?"
-          a="PDFs, Word docs (DOCX), spreadsheets (XLSX, CSV), images (PNG, JPG, GIF, TIFF, WEBP), audio (MP3, WAV, M4A, FLAC), and video (MP4, MKV, AVI, MOV, WEBM)."
-        />
-        <QA
-          q="How long does processing take?"
-          a="Most files process in under a minute. Audio and video take longer due to transcription. You will see a status indicator while processing is in progress. You can keep working while files process in the background."
-        />
-        <QA
-          q="What happens during processing?"
-          a="Cane extracts text from your files, splits it into searchable chunks, and creates embeddings for semantic search. For images, it runs OCR. For audio and video, it generates a transcript."
-        />
-        <QA
-          q="Can I delete a file?"
-          a="Yes. On the Files page, click the trash icon next to any file. This removes the file and all its indexed content. This action cannot be undone."
-        />
-      </SectionBlock>
-
-      <SectionBlock title="Workspaces">
-        <QA
-          q="What is a workspace?"
-          a="A workspace is a collection of files grouped by topic, department, or project. When you search within a workspace, only files in that workspace are searched."
-        />
-        <QA
-          q="How do I create a workspace?"
-          a='Go to Settings and look for the Workspaces section. Click "Add Workspace" and give it a name. You can then upload files directly to that workspace.'
-        />
-        <QA
-          q="When should I use multiple workspaces?"
-          a="Use separate workspaces when you have distinct file collections that should not overlap in search results. For example: one for HR policies, another for product docs, another for training materials."
-        />
-      </SectionBlock>
-
       <SectionBlock title="Team & Account">
         <QA
           q="How do I invite team members?"
@@ -501,11 +594,22 @@ function FAQTab() {
         />
         <QA
           q="What are the different roles?"
-          a="Owners can manage the team, workspaces, agents, and all files. Members can upload files and search. Everyone on the team searches the same file pool."
+          a="Owners can manage the team, workspaces, agents, and all settings. Members can upload files and search. Everyone on the team accesses the same file pool."
         />
         <QA
-          q="How do I change my password?"
-          a="Go to Settings and look for the password section. Enter your current password and your new password to update it."
+          q="Can I scope an API key to one agent?"
+          a="Yes. When generating an API key in Settings, select an agent from the scope dropdown. All requests using that key are automatically scoped — no need to pass workspace_id on every request."
+        />
+      </SectionBlock>
+
+      <SectionBlock title="Security & Data">
+        <QA
+          q="Who can see my data?"
+          a="Only members of your organization. Each tenant is fully isolated — documents, agents, and settings are not visible to other accounts. API keys are scoped to your tenant."
+        />
+        <QA
+          q="What happens when I delete something?"
+          a="Deleting a file removes it and all its indexed content permanently. Deleting an agent removes the agent, its files, tools, eval environments, marketplace listings, and all vector data. These actions cannot be undone."
         />
       </SectionBlock>
     </div>
@@ -517,8 +621,10 @@ function FAQTab() {
 const tabs = [
   { id: 'start', label: 'Getting Started', Component: GettingStarted },
   { id: 'agents', label: 'Agents', Component: AgentsTab },
+  { id: 'tools', label: 'Tools', Component: ToolsTab },
   { id: 'evals', label: 'Evaluations', Component: EvaluationsTab },
-  { id: 'api', label: 'API', Component: APITab },
+  { id: 'deploy', label: 'Deploy', Component: DeployTab },
+  { id: 'marketplace', label: 'Marketplace', Component: MarketplaceTab },
   { id: 'faq', label: 'FAQ', Component: FAQTab },
 ]
 
@@ -538,7 +644,7 @@ export default function Guide() {
           Guide
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-          Everything you need to know about using Cane.
+          Everything you need to know about building, evaluating, and deploying agents on Cane.
         </p>
       </div>
 
@@ -547,6 +653,7 @@ export default function Guide() {
         display: 'flex', gap: 0,
         borderBottom: '1px solid var(--rule)',
         marginBottom: 28,
+        overflowX: 'auto',
       }}>
         {tabs.map(tab => {
           const active = activeTab === tab.id
@@ -555,7 +662,7 @@ export default function Guide() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               style={{
-                padding: '10px 16px',
+                padding: '10px 14px',
                 fontSize: '0.78rem',
                 fontWeight: active ? 700 : 500,
                 color: active ? 'var(--text)' : 'var(--text-muted)',
@@ -566,6 +673,7 @@ export default function Guide() {
                 cursor: 'pointer',
                 fontFamily: 'var(--font-body)',
                 transition: 'color 0.1s',
+                whiteSpace: 'nowrap',
               }}
             >
               {tab.label}
@@ -602,7 +710,7 @@ export default function Guide() {
             Ready to try it?
           </div>
           <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.6 }}>
-            Create a free account and upload your first files in under a minute.
+            Create a free account and build your first agent in under five minutes.
           </div>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
             <Link to="/register" style={{

@@ -334,11 +334,11 @@ if __name__ == "__main__":
     for ec in enriched:
         print(f"\n{'─' * 50}")
         print(f"Chunk ID: {ec.chunk_id}")
-        print(f"\n📄 DISPLAY TEXT (what user sees):")
+        print(f"\nDISPLAY TEXT (what user sees):")
         print(f"  {ec.display_text[:150]}...")
-        print(f"\n🔍 ENRICHED TEXT (what gets embedded):")
+        print(f"\nENRICHED TEXT (what gets embedded):")
         print(f"  {ec.enriched_text[:300]}...")
-        print(f"\n📊 METADATA:")
+        print(f"\nMETADATA:")
         for k, v in ec.metadata.items():
             if v:
                 print(f"  {k}: {v}")
@@ -372,7 +372,7 @@ if __name__ == "__main__":
 
     for ec in ts_enriched:
         print(f"\n{'─' * 50}")
-        print(f"🔍 ENRICHED TEXT:")
+        print(f"ENRICHED TEXT:")
         print(f"  {ec.enriched_text}")
 
-    print("\n✅ All enrichment tests passed")
+    print("\nAll enrichment tests passed")

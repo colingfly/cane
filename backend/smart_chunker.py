@@ -505,4 +505,4 @@ if __name__ == "__main__":
         print(f"\n  Chunk {c.meta.chunk_index + 1}/{c.meta.total_chunks} ({ts})")
         print(f"  {len(c.text)} chars: {c.text[:120]}...")
 
-    print("\n✅ All tests passed")
+    print("\nAll tests passed")

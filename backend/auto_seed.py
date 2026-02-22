@@ -40,7 +40,7 @@ def auto_seed():
         name = os.getenv("CANE_ADMIN_NAME", "Admin")
 
         if not email or not password:
-            print("[AutoSeed] ⚠️  No admin account and CANE_ADMIN_EMAIL/PASSWORD not set. Skipping.")
+            print("[AutoSeed]  No admin account and CANE_ADMIN_EMAIL/PASSWORD not set. Skipping.")
             return
 
         # Create platform tenant
