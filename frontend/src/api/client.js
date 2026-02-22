@@ -174,6 +174,7 @@ export async function askStream(query, n = 5, workspaceId = '', onText, onMeta, 
           const data = JSON.parse(trimmed.slice(6))
           if (data.type === 'text') onText?.(data.text)
           else if (data.type === 'meta') onMeta?.(data)
+          else if (data.type === 'tool_status') onMeta?.({ ...data, type: 'tool_status' })
           else if (data.type === 'done') onDone?.()
           else if (data.type === 'error') onError?.(data.error)
         } catch {
@@ -326,4 +327,46 @@ export async function cloneFromMarketplace(listingId) {
 
 export async function delistFromMarketplace(listingId) {
   return request(`/marketplace/${listingId}`, { method: 'DELETE' })
+}
+
+// ─── Agent Tools ───
+
+export async function getTools(workspaceId) {
+  return request(`/tools?workspace_id=${workspaceId}`)
+}
+
+export async function createTool(workspaceId, config) {
+  const qs = new URLSearchParams({
+    workspace_id: workspaceId,
+    name: config.name,
+    description: config.description,
+    tool_type: config.tool_type || 'webhook',
+    url: config.url,
+    method: config.method || 'POST',
+    headers: JSON.stringify(config.headers || {}),
+    payload_template: JSON.stringify(config.payload_template || {}),
+    auth_type: config.auth_type || 'none',
+    auth_value: config.auth_value || '',
+    parameters: JSON.stringify(config.parameters || []),
+    fire_and_forget: config.fire_and_forget !== false,
+  })
+  return request(`/tools?${qs.toString()}`, { method: 'POST' })
+}
+
+export async function updateTool(toolId, config) {
+  const qs = new URLSearchParams()
+  Object.entries(config).forEach(([k, v]) => {
+    if (v !== undefined) {
+      qs.set(k, typeof v === 'object' ? JSON.stringify(v) : String(v))
+    }
+  })
+  return request(`/tools/${toolId}?${qs.toString()}`, { method: 'PUT' })
+}
+
+export async function deleteTool(toolId) {
+  return request(`/tools/${toolId}`, { method: 'DELETE' })
+}
+
+export async function testTool(toolId) {
+  return request(`/tools/${toolId}/test`, { method: 'POST' })
 }

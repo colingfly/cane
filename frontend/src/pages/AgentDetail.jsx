@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Upload, Trash2, FileText, Sparkles, Save, ToggleLeft, ToggleRight, MessageSquare, Store } from 'lucide-react'
+import { ArrowLeft, Upload, Trash2, FileText, Sparkles, Save, ToggleLeft, ToggleRight, MessageSquare, Store, Wrench, Zap, Play, Plus, ChevronDown, ChevronUp } from 'lucide-react'
 import {
   getAgent, updateAgent, generateAgentPrompt,
   getDocuments, uploadDocument, deleteDocument, getDocumentStatus,
-  publishToMarketplace,
+  publishToMarketplace, getTools, createTool, updateTool, deleteTool, testTool,
 } from '../api/client'
 import { getEnvironments, getRuns } from '../api/eval'
 
@@ -59,6 +59,23 @@ export default function AgentDetail() {
   const [pubRuns, setPubRuns] = useState([])
   const [pubRunId, setPubRunId] = useState('')
 
+  // Tools
+  const [tools, setTools] = useState([])
+  const [showAddTool, setShowAddTool] = useState(false)
+  const [toolTesting, setToolTesting] = useState(null)
+  const [toolTestResult, setToolTestResult] = useState(null)
+  const [expandedTool, setExpandedTool] = useState(null)
+  const [newTool, setNewTool] = useState({
+    name: '', description: '', url: '', method: 'POST',
+    tool_type: 'webhook', fire_and_forget: true,
+    auth_type: 'none', auth_value: '',
+    parameters: [
+      { name: 'question', type: 'string', description: "The user's question", required: true },
+      { name: 'answer', type: 'string', description: "The agent's answer", required: true },
+    ],
+    payload_template: { question: '{{question}}', answer: '{{answer}}' },
+  })
+
   useEffect(() => { loadAgent() }, [agentId])
 
   const loadAgent = async () => {
@@ -73,6 +90,12 @@ export default function AgentDetail() {
       setEditDescription(agentRes.agent_description || '')
       setDirty(false)
       setDocuments(docsRes.documents || [])
+
+      // Load tools
+      try {
+        const toolsRes = await getTools(agentId)
+        setTools(toolsRes.tools || [])
+      } catch { setTools([]) }
     } catch (e) {
       console.error('Failed to load agent:', e)
     } finally {
@@ -227,6 +250,65 @@ export default function AgentDetail() {
       alert(e.message || 'Failed to publish')
     } finally {
       setPublishing(false)
+    }
+  }
+
+  // ─── Tool handlers ───
+  const handleAddTool = async () => {
+    if (!newTool.name.trim() || !newTool.url.trim() || !newTool.description.trim()) {
+      alert('Name, description, and URL are required')
+      return
+    }
+    try {
+      await createTool(agentId, newTool)
+      setShowAddTool(false)
+      setNewTool({
+        name: '', description: '', url: '', method: 'POST',
+        tool_type: 'webhook', fire_and_forget: true,
+        auth_type: 'none', auth_value: '',
+        parameters: [
+          { name: 'question', type: 'string', description: "The user's question", required: true },
+          { name: 'answer', type: 'string', description: "The agent's answer", required: true },
+        ],
+        payload_template: { question: '{{question}}', answer: '{{answer}}' },
+      })
+      const toolsRes = await getTools(agentId)
+      setTools(toolsRes.tools || [])
+    } catch (err) {
+      alert(err.message || 'Failed to create tool')
+    }
+  }
+
+  const handleDeleteTool = async (toolId) => {
+    if (!confirm('Delete this tool?')) return
+    try {
+      await deleteTool(toolId)
+      setTools(prev => prev.filter(t => t.id !== toolId))
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  const handleToggleTool = async (tool) => {
+    try {
+      await updateTool(tool.id, { is_enabled: !tool.is_enabled })
+      setTools(prev => prev.map(t => t.id === tool.id ? { ...t, is_enabled: !t.is_enabled } : t))
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  const handleTestTool = async (toolId) => {
+    setToolTesting(toolId)
+    setToolTestResult(null)
+    setExpandedTool(toolId)
+    try {
+      const res = await testTool(toolId)
+      setToolTestResult(res)
+    } catch (err) {
+      setToolTestResult({ status: 'error', error: err.message })
+    } finally {
+      setToolTesting(null)
     }
   }
 
@@ -451,6 +533,236 @@ export default function AgentDetail() {
         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 8 }}>
           This prompt tells the AI how to interpret and answer questions about the files in this agent.
         </div>
+      </div>
+
+      {/* Tools */}
+      <div className="card" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Wrench size={16} /> Tools
+            {tools.length > 0 && (
+              <span style={{
+                fontSize: '0.65rem', fontWeight: 700, background: 'var(--cane-100)',
+                color: 'var(--cane-700)', padding: '2px 8px', borderRadius: 10,
+              }}>{tools.length}</span>
+            )}
+          </h3>
+          <button className="btn btn-ghost" onClick={() => setShowAddTool(!showAddTool)} style={{ fontSize: '0.8rem' }}>
+            <Plus size={14} /> Add Tool
+          </button>
+        </div>
+
+        {/* Add tool form */}
+        {showAddTool && (
+          <div style={{
+            padding: 16, borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--cane-200)', background: 'var(--cane-50)',
+            marginBottom: 16,
+          }}>
+            <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: 14 }}>New Webhook Tool</div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Tool Name
+                </label>
+                <input
+                  className="form-input"
+                  value={newTool.name}
+                  onChange={e => setNewTool({ ...newTool, name: e.target.value })}
+                  placeholder="e.g. notify_slack"
+                  style={{ fontSize: '0.84rem' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Webhook URL
+                </label>
+                <input
+                  className="form-input"
+                  value={newTool.url}
+                  onChange={e => setNewTool({ ...newTool, url: e.target.value })}
+                  placeholder="https://hooks.zapier.com/..."
+                  style={{ fontSize: '0.84rem' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Description <span style={{ fontWeight: 400, textTransform: 'none' }}>— tells the AI when to use this tool</span>
+              </label>
+              <textarea
+                className="form-input"
+                value={newTool.description}
+                onChange={e => setNewTool({ ...newTool, description: e.target.value })}
+                placeholder="e.g. Use this tool to send a notification to the team's Slack channel whenever a user asks about compliance policies."
+                style={{ fontSize: '0.84rem', minHeight: 70, resize: 'vertical' }}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  HTTP Method
+                </label>
+                <select
+                  className="form-input"
+                  value={newTool.method}
+                  onChange={e => setNewTool({ ...newTool, method: e.target.value })}
+                >
+                  <option value="POST">POST</option>
+                  <option value="GET">GET</option>
+                  <option value="PUT">PUT</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Behavior
+                </label>
+                <select
+                  className="form-input"
+                  value={newTool.fire_and_forget ? 'fire' : 'wait'}
+                  onChange={e => setNewTool({ ...newTool, fire_and_forget: e.target.value === 'fire' })}
+                >
+                  <option value="fire">Fire & Forget (notify/log)</option>
+                  <option value="wait">Wait for Response (data lookup)</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Auth Type
+                </label>
+                <select
+                  className="form-input"
+                  value={newTool.auth_type}
+                  onChange={e => setNewTool({ ...newTool, auth_type: e.target.value })}
+                >
+                  <option value="none">None</option>
+                  <option value="bearer">Bearer Token</option>
+                  <option value="api_key">API Key</option>
+                </select>
+              </div>
+              {newTool.auth_type !== 'none' && (
+                <div>
+                  <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    {newTool.auth_type === 'bearer' ? 'Bearer Token' : 'API Key'}
+                  </label>
+                  <input
+                    className="form-input"
+                    type="password"
+                    value={newTool.auth_value}
+                    onChange={e => setNewTool({ ...newTool, auth_value: e.target.value })}
+                    placeholder="Enter token..."
+                    style={{ fontSize: '0.84rem' }}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary" onClick={handleAddTool} style={{ fontSize: '0.82rem' }}>
+                <Zap size={14} /> Create Tool
+              </button>
+              <button className="btn btn-ghost" onClick={() => setShowAddTool(false)} style={{ fontSize: '0.82rem' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Tool list */}
+        {tools.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {tools.map(tool => (
+              <div key={tool.id} style={{
+                padding: '12px 16px', borderRadius: 'var(--radius-sm)',
+                border: `1px solid ${tool.is_enabled ? 'var(--cane-200)' : 'var(--border)'}`,
+                background: tool.is_enabled ? 'white' : 'var(--bg)',
+                opacity: tool.is_enabled ? 1 : 0.6,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+                    <Zap size={15} style={{ color: tool.is_enabled ? 'var(--cane-600)' : 'var(--text-muted)', flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{tool.name}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                        {tool.description.length > 80 ? tool.description.slice(0, 80) + '...' : tool.description}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {tool.execution_count > 0 && (
+                      <span style={{
+                        fontSize: '0.68rem', color: 'var(--text-muted)', padding: '2px 8px',
+                        background: 'var(--bg)', borderRadius: 8,
+                      }}>{tool.execution_count} calls</span>
+                    )}
+                    <button
+                      className="btn btn-ghost"
+                      onClick={() => handleTestTool(tool.id)}
+                      disabled={toolTesting === tool.id}
+                      style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                      title="Test this tool"
+                    >
+                      <Play size={12} /> {toolTesting === tool.id ? '...' : 'Test'}
+                    </button>
+                    <button
+                      className="btn btn-ghost"
+                      onClick={() => handleToggleTool(tool)}
+                      style={{ padding: '4px 8px' }}
+                      title={tool.is_enabled ? 'Disable' : 'Enable'}
+                    >
+                      {tool.is_enabled ? <ToggleRight size={16} style={{ color: 'var(--cane-600)' }} /> : <ToggleLeft size={16} />}
+                    </button>
+                    <button
+                      className="btn btn-ghost"
+                      onClick={() => handleDeleteTool(tool.id)}
+                      style={{ padding: '4px 8px' }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Test result */}
+                {toolTestResult && toolTesting === null && expandedTool === tool.id && (
+                  <div style={{
+                    marginTop: 10, padding: '8px 12px', borderRadius: 6,
+                    fontSize: '0.78rem', fontFamily: 'monospace',
+                    background: toolTestResult.status === 'ok' ? '#f0fdf4' : '#fef2f2',
+                    border: `1px solid ${toolTestResult.status === 'ok' ? '#bbf7d0' : '#fecaca'}`,
+                    color: toolTestResult.status === 'ok' ? '#166534' : '#991b1b',
+                  }}>
+                    {toolTestResult.status === 'ok'
+                      ? `✓ Success (${toolTestResult.result?.status_code || 200})`
+                      : `✗ Error: ${toolTestResult.error || toolTestResult.result?.body || 'Unknown error'}`}
+                  </div>
+                )}
+
+                <div style={{ marginTop: 6, display: 'flex', gap: 8, fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                  <span style={{ padding: '1px 6px', background: 'var(--bg)', borderRadius: 4 }}>{tool.method}</span>
+                  <span style={{ padding: '1px 6px', background: 'var(--bg)', borderRadius: 4 }}>{tool.fire_and_forget ? 'Fire & Forget' : 'Wait for Response'}</span>
+                  <span style={{
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    maxWidth: 250, padding: '1px 6px', background: 'var(--bg)', borderRadius: 4,
+                  }}>{tool.url}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : !showAddTool ? (
+          <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-muted)' }}>
+            <Wrench size={24} style={{ marginBottom: 8, opacity: 0.4 }} />
+            <div style={{ fontSize: '0.84rem', fontWeight: 500 }}>No tools configured</div>
+            <div style={{ fontSize: '0.78rem', marginTop: 4 }}>
+              Add webhooks to let this agent take actions — log to sheets, send Slack messages, trigger Zapier workflows.
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {/* Publish to Marketplace */}

@@ -179,3 +179,7 @@ from eval_models import (                                          # noqa: E402,
     Environment, TestCase, JudgeCriteria, JudgeCustomRule,
     EvalRun, EvalResult,
 )
+from marketplace_models import (                                    # noqa: E402, F401
+    MarketplaceListing, MarketplaceClone,
+)
+from tool_models import AgentTool                                    # noqa: E402, F401

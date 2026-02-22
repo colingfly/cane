@@ -53,7 +53,13 @@ export default function SearchPage() {
     await askStream(
       currentQuery, 5, workspaceId,
       (text) => { fullText += text; setStreamText(fullText) },
-      (metaData) => { metaRef = metaData; setMeta(metaData) },
+      (metaData) => {
+        if (metaData.type === 'tool_status') {
+          setStreamText(prev => prev || '⚡ ' + metaData.message + '\n\n')
+        } else {
+          metaRef = metaData; setMeta(metaData)
+        }
+      },
       () => {
         setLoading(false)
         if (fullText) {

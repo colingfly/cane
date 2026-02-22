@@ -238,6 +238,47 @@ try:
 except Exception as e:
     print(f"  [DB] marketplace migration skipped: {e}")
 
+# Migrate: create agent_tools table if missing
+def _migrate_agent_tools_table():
+    from sqlalchemy import inspect, text
+    from database import engine
+    insp = inspect(engine)
+    if "agent_tools" not in insp.get_table_names():
+        with engine.begin() as conn:
+            conn.execute(text("""
+                CREATE TABLE agent_tools (
+                    id VARCHAR(36) PRIMARY KEY,
+                    workspace_id VARCHAR(36) NOT NULL,
+                    tenant_id VARCHAR(36) NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    description TEXT NOT NULL,
+                    tool_type VARCHAR(50) DEFAULT 'webhook',
+                    url TEXT NOT NULL,
+                    method VARCHAR(10) DEFAULT 'POST',
+                    headers TEXT DEFAULT '{}',
+                    payload_template TEXT DEFAULT '{}',
+                    auth_type VARCHAR(50) DEFAULT 'none',
+                    auth_value TEXT DEFAULT '',
+                    parameters TEXT DEFAULT '[]',
+                    is_enabled TINYINT(1) DEFAULT 1,
+                    fire_and_forget TINYINT(1) DEFAULT 1,
+                    execution_count INT DEFAULT 0,
+                    last_executed_at DATETIME,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+                    FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+                )
+            """))
+        print("  [DB] agent_tools table created")
+    else:
+        print("  [DB] agent_tools table already exists")
+
+try:
+    _migrate_agent_tools_table()
+except Exception as e:
+    print(f"  [DB] agent_tools migration skipped: {e}")
+
 # Auto-seed admin on first deploy
 from auto_seed import auto_seed
 auto_seed()
@@ -314,6 +355,9 @@ app.include_router(eval_router)
 # -- Marketplace Routes --
 from marketplace_routes import router as marketplace_router
 app.include_router(marketplace_router)
+
+from tool_routes import router as tool_router
+app.include_router(tool_router)
 
 FUSION_SCORE_THRESHOLD = 0.30
 
@@ -1485,7 +1529,39 @@ def ask(
     user_prompt = f"Question: {q}\n\nDocument Excerpts:\n{context}\n\nProvide a clear answer based on the above."
 
     try:
-        summary = _call_claude(user_prompt, system=system_prompt)
+        # Check if this workspace has tools configured
+        from tool_models import AgentTool
+        from tool_executor import build_claude_tools, call_claude_with_tools
+
+        workspace_tools = db.query(AgentTool).filter(
+            AgentTool.workspace_id == workspace_id,
+            AgentTool.tenant_id == user.tenant_id,
+            AgentTool.is_enabled == True,
+        ).all() if workspace_id else []
+
+        if workspace_tools:
+            # Tool-enabled agent: use tool_use flow
+            claude_tools = build_claude_tools(workspace_tools)
+            tool_lookup = {
+                t.name.replace(" ", "_").lower()[:64]: t
+                for t in workspace_tools
+            }
+
+            messages = [{
+                "role": "user",
+                "content": f"Question: {q}\n\nDocument Excerpts:\n{context}\n\nProvide a clear answer based on the above."
+            }]
+
+            summary = call_claude_with_tools(
+                messages=messages,
+                system=system_prompt,
+                tools=claude_tools,
+                tool_lookup=tool_lookup,
+                db_session=db,
+            )
+        else:
+            # Standard agent: direct Claude call
+            summary = _call_claude(user_prompt, system=system_prompt)
 
         # Also fetch relevant images to show alongside the answer
         # Reuse visual results from step 1 instead of calling CLIP again
@@ -1701,6 +1777,18 @@ def ask_stream(
         "content": f"Question: {q}\n\nDocument Excerpts:\n{context}\n\nProvide a clear answer based on the above."
     })
 
+    # Check if this workspace has tools configured
+    from tool_models import AgentTool
+    from tool_executor import build_claude_tools, call_claude_with_tools
+
+    workspace_tools = db.query(AgentTool).filter(
+        AgentTool.workspace_id == workspace_id,
+        AgentTool.tenant_id == user.tenant_id,
+        AgentTool.is_enabled == True,
+    ).all() if workspace_id else []
+
+    has_tools = len(workspace_tools) > 0
+
     # Images — deduplicate by source+page, template detection, cap at 4
     _img_seen = {}
     for vr in visual_hits:
@@ -1726,20 +1814,54 @@ def ask_stream(
         yield _sse({"type": "meta", "sources": sources, "images": images,
                      "chunks_used": len(visual_context) + len(text_context)})
 
-        # Stream text
-        full_text = []
-        for chunk in stream_claude("", system=system_prompt, messages=messages):
-            yield chunk
-            if chunk.startswith("data: "):
-                try:
-                    d = _json.loads(chunk[6:].strip())
-                    if d.get("type") == "text":
-                        full_text.append(d["text"])
-                except Exception:
-                    pass
+        if has_tools:
+            # Tool-enabled agent: do tool loop non-streaming, then emit result
+            try:
+                claude_tools = build_claude_tools(workspace_tools)
+                tool_lookup = {
+                    t.name.replace(" ", "_").lower()[:64]: t
+                    for t in workspace_tools
+                }
 
-        # Save conversation history
-        save_conversation_turn(session_id, q, "".join(full_text))
+                # Signal that tools are being used
+                yield _sse({"type": "tool_status", "message": "Checking tools..."})
+
+                from database import SessionLocal
+                tool_db = SessionLocal()
+                try:
+                    full_response = call_claude_with_tools(
+                        messages=messages,
+                        system=system_prompt,
+                        tools=claude_tools,
+                        tool_lookup=tool_lookup,
+                        db_session=tool_db,
+                    )
+                finally:
+                    tool_db.close()
+
+                # Emit the response in chunks to maintain streaming feel
+                chunk_size = 8
+                for i in range(0, len(full_response), chunk_size):
+                    yield _sse({"type": "text", "text": full_response[i:i+chunk_size]})
+
+                save_conversation_turn(session_id, q, full_response)
+
+            except Exception as e:
+                yield _sse({"type": "error", "error": f"Tool execution failed: {str(e)}"})
+        else:
+            # Standard agent: stream normally
+            full_text = []
+            for chunk in stream_claude("", system=system_prompt, messages=messages):
+                yield chunk
+                if chunk.startswith("data: "):
+                    try:
+                        d = _json.loads(chunk[6:].strip())
+                        if d.get("type") == "text":
+                            full_text.append(d["text"])
+                    except Exception:
+                        pass
+
+            save_conversation_turn(session_id, q, "".join(full_text))
 
         yield _sse({"type": "done"})
 
@@ -2301,6 +2423,8 @@ def admin_delete_tenant(
     db.query(Environment).filter(Environment.tenant_id == tenant_id).delete(synchronize_session=False)
 
     # 3. Everything else
+    from tool_models import AgentTool
+    db.query(AgentTool).filter(AgentTool.tenant_id == tenant_id).delete(synchronize_session=False)
     db.query(ApiKey).filter(ApiKey.tenant_id == tenant_id).delete(synchronize_session=False)
     db.query(SearchLog).filter(SearchLog.tenant_id == tenant_id).delete(synchronize_session=False)
     db.query(Document).filter(Document.tenant_id == tenant_id).delete(synchronize_session=False)
