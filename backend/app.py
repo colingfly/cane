@@ -2287,7 +2287,7 @@ def generate_agent_prompt(
             display = (meta or {}).get("display_text", doc) or doc
             file_previews[src] = {"filename": src, "preview": display[:2000]}
 
-    prompt = auto_generate_prompt(list(file_previews.values()))
+    prompt = auto_generate_prompt(list(file_previews.values()), base_prompt=ws.system_prompt or "")
 
     if not prompt:
         return JSONResponse(

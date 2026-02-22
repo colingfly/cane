@@ -71,12 +71,15 @@ Rules:
 
 # ── Auto-generate prompt for custom agents ──
 
-def auto_generate_prompt(document_previews: list[dict]) -> str:
+def auto_generate_prompt(document_previews: list[dict], base_prompt: str = "") -> str:
     """
     Send document previews to Claude and get back a domain-specific system prompt.
+    If base_prompt is provided, refines it with document-specific knowledge rather
+    than generating from scratch.
 
     Args:
         document_previews: List of {"filename": str, "preview": str} dicts
+        base_prompt: Optional existing prompt to refine (e.g., from a template)
 
     Returns:
         Generated system prompt string, or empty string on failure
@@ -92,7 +95,35 @@ def auto_generate_prompt(document_previews: list[dict]) -> str:
 
     docs_text = "\n\n".join(doc_descriptions)
 
-    meta_prompt = f"""Analyze the following document previews and generate a specialized system prompt for a RAG (retrieval-augmented generation) Q&A assistant that will answer questions about this content.
+    if base_prompt and base_prompt.strip():
+        meta_prompt = f"""You are refining an existing system prompt for a RAG (retrieval-augmented generation) Q&A assistant. The current prompt provides the general structure and rules. Your job is to enhance it with specific knowledge from the actual documents this assistant will use.
+
+CURRENT PROMPT:
+{base_prompt}
+
+DOCUMENTS:
+{docs_text}
+
+Refine the prompt by:
+1. Keeping the existing role, tone, and behavioral rules intact
+2. Adding specific domain terminology, named entities, programs, and concepts found in the documents
+3. Adding document-specific handling instructions (e.g., how to handle acronyms, specific formats, or domain conventions found in the content)
+4. Noting key topics the assistant should be prepared to answer about
+5. Adding any special considerations based on the actual content (regulatory language, technical depth, etc.)
+
+CRITICAL RULES TO PRESERVE AND REINFORCE:
+- The assistant answers ONLY based on provided document excerpts — never fabricate
+- When listing items, search ALL provided excerpts before presenting a list
+- If information might be incomplete due to retrieval, acknowledge this
+- Include specific terminology and named entities from the documents
+
+FORMAT:
+- Keep the prompt under 600 words — concise and actionable
+- Start directly with "You are..." — no preamble
+- Preserve the spirit of the original prompt while making it document-aware
+- Return ONLY the refined system prompt text, nothing else."""
+    else:
+        meta_prompt = f"""Analyze the following document previews and generate a specialized system prompt for a RAG (retrieval-augmented generation) Q&A assistant that will answer questions about this content.
 
 DOCUMENTS:
 {docs_text}
