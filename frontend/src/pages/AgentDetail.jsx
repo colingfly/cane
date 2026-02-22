@@ -765,6 +765,62 @@ export default function AgentDetail() {
         ) : null}
       </div>
 
+      {/* Embed Widget */}
+      {agent.system_prompt && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <MessageSquare size={16} /> Embed on Your Website
+            </h3>
+          </div>
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: 14 }}>
+            Add this agent to any website with one line of code. Create an API key in{' '}
+            <Link to="/settings" style={{ color: 'var(--accent)' }}>Settings → API Keys</Link>{' '}
+            scoped to this agent, then paste the snippet below.
+          </div>
+          <div style={{
+            position: 'relative',
+            background: '#1e1e2e',
+            borderRadius: 'var(--radius-sm)',
+            padding: '16px 18px',
+            fontSize: '0.78rem',
+            fontFamily: "'SF Mono', Consolas, 'Liberation Mono', monospace",
+            color: '#cdd6f4',
+            lineHeight: 1.6,
+            overflow: 'auto',
+          }}>
+            <button
+              onClick={() => {
+                const code = `<script\n  src="${window.location.origin}/widget.js"\n  data-api-key="YOUR_API_KEY"\n  data-agent-name="${agent.name}"\n  data-workspace-id="${agentId}"\n  data-color="#8B7355"\n  data-greeting="Hi! Ask me anything."\n></script>`
+                navigator.clipboard.writeText(code).then(() => {
+                  const btn = document.querySelector('#copy-embed-btn')
+                  if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 1500) }
+                })
+              }}
+              id="copy-embed-btn"
+              style={{
+                position: 'absolute', top: 8, right: 8,
+                background: 'rgba(255,255,255,0.1)', border: 'none',
+                color: '#cdd6f4', padding: '4px 10px', borderRadius: 6,
+                fontSize: '0.7rem', cursor: 'pointer', fontFamily: 'var(--font-body)',
+              }}
+            >Copy</button>
+            <span style={{ color: '#89b4fa' }}>&lt;script</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>src</span>=<span style={{ color: '#f9e2af' }}>"{window.location.origin}/widget.js"</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-api-key</span>=<span style={{ color: '#f9e2af' }}>"YOUR_API_KEY"</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-agent-name</span>=<span style={{ color: '#f9e2af' }}>"{agent.name}"</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-workspace-id</span>=<span style={{ color: '#f9e2af' }}>"{agentId}"</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-color</span>=<span style={{ color: '#f9e2af' }}>"#8B7355"</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-greeting</span>=<span style={{ color: '#f9e2af' }}>"Hi! Ask me anything."</span><br />
+            <span style={{ color: '#89b4fa' }}>&gt;&lt;/script&gt;</span>
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 10 }}>
+            Replace <code style={{ background: 'var(--bg)', padding: '1px 5px', borderRadius: 4, fontSize: '0.73rem' }}>YOUR_API_KEY</code> with
+            a key from Settings. Customize <code style={{ background: 'var(--bg)', padding: '1px 5px', borderRadius: 4, fontSize: '0.73rem' }}>data-color</code> and <code style={{ background: 'var(--bg)', padding: '1px 5px', borderRadius: 4, fontSize: '0.73rem' }}>data-greeting</code> to match your brand.
+          </div>
+        </div>
+      )}
+
       {/* Publish to Marketplace */}
       {agent.system_prompt && (
         <div className="card" style={{ marginBottom: 24 }}>

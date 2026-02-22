@@ -339,8 +339,8 @@ async def add_cache_headers(request, call_next):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -2700,32 +2700,59 @@ async def v1_ask(
     numbered = "\n\n".join(f"[{i+1}] {c}" for i, c in enumerate(context_chunks))
     user_msg = f"DOCUMENT EXCERPTS:\n{numbered}\n\nQUESTION: {query}"
 
-    # Call Claude
+    # Call Claude (with tools if configured)
     import json, urllib.request
-    payload = {
-        "model": CLAUDE_MODEL,
-        "max_tokens": 1024,
-        "system": rules,
-        "messages": [{"role": "user", "content": user_msg}],
-    }
-    data = json.dumps(payload).encode()
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
-        data=data,
-        headers={
-            "Content-Type": "application/json",
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-        },
-        method="POST",
-    )
+    from tool_models import AgentTool
+    from tool_executor import build_claude_tools, call_claude_with_tools
 
-    try:
-        resp = urllib.request.urlopen(req, timeout=30)
-        result = json.loads(resp.read().decode())
-        answer = result.get("content", [{}])[0].get("text", "").strip()
-    except Exception as e:
-        raise HTTPException(502, f"AI service error: {str(e)}")
+    workspace_tools = db.query(AgentTool).filter(
+        AgentTool.workspace_id == workspace_id,
+        AgentTool.tenant_id == api_key.tenant_id,
+        AgentTool.is_enabled == True,
+    ).all() if workspace_id else []
+
+    if workspace_tools:
+        claude_tools = build_claude_tools(workspace_tools)
+        tool_lookup = {
+            t.name.replace(" ", "_").lower()[:64]: t
+            for t in workspace_tools
+        }
+        messages = [{"role": "user", "content": user_msg}]
+        try:
+            answer = call_claude_with_tools(
+                messages=messages,
+                system=rules,
+                tools=claude_tools,
+                tool_lookup=tool_lookup,
+                db_session=db,
+            )
+        except Exception as e:
+            raise HTTPException(502, f"AI service error: {str(e)}")
+    else:
+        payload = {
+            "model": CLAUDE_MODEL,
+            "max_tokens": 1024,
+            "system": rules,
+            "messages": [{"role": "user", "content": user_msg}],
+        }
+        data = json.dumps(payload).encode()
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=data,
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+            },
+            method="POST",
+        )
+
+        try:
+            resp = urllib.request.urlopen(req, timeout=30)
+            result = json.loads(resp.read().decode())
+            answer = result.get("content", [{}])[0].get("text", "").strip()
+        except Exception as e:
+            raise HTTPException(502, f"AI service error: {str(e)}")
 
     # Log
     log = SearchLog(
@@ -2830,6 +2857,20 @@ async def v1_search(
 def v1_health():
     """Public API health check — no auth required."""
     return {"status": "ok", "service": "cane", "api_version": "v1"}
+
+
+# ── Embeddable Widget ──────────────────────────────────
+from fastapi.responses import FileResponse
+
+@app.get("/widget.js")
+def serve_widget():
+    """Serve the embeddable chat widget JavaScript."""
+    widget_path = pathlib.Path(__file__).parent / "widget.js"
+    if widget_path.exists():
+        return FileResponse(str(widget_path), media_type="application/javascript",
+                            headers={"Cache-Control": "public, max-age=3600",
+                                     "Access-Control-Allow-Origin": "*"})
+    raise HTTPException(404, "Widget not found")
 
 
 # ── Serve React SPA ──────────────────────────────────────
