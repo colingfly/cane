@@ -924,7 +924,7 @@ export default function AgentDetail() {
                 </div>
               </div>
 
-              {/* Environment (optional) */}
+              {/* Evaluation (optional) */}
               <div style={{ marginBottom: 14 }}>
                 <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   Evaluation (optional)
@@ -951,7 +951,7 @@ export default function AgentDetail() {
                     padding: '10px 14px', background: 'var(--paper)',
                     borderRadius: 'var(--radius-sm)', border: '1px solid var(--rule)',
                   }}>
-                    No evaluation environments found for this agent. You can still publish, but the listing won't have a performance card or re-verify capability.
+                    No evaluations found for this agent. You can still publish, but the listing won't have a performance card or re-verify capability.
                   </div>
                 )}
               </div>

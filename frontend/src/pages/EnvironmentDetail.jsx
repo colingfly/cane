@@ -246,7 +246,7 @@ export default function EnvironmentDetail() {
   }
 
   if (loading) return <div className="loading-center"><div className="spinner" /></div>
-  if (!env) return <div className="empty-state"><h3>Environment not found</h3></div>
+  if (!env) return <div className="empty-state"><h3>Evaluation not found</h3></div>
 
   const enabledCriteria = env.criteria?.filter(c => c.is_enabled) || []
   const totalWeight = enabledCriteria.reduce((s, c) => s + c.weight, 0)
@@ -259,7 +259,7 @@ export default function EnvironmentDetail() {
         onClick={() => navigate('/environments')}
         style={{ marginBottom: 16, gap: 6 }}
       >
-        <ArrowLeft size={14} /> Back to Environments
+        <ArrowLeft size={14} /> Back to Evaluations
       </button>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
@@ -314,7 +314,7 @@ export default function EnvironmentDetail() {
       {/* ═══ SETUP TAB ═══ */}
       {tab === 'setup' && (
         <div className="card">
-          <h3 style={{ marginBottom: 20 }}>Environment Details</h3>
+          <h3 style={{ marginBottom: 20 }}>Evaluation Details</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div className="form-group">
               <label>Name</label>
@@ -335,7 +335,7 @@ export default function EnvironmentDetail() {
               className="form-input"
               value={description}
               onChange={e => setDescription(e.target.value)}
-              placeholder="What does this environment test?"
+              placeholder="What does this evaluation test?"
             />
           </div>
           <button

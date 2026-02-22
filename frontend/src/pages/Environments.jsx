@@ -51,7 +51,7 @@ export default function Environments() {
   }
 
   async function handleDelete(id) {
-    if (!confirm('Delete this environment and all its test cases?')) return
+    if (!confirm('Delete this evaluation and all its test cases?')) return
     try {
       await deleteEnvironment(id)
       setEnvironments(prev => prev.filter(e => e.id !== id))
@@ -77,15 +77,15 @@ export default function Environments() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{
-            width: 40, height: 40, borderRadius: 10,
-            background: 'var(--accent-muted)',
+            width: 40, height: 40, borderRadius: 8,
+            background: 'var(--cane-900)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--accent)',
+            color: 'var(--cane-400)',
           }}>
-            <FlaskConical size={22} />
+            <FlaskConical size={20} />
           </div>
           <div>
-            <h2 style={{ fontSize: '1.75rem', fontWeight: 700, letterSpacing: '-0.02em' }}>Environments</h2>
+            <h2 style={{ fontSize: '1.75rem', fontWeight: 700, letterSpacing: '-0.02em' }}>Evaluations</h2>
             <p style={{ color: 'var(--text-secondary)', marginTop: 2 }}>
               Test, evaluate, and improve your agents.
             </p>
@@ -96,7 +96,7 @@ export default function Environments() {
             className="btn btn-primary"
             onClick={() => setShowCreate(!showCreate)}
           >
-            <Plus size={16} /> New Environment
+            <Plus size={16} /> New Evaluation
           </button>
         )}
       </div>
@@ -133,13 +133,13 @@ export default function Environments() {
                 className="form-input"
                 value={newDesc}
                 onChange={e => setNewDesc(e.target.value)}
-                placeholder="What does this environment test?"
+                placeholder="What does this evaluation test?"
               />
             </div>
             {error && <p style={{ color: 'var(--error)', fontSize: '0.8125rem', marginBottom: 12 }}>{error}</p>}
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="submit" className="btn btn-primary" disabled={creating || !newName.trim()}>
-                {creating ? 'Creating...' : 'Create Environment'}
+                {creating ? 'Creating...' : 'Create Evaluation'}
               </button>
               <button type="button" className="btn btn-secondary" onClick={() => setShowCreate(false)}>
                 Cancel
@@ -149,7 +149,7 @@ export default function Environments() {
         </div>
       )}
 
-      {/* Environment list */}
+      {/* Evaluation list */}
       {environments.length > 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {environments.map(env => (
@@ -200,7 +200,7 @@ export default function Environments() {
                   <button
                     className="btn btn-ghost"
                     onClick={e => { e.stopPropagation(); handleDelete(env.id) }}
-                    title="Delete environment"
+                    title="Delete evaluation"
                   >
                     <Trash2 size={15} />
                   </button>
@@ -216,17 +216,17 @@ export default function Environments() {
           {agents.length === 0 ? (
             <>
               <h3>Create an agent first</h3>
-              <p>Environments evaluate agents. Build an agent in Agent Builder, then come back here.</p>
+              <p>Evaluations test your agents. Build an agent in Agent Builder, then come back here.</p>
               <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => navigate('/')}>
                 Go to Agent Builder
               </button>
             </>
           ) : (
             <>
-              <h3>No environments yet</h3>
-              <p>Create an environment to start testing your agents.</p>
+              <h3>No evaluations yet</h3>
+              <p>Create an evaluation to start testing your agents.</p>
               <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => setShowCreate(true)}>
-                <Plus size={16} /> New Environment
+                <Plus size={16} /> New Evaluation
               </button>
             </>
           )}

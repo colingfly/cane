@@ -287,7 +287,7 @@ function AgentsTab() {
         />
         <QA
           q="Can I delete an agent?"
-          a="Yes. On the Agent Builder page, click the trash icon on any agent card. This deletes the agent, its files, tools, eval environments, and any marketplace listings. This action cannot be undone."
+          a="Yes. On the Agent Builder page, click the trash icon on any agent card. This deletes the agent, its files, tools, evaluations, and any marketplace listings. This action cannot be undone."
         />
       </SectionBlock>
     </div>
@@ -367,19 +367,19 @@ function EvaluationsTab() {
           a='Without evaluations, you are guessing whether your agent is any good. You might ask it a few questions manually and think "that looks right," but you have no way to measure accuracy systematically, track improvement over time, or catch regressions when you change the prompt or add files. Evaluations give you a number: your agent scores 79/100 today. You tweak the prompt, re-run, and it scores 84. That is progress you can prove.'
         />
         <QA
-          q="What is an environment?"
-          a="An environment is where evaluations happen. It links to one agent, contains a set of test cases, defines judge criteria, and stores the history of all evaluation runs. Think of it as a test bench for a specific agent."
+          q="What is an evaluation environment?"
+          a="An evaluation environment links to one agent, contains a set of test cases, defines judge criteria, and stores the history of all evaluation runs. Think of it as a test bench for a specific agent. You can have multiple evaluation environments per agent."
         />
       </SectionBlock>
 
       <SectionBlock title="Setting Up">
         <QA
-          q="How do I create an environment?"
-          a='Go to Environments from the sidebar and click "New Environment." Give it a name and select which agent to test. The agent must already exist and have files uploaded.'
+          q="How do I create an evaluation?"
+          a='Go to Evaluations from the sidebar and click "New Evaluation." Give it a name and select which agent to test. The agent must already exist and have files uploaded.'
         />
         <QA
           q="How do I write test cases?"
-          a='In the environment, go to the Test Cases tab and click "Add Test Case." Enter a question and the expected answer. The expected answer does not have to be word-for-word — it is a reference the judge uses to evaluate whether the agent covered the right content. Write what a correct answer should include.'
+          a='In the evaluation, go to the Test Cases tab and click "Add Test Case." Enter a question and the expected answer. The expected answer does not have to be word-for-word — it is a reference the judge uses to evaluate whether the agent covered the right content. Write what a correct answer should include.'
         />
         <QA
           q="Can I auto-generate test cases?"
@@ -405,7 +405,7 @@ function EvaluationsTab() {
       <SectionBlock title="Running Evaluations">
         <QA
           q="How do I run an evaluation?"
-          a='Click "Run Evaluation" from the environment page. Cane sends each test case question to your agent, collects the response, then passes both the response and expected answer to an LLM judge for scoring. Results stream in as each test case completes.'
+          a='Click "Run Evaluation" from the evaluation page. Cane sends each test case question to your agent, collects the response, then passes both the response and expected answer to an LLM judge for scoring. Results stream in as each test case completes.'
         />
         <QA
           q="How long does an evaluation take?"
@@ -413,14 +413,14 @@ function EvaluationsTab() {
         />
         <QA
           q="Can I re-run evaluations?"
-          a="Yes. Every run is saved in the environment's history. Re-run after changing the agent's prompt, adding files, or updating test cases. Compare runs to track improvement."
+          a="Yes. Every run is saved in the evaluation's history. Re-run after changing the agent's prompt, adding files, or updating test cases. Compare runs to track improvement."
         />
       </SectionBlock>
 
       <SectionBlock title="Reading Results">
         <QA
           q="What do the scores mean?"
-          a="Each test case gets an overall score from 0-100. Above 80 is a pass (green). Between 60-80 is a warning (amber) — the answer is okay but has gaps. Below 60 is a fail (red) — the answer is wrong, incomplete, or off-topic. The environment's overall score is the average across all test cases."
+          a="Each test case gets an overall score from 0-100. Above 80 is a pass (green). Between 60-80 is a warning (amber) — the answer is okay but has gaps. Below 60 is a fail (red) — the answer is wrong, incomplete, or off-topic. The evaluation's overall score is the average across all test cases."
         />
         <QA
           q="What is judge reasoning?"
@@ -543,7 +543,7 @@ function MarketplaceTab() {
         />
         <QA
           q="How do I verify a clone?"
-          a='After cloning, go to the eval environment that was created and click "Run Evaluation." Cane runs the published test cases against your copy of the agent. You will get an independent score that you can compare against the published listing score.'
+          a='After cloning, go to the evaluation that was created and click "Run Evaluation." Cane runs the published test cases against your copy of the agent. You will get an independent score that you can compare against the published listing score.'
         />
         <QA
           q="What if my verification score differs from the published score?"
@@ -609,7 +609,7 @@ function FAQTab() {
         />
         <QA
           q="What happens when I delete something?"
-          a="Deleting a file removes it and all its indexed content permanently. Deleting an agent removes the agent, its files, tools, eval environments, marketplace listings, and all vector data. These actions cannot be undone."
+          a="Deleting a file removes it and all its indexed content permanently. Deleting an agent removes the agent, its files, tools, evaluations, marketplace listings, and all vector data. These actions cannot be undone."
         />
       </SectionBlock>
     </div>

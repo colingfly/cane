@@ -22,7 +22,7 @@ export default function Layout({ children }) {
           </NavLink>
           <NavLink to="/environments">
             <FlaskConical />
-            <span>Environments</span>
+            <span>Evaluations</span>
           </NavLink>
           <NavLink to="/search">
             <Search /> Search
