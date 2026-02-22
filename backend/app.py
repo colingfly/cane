@@ -2181,7 +2181,7 @@ def delete_agent(
         # 1. Marketplace: delete clones OF this agent's listings, then listings
         from marketplace_models import MarketplaceListing, MarketplaceClone
         listing_ids = [l.id for l in db.query(MarketplaceListing).filter(
-            MarketplaceListing.workspace_id == agent_id
+            MarketplaceListing.source_workspace_id == agent_id
         ).all()]
         if listing_ids:
             db.query(MarketplaceClone).filter(
@@ -2210,10 +2210,6 @@ def delete_agent(
             db.query(EvalRun).filter(EvalRun.environment_id.in_(env_ids)).delete(synchronize_session=False)
             db.query(JudgeCustomRule).filter(JudgeCustomRule.environment_id.in_(env_ids)).delete(synchronize_session=False)
             db.query(JudgeCriteria).filter(JudgeCriteria.environment_id.in_(env_ids)).delete(synchronize_session=False)
-
-            tc_ids = [t.id for t in db.query(TestCase).filter(
-                TestCase.environment_id.in_(env_ids)
-            ).all()]
             db.query(TestCase).filter(TestCase.environment_id.in_(env_ids)).delete(synchronize_session=False)
             db.query(Environment).filter(Environment.id.in_(env_ids)).delete(synchronize_session=False)
 
@@ -2221,10 +2217,13 @@ def delete_agent(
         from tool_models import AgentTool
         db.query(AgentTool).filter(AgentTool.workspace_id == agent_id).delete(synchronize_session=False)
 
-        # 4. Search logs
+        # 4. API keys scoped to this workspace
+        db.query(ApiKey).filter(ApiKey.workspace_id == agent_id).delete(synchronize_session=False)
+
+        # 5. Search logs
         db.query(SearchLog).filter(SearchLog.workspace_id == agent_id).delete(synchronize_session=False)
 
-        # 5. Documents + vector chunks
+        # 6. Documents + vector chunks
         docs = db.query(Document).filter(Document.workspace_id == agent_id).all()
         for doc in docs:
             try:
@@ -2238,7 +2237,7 @@ def delete_agent(
                 pass
             db.delete(doc)
 
-        # 6. Delete workspace
+        # 7. Delete workspace
         db.delete(ws)
         db.commit()
         print(f"  [Agent] Deleted agent {agent_id} with all cascaded data")
