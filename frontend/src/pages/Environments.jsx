@@ -75,21 +75,11 @@ export default function Environments() {
     <div className="fade-in">
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{
-            width: 40, height: 40, borderRadius: 8,
-            background: 'var(--cane-900)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--cane-400)',
-          }}>
-            <FlaskConical size={20} />
-          </div>
-          <div>
-            <h2 style={{ fontSize: '1.75rem', fontWeight: 700, letterSpacing: '-0.02em' }}>Evaluations</h2>
-            <p style={{ color: 'var(--text-secondary)', marginTop: 2 }}>
-              Test, evaluate, and improve your agents.
-            </p>
-          </div>
+        <div>
+          <h2 style={{ fontSize: '1.75rem', fontWeight: 700, letterSpacing: '-0.02em' }}>Evaluations</h2>
+          <p style={{ color: 'var(--text-secondary)', marginTop: 2 }}>
+            Test, evaluate, and improve your agents.
+          </p>
         </div>
         {agents.length > 0 && (
           <button
