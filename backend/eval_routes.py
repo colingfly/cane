@@ -385,8 +385,9 @@ def generate_test_cases(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Linked workspace not found")
 
     # Fetch document chunks from ChromaDB
-    from app import text_col, _build_tenant_where
-    where = _build_tenant_where(user.tenant_id, env.workspace_id)
+    from services.chroma import text_col
+    from services.search import build_tenant_where
+    where = build_tenant_where(user.tenant_id, env.workspace_id)
 
     try:
         get_kwargs = {"include": ["documents", "metadatas"]}

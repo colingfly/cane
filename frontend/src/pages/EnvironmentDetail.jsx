@@ -601,20 +601,6 @@ export default function EnvironmentDetail() {
             ))}
           </div>
 
-          <button
-            className="btn btn-primary"
-            onClick={handleSaveCriteria}
-            disabled={saving || totalWeight !== 100}
-            style={{ marginTop: 16 }}
-          >
-            {saving ? 'Saving...' : 'Save Criteria'}
-          </button>
-          {totalWeight !== 100 && (
-            <span style={{ fontSize: '0.78rem', color: 'var(--error)', marginLeft: 12 }}>
-              Weights must sum to 100
-            </span>
-          )}
-
           {/* Custom Rules */}
           <div style={{ marginTop: 32 }}>
             <div style={{
@@ -656,6 +642,20 @@ export default function EnvironmentDetail() {
               </form>
             </div>
           </div>
+
+          <button
+            className="btn btn-primary"
+            onClick={handleSaveCriteria}
+            disabled={saving || totalWeight !== 100}
+            style={{ marginTop: 20 }}
+          >
+            {saving ? 'Saving...' : 'Save Criteria'}
+          </button>
+          {totalWeight !== 100 && (
+            <span style={{ fontSize: '0.78rem', color: 'var(--error)', marginLeft: 12 }}>
+              Weights must sum to 100
+            </span>
+          )}
         </div>
       )}
 
