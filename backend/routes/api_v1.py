@@ -1,8 +1,6 @@
 """
 routes/api_v1.py — Public API v1 (API-key authenticated).
 """
-import json
-import urllib.request
 
 from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.orm import Session
@@ -194,24 +192,8 @@ def v1_health():
 
 def _plain_claude_call(system: str, user_msg: str) -> str:
     """Plain Claude API call without tools."""
-    payload = {
-        "model": CLAUDE_MODEL, "max_tokens": 1024, "system": system,
-        "messages": [{"role": "user", "content": user_msg}],
-    }
-    data = json.dumps(payload).encode()
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
-        data=data,
-        headers={
-            "Content-Type": "application/json",
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-        },
-        method="POST",
-    )
     try:
-        resp = urllib.request.urlopen(req, timeout=30)
-        result = json.loads(resp.read().decode())
-        return result.get("content", [{}])[0].get("text", "").strip()
+        from services.claude import call
+        return call(user_msg, system=system)
     except Exception as e:
         raise HTTPException(502, f"AI service error: {str(e)}")

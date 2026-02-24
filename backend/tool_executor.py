@@ -12,7 +12,7 @@ import urllib.error
 from datetime import datetime
 from typing import Optional
 
-from config import ANTHROPIC_API_KEY, CLAUDE_MODEL
+from config import CLAUDE_MODEL
 
 
 def build_claude_tools(agent_tools: list) -> list:
@@ -142,8 +142,7 @@ def call_claude_with_tools(
 
     tool_lookup: dict mapping tool_name -> AgentTool record
     """
-    if not ANTHROPIC_API_KEY:
-        raise RuntimeError("ANTHROPIC_API_KEY not configured")
+    from services.claude import call_with_tools as _sdk_call
 
     # Strip internal _tool_id from tool defs before sending to Claude
     clean_tools = []
@@ -159,58 +158,52 @@ def call_claude_with_tools(
     all_text_parts = []  # Collect text across all iterations
 
     for iteration in range(max_iterations):
-        payload = {
-            "model": CLAUDE_MODEL,
-            "max_tokens": 1024,
-            "temperature": 0.3,
-            "system": enhanced_system,
-            "messages": current_messages,
-            "tools": clean_tools,
-        }
-
-        data = json.dumps(payload).encode()
-        req = urllib.request.Request(
-            "https://api.anthropic.com/v1/messages",
-            data=data,
-            headers={
-                "Content-Type": "application/json",
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-            },
-            method="POST",
-        )
-
         try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                result = json.loads(resp.read())
+            response = _sdk_call(
+                messages=current_messages,
+                system=enhanced_system,
+                tools=clean_tools,
+            )
         except Exception as e:
             print(f"  [Tools] Claude API error on iteration {iteration}: {e}")
             break
 
-        content = result.get("content", [])
-        stop_reason = result.get("stop_reason", "")
+        stop_reason = response.stop_reason
+        content = response.content
         print(f"  [Tools] Iteration {iteration}: stop_reason={stop_reason}, blocks={len(content)}")
 
         # Collect any text blocks from this response
         for block in content:
-            if block.get("type") == "text" and block.get("text", "").strip():
-                all_text_parts.append(block["text"])
-                print(f"  [Tools] Got text: {block['text'][:80]}...")
+            if block.type == "text" and block.text.strip():
+                all_text_parts.append(block.text)
+                print(f"  [Tools] Got text: {block.text[:80]}...")
 
         # If no tool use, we're done
         if stop_reason != "tool_use":
             break
 
         # Claude wants to use tools — process each tool_use block
-        current_messages.append({"role": "assistant", "content": content})
+        # Convert content blocks to dicts for the messages API
+        content_dicts = []
+        for block in content:
+            if block.type == "text":
+                content_dicts.append({"type": "text", "text": block.text})
+            elif block.type == "tool_use":
+                content_dicts.append({
+                    "type": "tool_use",
+                    "id": block.id,
+                    "name": block.name,
+                    "input": block.input,
+                })
+        current_messages.append({"role": "assistant", "content": content_dicts})
 
         tool_results = []
 
         for block in content:
-            if block.get("type") == "tool_use":
-                tool_name = block.get("name", "")
-                tool_input = block.get("input", {})
-                tool_use_id = block.get("id", "")
+            if block.type == "tool_use":
+                tool_name = block.name
+                tool_input = block.input
+                tool_use_id = block.id
 
                 print(f"  [Tools] Claude wants to call: {tool_name} with input: {json.dumps(tool_input)[:200]}")
 

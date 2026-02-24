@@ -4,12 +4,10 @@ services/rag.py — Shared RAG context building and Claude API calls.
 Extracts the duplicated context-building logic from /api/ask, /api/ask/stream,
 and /v1/ask into a single reusable function.
 """
-import json
-import urllib.request
 from collections import Counter
 from dataclasses import dataclass, field
 
-from config import ANTHROPIC_API_KEY, CLAUDE_MODEL, RAG_BASE_RULES
+from config import RAG_BASE_RULES
 from services.search import search_text, search_visual, clean_transcript, build_tenant_where
 
 
@@ -193,32 +191,5 @@ def build_system_prompt(agent_prompt: str = "") -> str:
 
 def call_claude(user_prompt: str, system: str = "") -> str:
     """Call Claude API for RAG summarization."""
-    if not ANTHROPIC_API_KEY:
-        return ""
-
-    payload = {
-        "model": CLAUDE_MODEL,
-        "max_tokens": 1024,
-        "temperature": 0.3,
-        "system": system,
-        "messages": [{"role": "user", "content": user_prompt}],
-    }
-
-    data = json.dumps(payload).encode()
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
-        data=data,
-        headers={
-            "Content-Type": "application/json",
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-        },
-        method="POST",
-    )
-
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        result = json.loads(resp.read())
-        content = result.get("content", [])
-        return "".join(
-            block.get("text", "") for block in content if block.get("type") == "text"
-        ).strip()
+    from services.claude import call
+    return call(user_prompt, system=system)

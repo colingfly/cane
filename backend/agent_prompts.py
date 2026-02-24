@@ -5,7 +5,6 @@ Pre-built agents come with hand-crafted prompts optimized for their domain.
 Custom agents use Claude to auto-generate a prompt from uploaded content.
 """
 import json
-import urllib.request
 from config import ANTHROPIC_API_KEY
 
 # ── Pre-built Agent Definitions ──
@@ -147,31 +146,15 @@ FORMAT:
 - Start directly with "You are..." — no preamble
 - Return ONLY the system prompt text, nothing else."""
 
-    payload = {
-        "model": "claude-sonnet-4-20250514",
-        "max_tokens": 800,
-        "temperature": 0.3,
-        "messages": [{"role": "user", "content": meta_prompt}],
-    }
-
-    data = json.dumps(payload).encode()
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
-        data=data,
-        headers={
-            "Content-Type": "application/json",
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-        },
-        method="POST",
-    )
-
     try:
-        resp = urllib.request.urlopen(req, timeout=30)
-        result = json.loads(resp.read().decode())
-        content = result.get("content", [])
-        if content and content[0].get("type") == "text":
-            prompt = content[0]["text"].strip()
+        from services.claude import call
+        prompt = call(
+            meta_prompt,
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=800,
+            temperature=0.3,
+        )
+        if prompt:
             print(f"  [Agent] Auto-generated prompt ({len(prompt)} chars)")
             return prompt
     except Exception as e:

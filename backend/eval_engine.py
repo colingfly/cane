@@ -9,7 +9,6 @@ Executes an eval run:
 """
 import json
 import time
-import urllib.request
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -25,35 +24,8 @@ JUDGE_MODEL = "claude-sonnet-4-5-20250929"
 
 def _call_claude(prompt: str, system: str = "", model: str = None, max_tokens: int = 1024) -> str:
     """Call Claude API. Returns text response."""
-    if not ANTHROPIC_API_KEY:
-        raise RuntimeError("ANTHROPIC_API_KEY not configured")
-
-    payload = {
-        "model": model or CLAUDE_MODEL,
-        "max_tokens": max_tokens,
-        "temperature": 0.2,
-        "system": system,
-        "messages": [{"role": "user", "content": prompt}],
-    }
-
-    data = json.dumps(payload).encode()
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
-        data=data,
-        headers={
-            "Content-Type": "application/json",
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-        },
-        method="POST",
-    )
-
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        result = json.loads(resp.read())
-        content = result.get("content", [])
-        return "".join(
-            block.get("text", "") for block in content if block.get("type") == "text"
-        ).strip()
+    from services.claude import call
+    return call(prompt, system=system, model=model, max_tokens=max_tokens, temperature=0.2)
 
 
 # ─── Agent answer (reuses existing search pipeline) ───
@@ -64,16 +36,17 @@ def _get_agent_answer(question: str, workspace_id: str, tenant_id: str, system_p
     search ChromaDB for relevant chunks, then call Claude with the agent's prompt.
     Returns {answer, sources, response_time_ms}
     """
-    # Import from the running app — these are module-level in app.py
-    from app import text_col, _search_text, _build_tenant_where, _clean_transcript
+    # Import from refactored services
+    from services.chroma import text_col
+    from services.search import search_text, build_tenant_where, clean_transcript
     from chunk_quality import is_quality_chunk
 
     start = time.time()
 
-    where = _build_tenant_where(tenant_id, workspace_id)
+    where = build_tenant_where(tenant_id, workspace_id)
 
     # Search for relevant chunks
-    text_results = _search_text(question, 10, where)
+    text_results = search_text(question, 10, where)
     chunks = text_results.get("results", [])
     print(f"  [Eval] Search for '{question[:50]}...' → {len(chunks)} text hits, workspace={workspace_id}")
 
@@ -92,7 +65,7 @@ def _get_agent_answer(question: str, workspace_id: str, tenant_id: str, system_p
             metas = tenant_chunks.get("metadatas", [])
             for doc, meta in zip(docs, metas):
                 display = (meta or {}).get("display_text", doc) or doc
-                display = _clean_transcript(display.strip()) if display else ""
+                display = clean_transcript(display.strip()) if display else ""
                 if display and len(display) >= 20 and display[:100] not in seen:
                     seen.add(display[:100])
                     chunks.append({

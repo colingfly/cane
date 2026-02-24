@@ -2,12 +2,14 @@
 streaming.py — SSE streaming for Cane Ask endpoint.
 
 Provides:
-  - _stream_claude(): Generator that yields SSE events from Claude API
+  - stream_claude(): Generator that yields SSE events from Claude API
   - Conversation history management
+
+Now uses the Anthropic SDK's native streaming — no more manual SSE parsing.
 """
 import json
-import urllib.request
-from config import ANTHROPIC_API_KEY, CLAUDE_MODEL
+from services.claude import client
+from config import CLAUDE_MODEL
 
 
 # ── Conversation memory (in-memory, per-session) ──
@@ -40,61 +42,24 @@ def stream_claude(user_prompt: str, system: str = "", messages: list = None):
     Stream Claude API response as SSE data lines.
     Yields strings like: 'data: {"type":"text","text":"Hello"}\n\n'
     """
-    if not ANTHROPIC_API_KEY:
+    if not client:
         yield _sse({"type": "error", "error": "No API key"})
         return
 
     msg_list = messages or [{"role": "user", "content": user_prompt}]
 
-    payload = {
-        "model": CLAUDE_MODEL,
-        "max_tokens": 1024,
-        "temperature": 0.3,
-        "stream": True,
-        "system": system,
-        "messages": msg_list,
-    }
-
-    data = json.dumps(payload).encode()
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
-        data=data,
-        headers={
-            "Content-Type": "application/json",
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-        },
-        method="POST",
-    )
-
     try:
-        resp = urllib.request.urlopen(req, timeout=60)
-        buffer = ""
-        for raw_line in resp:
-            line = raw_line.decode("utf-8", errors="replace")
-            buffer += line
-            while "\n" in buffer:
-                event_line, buffer = buffer.split("\n", 1)
-                event_line = event_line.strip()
-                if not event_line:
-                    continue
-                if event_line.startswith("data: "):
-                    json_str = event_line[6:]
-                    if json_str.strip() == "[DONE]":
-                        return
-                    try:
-                        evt = json.loads(json_str)
-                        evt_type = evt.get("type", "")
-                        if evt_type == "content_block_delta":
-                            delta = evt.get("delta", {})
-                            if delta.get("type") == "text_delta":
-                                text = delta.get("text", "")
-                                if text:
-                                    yield _sse({"type": "text", "text": text})
-                        elif evt_type == "message_stop":
-                            return
-                    except json.JSONDecodeError:
-                        continue
+        import anthropic
+        with client.messages.stream(
+            model=CLAUDE_MODEL,
+            max_tokens=1024,
+            temperature=0.3,
+            system=system or anthropic.NOT_GIVEN,
+            messages=msg_list,
+        ) as stream:
+            for text in stream.text_stream:
+                if text:
+                    yield _sse({"type": "text", "text": text})
     except Exception as e:
         yield _sse({"type": "error", "error": str(e)})
 

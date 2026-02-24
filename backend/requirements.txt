@@ -2,6 +2,7 @@
 
 # API
 fastapi>=0.104.0
+anthropic>=0.39.0
 uvicorn>=0.24.0
 python-multipart>=0.0.6
 gunicorn>=21.0.0
