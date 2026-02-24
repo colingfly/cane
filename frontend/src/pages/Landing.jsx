@@ -100,32 +100,32 @@ export default function Landing() {
           <div className="lp-cap-grid">
             {[
               {
-                icon: '🔌', title: 'MCP Connections',
+                icon: 'MC', title: 'MCP Connections',
                 desc: 'Connect agents to external services via Model Context Protocol. Browse the catalog or add custom servers. Calendars, CRMs, email, Slack — your agent can interact with them all.',
                 detail: 'Google Calendar · Salesforce · Gmail · Slack · Custom servers',
               },
               {
-                icon: '🧰', title: 'Webhook Tools',
+                icon: 'WH', title: 'Webhook Tools',
                 desc: 'Give agents the ability to take actions. Log to Google Sheets, send Slack notifications, trigger Zapier workflows, call any REST API. Fire-and-forget or wait for responses.',
                 detail: 'POST / GET / PUT · Auth headers · Payload templates',
               },
               {
-                icon: '📊', title: 'Analytics Dashboard',
+                icon: 'AN', title: 'Analytics Dashboard',
                 desc: 'Track every conversation across every channel. See daily volume, response times, channel breakdown, tool usage, and satisfaction scores. Know exactly how your agent performs.',
                 detail: 'Per-agent metrics · Channel breakdown · Feedback tracking',
               },
               {
-                icon: '🎨', title: 'Widget Customization',
+                icon: 'WC', title: 'Widget Customization',
                 desc: 'Customize every aspect of the chat widget. Colors, greeting, logo, position, border radius, auto-open delay. Live preview in the builder. One-click embed code generation.',
                 detail: 'Live preview · Logo upload · Position control · Auto-open',
               },
               {
-                icon: '🏪', title: 'Agent Marketplace',
+                icon: 'MP', title: 'Agent Marketplace',
                 desc: 'Clone pre-built agent packs with system prompts, eval suites, and test cases. Publish your own agents for others to use. Independent verification through re-running evals.',
                 detail: 'One-click clone · Eval verification · Featured packs',
               },
               {
-                icon: '🧪', title: 'Evaluation Engine',
+                icon: 'EV', title: 'Evaluation Engine',
                 desc: 'Define test cases and scoring criteria. Run automated evaluations with LLM-as-Judge. Get pass/warn/fail verdicts per test case. Weighted criteria: accuracy, completeness, relevance, faithfulness.',
                 detail: 'Custom criteria · Custom rules · Score history',
               },
@@ -560,7 +560,18 @@ const landingStyles = `
 }
 
 .lp-cap-icon {
-  font-size: 1.8rem;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(200, 150, 62, 0.12);
+  color: #c8963e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
   margin-bottom: 16px;
 }
 
