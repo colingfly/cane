@@ -114,6 +114,7 @@ from tool_routes import router as tool_router
 from mcp_routes import router as mcp_router
 from pack_routes import router as pack_router
 from analytics_routes import router as analytics_router
+from email_routes import router as email_router
 
 app.include_router(auth_router)
 app.include_router(documents_router)
@@ -130,6 +131,7 @@ app.include_router(tool_router)
 app.include_router(mcp_router)
 app.include_router(pack_router)
 app.include_router(analytics_router)
+app.include_router(email_router)
 
 
 # ── Health check ──

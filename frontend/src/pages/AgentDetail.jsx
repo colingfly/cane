@@ -211,11 +211,14 @@ export default function AgentDetail() {
     }
   }
 
-  const markDirty = () => {
+  const markDirty = (overrides = {}) => {
     if (!agent) return
-    const changed = editName !== (agent.name || '') ||
-      editDescription !== (agent.agent_description || '') ||
-      editPrompt !== (agent.system_prompt || '')
+    const name = overrides.name !== undefined ? overrides.name : editName
+    const desc = overrides.description !== undefined ? overrides.description : editDescription
+    const prompt = overrides.prompt !== undefined ? overrides.prompt : editPrompt
+    const changed = name !== (agent.name || '') ||
+      desc !== (agent.agent_description || '') ||
+      prompt !== (agent.system_prompt || '')
     setDirty(changed)
   }
 
@@ -494,7 +497,7 @@ export default function AgentDetail() {
           <div style={{ flex: 1 }}>
             <input
               value={editName}
-              onChange={e => { setEditName(e.target.value); setTimeout(markDirty, 0) }}
+              onChange={e => { setEditName(e.target.value); markDirty({ name: e.target.value }) }}
               placeholder="Agent name"
               style={{
                 fontSize: '1.5rem', fontWeight: 700, fontFamily: 'var(--font-display)',
@@ -507,7 +510,7 @@ export default function AgentDetail() {
             />
             <input
               value={editDescription}
-              onChange={e => { setEditDescription(e.target.value); setTimeout(markDirty, 0) }}
+              onChange={e => { setEditDescription(e.target.value); markDirty({ description: e.target.value }) }}
               placeholder="Add a description..."
               style={{
                 color: 'var(--text-muted)', fontSize: '0.875rem',
@@ -794,7 +797,7 @@ export default function AgentDetail() {
 
         <textarea
           value={editPrompt}
-          onChange={e => { setEditPrompt(e.target.value); setTimeout(markDirty, 0) }}
+          onChange={e => { setEditPrompt(e.target.value); markDirty({ prompt: e.target.value }) }}
           placeholder={agent.agent_type === 'custom'
             ? 'Upload files and click "Auto-generate" to create a specialized prompt, or write your own...'
             : 'Template prompt loaded. Upload files and click "Refine with files" to specialize it for your documents...'
