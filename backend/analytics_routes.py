@@ -173,7 +173,17 @@ def get_widget_config(
     if not ws:
         return JSONResponse({"error": "Agent not found"}, status_code=404)
 
-    config = json.loads(ws.widget_config or "{}")
+    # Read via raw SQL since column may not exist yet
+    try:
+        from sqlalchemy import text
+        row = db.execute(
+            text("SELECT widget_config FROM workspaces WHERE id = :wid"),
+            {"wid": workspace_id},
+        ).first()
+        config = json.loads(row[0] or "{}") if row and row[0] else {}
+    except Exception:
+        config = {}
+
     return {"config": config}
 
 
@@ -196,6 +206,15 @@ async def update_widget_config(
     except Exception:
         body = {}
 
-    ws.widget_config = json.dumps(body)
-    db.commit()
+    # Write via raw SQL since column may not exist yet
+    try:
+        from sqlalchemy import text
+        db.execute(
+            text("UPDATE workspaces SET widget_config = :cfg WHERE id = :wid"),
+            {"cfg": json.dumps(body), "wid": workspace_id},
+        )
+        db.commit()
+    except Exception as e:
+        return JSONResponse({"error": f"widget_config column not available: {e}"}, status_code=500)
+
     return {"status": "ok", "config": body}
