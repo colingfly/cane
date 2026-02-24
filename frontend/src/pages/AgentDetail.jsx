@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Upload, Trash2, FileText, Sparkles, Save, ToggleLeft, ToggleRight, MessageSquare, Store, Wrench, Zap, Play, Plus, ChevronDown, ChevronUp, RefreshCw, Link2, Globe, X, BarChart3, Palette } from 'lucide-react'
+import { ArrowLeft, Upload, Trash2, FileText, Sparkles, Save, ToggleLeft, ToggleRight, MessageSquare, Store, Wrench, Zap, Play, Plus, ChevronDown, ChevronUp, RefreshCw, Link2, Globe, X, BarChart3, Palette, Key, Pencil, Copy, Check } from 'lucide-react'
 import {
   getAgent, updateAgent, generateAgentPrompt, generateReplicaPrompt,
   getDocuments, uploadDocument, deleteDocument, getDocumentStatus,
   publishToMarketplace, getTools, createTool, updateTool, deleteTool, testTool,
   getMcpCatalog, getMcpServers, connectMcpServer, updateMcpServer, deleteMcpServer, syncMcpServer,
   getWidgetConfig, updateWidgetConfig,
+  createApiKey, deleteApiKey, getApiKeys,
 } from '../api/client'
 import { getEnvironments, getRuns } from '../api/eval'
 
@@ -67,6 +68,11 @@ export default function AgentDetail() {
   const [toolTesting, setToolTesting] = useState(null)
   const [toolTestResult, setToolTestResult] = useState(null)
   const [expandedTool, setExpandedTool] = useState(null)
+  const [editingTool, setEditingTool] = useState(null)
+  const [editTool, setEditTool] = useState(null)
+  const [agentKeys, setAgentKeys] = useState([])
+  const [showNewKey, setShowNewKey] = useState(null)
+  const [copiedKey, setCopiedKey] = useState(false)
   const [newTool, setNewTool] = useState({
     name: '', description: '', url: '', method: 'POST',
     tool_type: 'webhook', fire_and_forget: true,
@@ -141,6 +147,13 @@ export default function AgentDetail() {
           setWidgetConfig(prev => ({ ...prev, ...wcRes.config }))
         }
       } catch { /* ignore */ }
+
+      // Load API keys for this agent
+      try {
+        const keysRes = await getApiKeys()
+        const agentSpecificKeys = (keysRes.keys || []).filter(k => k.workspace_id === agentId)
+        setAgentKeys(agentSpecificKeys)
+      } catch { setAgentKeys([]) }
     } catch (e) {
       console.error('Failed to load agent:', e)
     } finally {
@@ -357,6 +370,58 @@ export default function AgentDetail() {
       setToolTestResult({ status: 'error', error: err.message })
     } finally {
       setToolTesting(null)
+    }
+  }
+
+  const handleEditTool = (tool) => {
+    setEditingTool(tool.id)
+    setEditTool({
+      name: tool.name, description: tool.description, url: tool.url,
+      method: tool.method || 'POST', fire_and_forget: tool.fire_and_forget,
+      auth_type: tool.auth_type || 'none', auth_value: '',
+    })
+  }
+
+  const handleSaveEditTool = async () => {
+    if (!editTool.name.trim() || !editTool.url.trim() || !editTool.description.trim()) {
+      alert('Name, description, and URL are required')
+      return
+    }
+    try {
+      const updates = { ...editTool }
+      if (!updates.auth_value) delete updates.auth_value // don't overwrite with empty
+      await updateTool(editingTool, updates)
+      const toolsRes = await getTools(agentId)
+      setTools(toolsRes.tools || [])
+      setEditingTool(null)
+      setEditTool(null)
+    } catch (err) {
+      alert(err.message || 'Failed to update tool')
+    }
+  }
+
+  // ─── API Key handlers ───
+  const handleCreateKey = async () => {
+    try {
+      const res = await createApiKey(`${agent?.name || 'Agent'} Key`, agentId)
+      if (res.key) {
+        setShowNewKey(res.key)
+        setCopiedKey(false)
+      }
+      const keysRes = await getApiKeys()
+      setAgentKeys((keysRes.keys || []).filter(k => k.workspace_id === agentId))
+    } catch (err) {
+      alert(err.message || 'Failed to create key')
+    }
+  }
+
+  const handleDeleteKey = async (keyId) => {
+    if (!confirm('Delete this API key? Any widgets using it will stop working.')) return
+    try {
+      await deleteApiKey(keyId)
+      setAgentKeys(prev => prev.filter(k => k.id !== keyId))
+    } catch (err) {
+      alert(err.message)
     }
   }
 
@@ -967,77 +1032,120 @@ export default function AgentDetail() {
             {tools.map(tool => (
               <div key={tool.id} style={{
                 padding: '12px 16px', borderRadius: 'var(--radius-sm)',
-                border: `1px solid ${tool.is_enabled ? 'var(--cane-200)' : 'var(--border)'}`,
-                background: tool.is_enabled ? 'white' : 'var(--bg)',
+                border: `1px solid ${editingTool === tool.id ? 'var(--cane-400)' : tool.is_enabled ? 'var(--cane-200)' : 'var(--border)'}`,
+                background: editingTool === tool.id ? 'var(--cane-50, #fdf8f0)' : tool.is_enabled ? 'white' : 'var(--bg)',
                 opacity: tool.is_enabled ? 1 : 0.6,
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-                    <Zap size={15} style={{ color: tool.is_enabled ? 'var(--cane-600)' : 'var(--text-muted)', flexShrink: 0 }} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{tool.name}</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                        {tool.description.length > 80 ? tool.description.slice(0, 80) + '...' : tool.description}
+                {editingTool === tool.id && editTool ? (
+                  /* ── Inline Edit Form ── */
+                  <div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                      <div>
+                        <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Tool Name</label>
+                        <input className="form-input" value={editTool.name} onChange={e => setEditTool({ ...editTool, name: e.target.value })} style={{ fontSize: '0.84rem' }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Webhook URL</label>
+                        <input className="form-input" value={editTool.url} onChange={e => setEditTool({ ...editTool, url: e.target.value })} style={{ fontSize: '0.84rem' }} />
                       </div>
                     </div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {tool.execution_count > 0 && (
-                      <span style={{
-                        fontSize: '0.68rem', color: 'var(--text-muted)', padding: '2px 8px',
-                        background: 'var(--bg)', borderRadius: 8,
-                      }}>{tool.execution_count} calls</span>
+                    <div style={{ marginBottom: 12 }}>
+                      <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Description</label>
+                      <textarea className="form-input" value={editTool.description} onChange={e => setEditTool({ ...editTool, description: e.target.value })} style={{ fontSize: '0.84rem', minHeight: 60, resize: 'vertical' }} />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+                      <div>
+                        <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Method</label>
+                        <select className="form-input" value={editTool.method} onChange={e => setEditTool({ ...editTool, method: e.target.value })}>
+                          <option value="POST">POST</option><option value="GET">GET</option><option value="PUT">PUT</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Behavior</label>
+                        <select className="form-input" value={editTool.fire_and_forget ? 'fire' : 'wait'} onChange={e => setEditTool({ ...editTool, fire_and_forget: e.target.value === 'fire' })}>
+                          <option value="fire">Fire & Forget</option><option value="wait">Wait for Response</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Auth</label>
+                        <select className="form-input" value={editTool.auth_type} onChange={e => setEditTool({ ...editTool, auth_type: e.target.value })}>
+                          <option value="none">None</option><option value="bearer">Bearer</option><option value="api_key">API Key</option>
+                        </select>
+                      </div>
+                    </div>
+                    {editTool.auth_type !== 'none' && (
+                      <div style={{ marginBottom: 12 }}>
+                        <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          {editTool.auth_type === 'bearer' ? 'Bearer Token' : 'API Key'} <span style={{ fontWeight: 400, textTransform: 'none' }}>(leave blank to keep current)</span>
+                        </label>
+                        <input className="form-input" type="password" value={editTool.auth_value} onChange={e => setEditTool({ ...editTool, auth_value: e.target.value })} style={{ fontSize: '0.84rem' }} />
+                      </div>
                     )}
-                    <button
-                      className="btn btn-ghost"
-                      onClick={() => handleTestTool(tool.id)}
-                      disabled={toolTesting === tool.id}
-                      style={{ padding: '4px 8px', fontSize: '0.75rem' }}
-                      title="Test this tool"
-                    >
-                      <Play size={12} /> {toolTesting === tool.id ? '...' : 'Test'}
-                    </button>
-                    <button
-                      className="btn btn-ghost"
-                      onClick={() => handleToggleTool(tool)}
-                      style={{ padding: '4px 8px' }}
-                      title={tool.is_enabled ? 'Disable' : 'Enable'}
-                    >
-                      {tool.is_enabled ? <ToggleRight size={16} style={{ color: 'var(--cane-600)' }} /> : <ToggleLeft size={16} />}
-                    </button>
-                    <button
-                      className="btn btn-ghost"
-                      onClick={() => handleDeleteTool(tool.id)}
-                      style={{ padding: '4px 8px' }}
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn btn-primary" onClick={handleSaveEditTool} style={{ fontSize: '0.82rem' }}><Save size={14} /> Save</button>
+                      <button className="btn btn-ghost" onClick={() => { setEditingTool(null); setEditTool(null) }} style={{ fontSize: '0.82rem' }}>Cancel</button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  /* ── Read-only Tool Card ── */
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+                        <Zap size={15} style={{ color: tool.is_enabled ? 'var(--cane-600)' : 'var(--text-muted)', flexShrink: 0 }} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{tool.name}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                            {tool.description.length > 80 ? tool.description.slice(0, 80) + '...' : tool.description}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {tool.execution_count > 0 && (
+                          <span style={{
+                            fontSize: '0.68rem', color: 'var(--text-muted)', padding: '2px 8px',
+                            background: 'var(--bg)', borderRadius: 8,
+                          }}>{tool.execution_count} calls</span>
+                        )}
+                        <button className="btn btn-ghost" onClick={() => handleTestTool(tool.id)} disabled={toolTesting === tool.id} style={{ padding: '4px 8px', fontSize: '0.75rem' }} title="Test this tool">
+                          <Play size={12} /> {toolTesting === tool.id ? '...' : 'Test'}
+                        </button>
+                        <button className="btn btn-ghost" onClick={() => handleEditTool(tool)} style={{ padding: '4px 8px' }} title="Edit tool">
+                          <Pencil size={13} />
+                        </button>
+                        <button className="btn btn-ghost" onClick={() => handleToggleTool(tool)} style={{ padding: '4px 8px' }} title={tool.is_enabled ? 'Disable' : 'Enable'}>
+                          {tool.is_enabled ? <ToggleRight size={16} style={{ color: 'var(--cane-600)' }} /> : <ToggleLeft size={16} />}
+                        </button>
+                        <button className="btn btn-ghost" onClick={() => handleDeleteTool(tool.id)} style={{ padding: '4px 8px' }}>
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
 
-                {/* Test result */}
-                {toolTestResult && toolTesting === null && expandedTool === tool.id && (
-                  <div style={{
-                    marginTop: 10, padding: '8px 12px', borderRadius: 6,
-                    fontSize: '0.78rem', fontFamily: 'monospace',
-                    background: toolTestResult.status === 'ok' ? '#f0fdf4' : '#fef2f2',
-                    border: `1px solid ${toolTestResult.status === 'ok' ? '#bbf7d0' : '#fecaca'}`,
-                    color: toolTestResult.status === 'ok' ? '#166534' : '#991b1b',
-                  }}>
-                    {toolTestResult.status === 'ok'
-                      ? `✓ Success (${toolTestResult.result?.status_code || 200})`
-                      : `✗ Error: ${toolTestResult.error || toolTestResult.result?.body || 'Unknown error'}`}
-                  </div>
+                    {/* Test result */}
+                    {toolTestResult && toolTesting === null && expandedTool === tool.id && (
+                      <div style={{
+                        marginTop: 10, padding: '8px 12px', borderRadius: 6,
+                        fontSize: '0.78rem', fontFamily: 'monospace',
+                        background: toolTestResult.status === 'ok' ? '#f0fdf4' : '#fef2f2',
+                        border: `1px solid ${toolTestResult.status === 'ok' ? '#bbf7d0' : '#fecaca'}`,
+                        color: toolTestResult.status === 'ok' ? '#166534' : '#991b1b',
+                      }}>
+                        {toolTestResult.status === 'ok'
+                          ? `✓ Success (${toolTestResult.result?.status_code || 200})`
+                          : `✗ Error: ${toolTestResult.error || toolTestResult.result?.body || 'Unknown error'}`}
+                      </div>
+                    )}
+
+                    <div style={{ marginTop: 6, display: 'flex', gap: 8, fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                      <span style={{ padding: '1px 6px', background: 'var(--bg)', borderRadius: 4 }}>{tool.method}</span>
+                      <span style={{ padding: '1px 6px', background: 'var(--bg)', borderRadius: 4 }}>{tool.fire_and_forget ? 'Fire & Forget' : 'Wait for Response'}</span>
+                      <span style={{
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        maxWidth: 250, padding: '1px 6px', background: 'var(--bg)', borderRadius: 4,
+                      }}>{tool.url}</span>
+                    </div>
+                  </>
                 )}
-
-                <div style={{ marginTop: 6, display: 'flex', gap: 8, fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                  <span style={{ padding: '1px 6px', background: 'var(--bg)', borderRadius: 4 }}>{tool.method}</span>
-                  <span style={{ padding: '1px 6px', background: 'var(--bg)', borderRadius: 4 }}>{tool.fire_and_forget ? 'Fire & Forget' : 'Wait for Response'}</span>
-                  <span style={{
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    maxWidth: 250, padding: '1px 6px', background: 'var(--bg)', borderRadius: 4,
-                  }}>{tool.url}</span>
-                </div>
               </div>
             ))}
           </div>
@@ -1413,6 +1521,77 @@ export default function AgentDetail() {
         ) : null}
       </div>
 
+      {/* API Keys */}
+      <div className="card" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Key size={16} /> API Keys
+          </h3>
+          <button className="btn btn-ghost" onClick={handleCreateKey} style={{ fontSize: '0.82rem' }}>
+            <Plus size={14} /> Generate Key
+          </button>
+        </div>
+
+        {/* Newly created key banner */}
+        {showNewKey && (
+          <div style={{
+            marginBottom: 14, padding: '12px 16px', borderRadius: 'var(--radius-sm)',
+            background: '#f0fdf4', border: '1px solid #bbf7d0',
+          }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#166534', marginBottom: 6 }}>
+              New API key created — copy it now, it won't be shown again
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <code style={{
+                flex: 1, fontSize: '0.78rem', padding: '6px 10px', background: 'white',
+                borderRadius: 4, border: '1px solid #d1d5db', fontFamily: 'monospace',
+                wordBreak: 'break-all',
+              }}>{showNewKey}</code>
+              <button className="btn btn-ghost" onClick={() => {
+                navigator.clipboard.writeText(showNewKey)
+                setCopiedKey(true)
+                setTimeout(() => setCopiedKey(false), 2000)
+              }} style={{ padding: '6px 10px', flexShrink: 0 }}>
+                {copiedKey ? <Check size={14} style={{ color: '#16a34a' }} /> : <Copy size={14} />}
+              </button>
+            </div>
+            <button className="btn btn-ghost" onClick={() => setShowNewKey(null)} style={{ fontSize: '0.72rem', marginTop: 8 }}>Dismiss</button>
+          </div>
+        )}
+
+        {agentKeys.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {agentKeys.map(k => (
+              <div key={k.id} style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '8px 12px', borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border)', background: 'white',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Key size={13} style={{ color: 'var(--text-muted)' }} />
+                  <div>
+                    <div style={{ fontSize: '0.84rem', fontWeight: 600 }}>{k.name}</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                      {k.key_prefix}••••••••
+                      {k.requests_today > 0 && <span style={{ marginLeft: 8 }}>({k.requests_today} requests today)</span>}
+                    </div>
+                  </div>
+                </div>
+                <button className="btn btn-ghost" onClick={() => handleDeleteKey(k.id)} style={{ padding: '4px 8px' }}>
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--text-muted)' }}>
+            <Key size={20} style={{ marginBottom: 6, opacity: 0.4 }} />
+            <div style={{ fontSize: '0.84rem', fontWeight: 500 }}>No API keys yet</div>
+            <div style={{ fontSize: '0.78rem', marginTop: 4 }}>Generate a key to use the widget embed or API.</div>
+          </div>
+        )}
+      </div>
+
       {/* Widget Customizer + Embed */}
       {agent.system_prompt && (
         <div className="card" style={{ marginBottom: 24 }}>
@@ -1428,8 +1607,7 @@ export default function AgentDetail() {
           </div>
 
           <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: 16 }}>
-            Customize how the chat widget looks on your site. Create an API key in{' '}
-            <Link to="/settings" style={{ color: 'var(--accent)' }}>Settings</Link>, then copy the snippet below.
+            Customize how the chat widget looks on your site. Use an API key from the section above, then copy the snippet below.
           </div>
 
           {/* Config grid */}

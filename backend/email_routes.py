@@ -174,4 +174,7 @@ def email_status():
         "configured": configured,
         "from_email": GMAIL_FROM_EMAIL or "(not set)",
         "from_name": GMAIL_FROM_NAME,
+        "has_client_id": bool(GMAIL_CLIENT_ID),
+        "has_client_secret": bool(GMAIL_CLIENT_SECRET),
+        "has_refresh_token": bool(GMAIL_REFRESH_TOKEN),
     }

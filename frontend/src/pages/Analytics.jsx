@@ -50,13 +50,18 @@ export default function Analytics() {
 
   useEffect(() => {
     setLoading(true)
-    Promise.all([
-      getAgent(agentId),
-      getAnalytics(agentId, days),
-    ]).then(([a, d]) => {
-      setAgent(a)
-      setData(d)
-    }).catch(console.error).finally(() => setLoading(false))
+    const fetchData = async () => {
+      try {
+        const a = await getAgent(agentId)
+        if (a && !a.error) setAgent(a)
+      } catch (e) { console.error('Agent fetch failed:', e) }
+      try {
+        const d = await getAnalytics(agentId, days)
+        setData(d)
+      } catch (e) { console.error('Analytics fetch failed:', e) }
+      setLoading(false)
+    }
+    fetchData()
   }, [agentId, days])
 
   if (loading) return <div className="loading-center"><div className="spinner" /></div>
