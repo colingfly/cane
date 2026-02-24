@@ -1,5 +1,7 @@
 [build]
 dockerfilePath = "Dockerfile"
+noCache = true
+
 [deploy]
 healthcheckPath = "/api/health"
 healthcheckTimeout = 600
