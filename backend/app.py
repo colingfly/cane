@@ -36,6 +36,19 @@ except Exception as e:
 from auto_seed import auto_seed
 auto_seed()
 
+# Seed agent packs into marketplace
+try:
+    from database import SessionLocal
+    from db_models import User as _User
+    _db = SessionLocal()
+    _admin = _db.query(_User).filter(_User.role == "admin").first()
+    if _admin:
+        from pack_seeder import seed_packs
+        seed_packs(_db, _admin.tenant_id, _admin.id)
+    _db.close()
+except Exception as e:
+    print(f"  [Packs] Seed skipped: {e}")
+
 print(f"""
 {'='*60}
   Cane — Document Intelligence API
@@ -95,6 +108,7 @@ from eval_routes import router as eval_router
 from marketplace_routes import router as marketplace_router
 from tool_routes import router as tool_router
 from mcp_routes import router as mcp_router
+from pack_routes import router as pack_router
 
 app.include_router(auth_router)
 app.include_router(documents_router)
@@ -109,6 +123,7 @@ app.include_router(eval_router)
 app.include_router(marketplace_router)
 app.include_router(tool_router)
 app.include_router(mcp_router)
+app.include_router(pack_router)
 
 
 # ── Health check ──

@@ -415,3 +415,17 @@ export async function testMcpTool(serverId, toolName, args = '{}') {
   const qs = new URLSearchParams({ tool_name: toolName, arguments: args })
   return request(`/mcp/servers/${serverId}/test?${qs.toString()}`, { method: 'POST' })
 }
+
+// ─── Agent Packs ───
+
+export async function getPacks() {
+  return request('/packs')
+}
+
+export async function getPackDetail(packId) {
+  return request(`/packs/${packId}`)
+}
+
+export async function clonePack(packId) {
+  return request(`/packs/${packId}/clone`, { method: 'POST' })
+}

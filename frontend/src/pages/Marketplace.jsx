@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Download, FlaskConical, FileText, Star, Filter } from 'lucide-react'
-import { browseMarketplace } from '../api/client'
+import { Search, Download, FlaskConical, FileText, Star, Filter, Zap, Wrench, Globe } from 'lucide-react'
+import { browseMarketplace, getPacks, clonePack } from '../api/client'
 
 const CATEGORIES = [
   { id: 'all', label: 'All' },
@@ -159,16 +159,34 @@ export default function Marketplace() {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('all')
   const [sort, setSort] = useState('score')
+  const [packs, setPacks] = useState([])
+  const [cloningPack, setCloningPack] = useState(null)
 
   const load = async () => {
     setLoading(true)
     try {
-      const res = await browseMarketplace({ category, search, sort })
-      setListings(res.listings || [])
+      const [mktRes, packRes] = await Promise.all([
+        browseMarketplace({ category, search, sort }),
+        packs.length ? Promise.resolve(null) : getPacks().catch(() => null),
+      ])
+      setListings(mktRes.listings || [])
+      if (packRes) setPacks(packRes.packs || [])
     } catch (e) {
       console.error('Failed to load marketplace:', e)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleClonePack = async (packId) => {
+    setCloningPack(packId)
+    try {
+      const res = await clonePack(packId)
+      navigate(`/agents/${res.agent_id}`)
+    } catch (err) {
+      alert(err.message || 'Failed to clone pack')
+    } finally {
+      setCloningPack(null)
     }
   }
 
@@ -193,6 +211,86 @@ export default function Marketplace() {
           Discover, clone, and verify community-built AI agents.
         </p>
       </div>
+
+      {/* Featured Packs */}
+      {packs.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{
+            fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase',
+            letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 12,
+          }}>
+            Ready-to-Deploy Packs
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 14 }}>
+            {packs.map(p => (
+              <div key={p.id} style={{
+                padding: '20px 22px', background: 'white',
+                border: '1px solid var(--cane-200)', borderRadius: 'var(--radius)',
+                display: 'flex', flexDirection: 'column', gap: 12,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: 11,
+                    background: 'var(--cane-900)', color: 'var(--accent-light)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontFamily: 'var(--font-display)', fontWeight: 700,
+                    fontSize: '0.9rem', flexShrink: 0,
+                  }}>
+                    {(p.icon || p.name?.charAt(0) || '?').slice(0, 2).toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{
+                      fontWeight: 700, fontSize: '1rem', fontFamily: 'var(--font-display)',
+                      letterSpacing: '-0.01em', marginBottom: 4,
+                    }}>
+                      {p.name}
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                      {p.description}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+                  fontSize: '0.68rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)',
+                }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <Wrench size={10} /> {p.tool_count} tools
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <FlaskConical size={10} /> {p.test_case_count} tests
+                  </span>
+                  {p.suggested_mcp?.length > 0 && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <Globe size={10} /> {p.suggested_mcp.length} integrations
+                    </span>
+                  )}
+                  <div style={{ flex: 1 }} />
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {(p.tags || []).slice(0, 3).map(t => (
+                      <span key={t} style={{
+                        padding: '2px 7px', borderRadius: 4,
+                        background: 'var(--cane-100)', color: 'var(--cane-600)',
+                        fontSize: '0.6rem', fontWeight: 600,
+                      }}>{t}</span>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  className="btn btn-primary"
+                  onClick={() => handleClonePack(p.id)}
+                  disabled={cloningPack === p.id}
+                  style={{ width: '100%', justifyContent: 'center', fontSize: '0.84rem', marginTop: 2 }}
+                >
+                  <Zap size={14} /> {cloningPack === p.id ? 'Setting up...' : 'Use This Pack'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Search + filters */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>

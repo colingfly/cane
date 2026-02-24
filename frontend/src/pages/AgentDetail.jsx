@@ -86,6 +86,7 @@ export default function AgentDetail() {
   const [mcpSyncing, setMcpSyncing] = useState(null)
   const [mcpExpanded, setMcpExpanded] = useState(null)
   const [mcpConnecting, setMcpConnecting] = useState(null)
+  const [mcpConnectForm, setMcpConnectForm] = useState(null) // { id, name, auth_type, setup_instructions, server_url, auth_value }
   const [mcpCustom, setMcpCustom] = useState({
     name: '', server_url: '', auth_type: 'none', auth_value: '',
   })
@@ -346,22 +347,34 @@ export default function AgentDetail() {
     setShowMcpCustom(false)
   }
 
-  const handleConnectCatalog = async (connector) => {
-    const authValue = prompt(`${connector.setup_instructions}\n\nPaste your token/key:`)
-    if (!authValue) return
-    setMcpConnecting(connector.id)
+  const handleConnectCatalog = (connector) => {
+    setMcpConnectForm({
+      id: connector.id,
+      name: connector.name,
+      icon: connector.icon,
+      auth_type: connector.auth_type,
+      setup_instructions: connector.setup_instructions,
+      server_url: '',
+      auth_value: '',
+    })
+  }
+
+  const handleSubmitCatalogConnect = async () => {
+    if (!mcpConnectForm) return
+    if (!mcpConnectForm.server_url.trim()) { alert('Server URL is required'); return }
+    if (mcpConnectForm.auth_type !== 'none' && !mcpConnectForm.auth_value.trim()) { alert('Auth token is required'); return }
+    setMcpConnecting(mcpConnectForm.id)
     try {
-      const serverUrl = prompt('MCP Server URL for ' + connector.name + ':')
-      if (!serverUrl) { setMcpConnecting(null); return }
       const res = await connectMcpServer(agentId, {
-        name: connector.name,
-        server_url: serverUrl,
-        server_type: connector.id,
-        icon: connector.icon,
-        auth_type: connector.auth_type,
-        auth_value: authValue,
+        name: mcpConnectForm.name,
+        server_url: mcpConnectForm.server_url,
+        server_type: mcpConnectForm.id,
+        icon: mcpConnectForm.icon,
+        auth_type: mcpConnectForm.auth_type,
+        auth_value: mcpConnectForm.auth_value,
       })
       setMcpServers(prev => [res, ...prev])
+      setMcpConnectForm(null)
       setShowMcpCatalog(false)
     } catch (err) {
       alert(err.message || 'Failed to connect')
@@ -903,13 +916,73 @@ export default function AgentDetail() {
             marginBottom: 16,
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>Pre-Built Connectors</div>
-              <button className="btn btn-ghost" onClick={() => setShowMcpCatalog(false)} style={{ padding: '2px 6px' }}>
+              <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>
+                {mcpConnectForm ? `Connect ${mcpConnectForm.name}` : 'Pre-Built Connectors'}
+              </div>
+              <button className="btn btn-ghost" onClick={() => { setShowMcpCatalog(false); setMcpConnectForm(null) }} style={{ padding: '2px 6px' }}>
                 <X size={14} />
               </button>
             </div>
 
-            {mcpCatalog.length > 0 ? (
+            {/* Inline connect form */}
+            {mcpConnectForm && (
+              <div style={{
+                padding: 16, borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--cane-200)', background: 'white',
+                marginBottom: 14,
+              }}>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 14, lineHeight: 1.5 }}>
+                  {mcpConnectForm.setup_instructions}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      MCP Server URL
+                    </label>
+                    <input
+                      className="form-input"
+                      value={mcpConnectForm.server_url}
+                      onChange={e => setMcpConnectForm({ ...mcpConnectForm, server_url: e.target.value })}
+                      placeholder="https://mcp.example.com/sse"
+                      style={{ fontSize: '0.84rem' }}
+                    />
+                  </div>
+                  {mcpConnectForm.auth_type !== 'none' && (
+                    <div>
+                      <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        {mcpConnectForm.auth_type === 'bearer' ? 'Bearer Token' : 'API Key'}
+                      </label>
+                      <input
+                        className="form-input"
+                        type="password"
+                        value={mcpConnectForm.auth_value}
+                        onChange={e => setMcpConnectForm({ ...mcpConnectForm, auth_value: e.target.value })}
+                        placeholder="Paste your token here..."
+                        style={{ fontSize: '0.84rem' }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleSubmitCatalogConnect}
+                    disabled={mcpConnecting === mcpConnectForm.id}
+                    style={{ fontSize: '0.82rem' }}
+                  >
+                    <Link2 size={14} /> {mcpConnecting === mcpConnectForm.id ? 'Connecting...' : `Connect ${mcpConnectForm.name}`}
+                  </button>
+                  <button className="btn btn-ghost" onClick={() => setMcpConnectForm(null)} style={{ fontSize: '0.82rem' }}>
+                    Back
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Connector grid */}
+            {!mcpConnectForm && mcpCatalog.length > 0 ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
                 {mcpCatalog.map(c => {
                   const alreadyConnected = mcpServers.some(s => s.server_type === c.id)
@@ -945,10 +1018,9 @@ export default function AgentDetail() {
                           <button
                             className="btn btn-primary"
                             onClick={() => handleConnectCatalog(c)}
-                            disabled={mcpConnecting === c.id}
                             style={{ fontSize: '0.72rem', padding: '4px 10px' }}
                           >
-                            {mcpConnecting === c.id ? '...' : 'Connect'}
+                            Connect
                           </button>
                         )}
                       </div>
@@ -956,11 +1028,11 @@ export default function AgentDetail() {
                   )
                 })}
               </div>
-            ) : (
+            ) : !mcpConnectForm ? (
               <div style={{ textAlign: 'center', padding: 16, color: 'var(--text-muted)', fontSize: '0.82rem' }}>
                 Loading connectors...
               </div>
-            )}
+            ) : null}
           </div>
         )}
 
