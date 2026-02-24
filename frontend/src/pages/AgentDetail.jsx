@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Upload, Trash2, FileText, Sparkles, Save, ToggleLeft, ToggleRight, MessageSquare, Store, Wrench, Zap, Play, Plus, ChevronDown, ChevronUp } from 'lucide-react'
+import { ArrowLeft, Upload, Trash2, FileText, Sparkles, Save, ToggleLeft, ToggleRight, MessageSquare, Store, Wrench, Zap, Play, Plus, ChevronDown, ChevronUp, RefreshCw, Link2, Globe, X } from 'lucide-react'
 import {
   getAgent, updateAgent, generateAgentPrompt,
   getDocuments, uploadDocument, deleteDocument, getDocumentStatus,
   publishToMarketplace, getTools, createTool, updateTool, deleteTool, testTool,
+  getMcpCatalog, getMcpServers, connectMcpServer, updateMcpServer, deleteMcpServer, syncMcpServer,
 } from '../api/client'
 import { getEnvironments, getRuns } from '../api/eval'
 
@@ -76,6 +77,19 @@ export default function AgentDetail() {
     payload_template: { question: '{{question}}', answer: '{{answer}}' },
   })
 
+  // MCP
+  const [mcpServers, setMcpServers] = useState([])
+  const [mcpCatalog, setMcpCatalog] = useState([])
+  const [mcpCategories, setMcpCategories] = useState([])
+  const [showMcpCatalog, setShowMcpCatalog] = useState(false)
+  const [showMcpCustom, setShowMcpCustom] = useState(false)
+  const [mcpSyncing, setMcpSyncing] = useState(null)
+  const [mcpExpanded, setMcpExpanded] = useState(null)
+  const [mcpConnecting, setMcpConnecting] = useState(null)
+  const [mcpCustom, setMcpCustom] = useState({
+    name: '', server_url: '', auth_type: 'none', auth_value: '',
+  })
+
   useEffect(() => { loadAgent() }, [agentId])
 
   const loadAgent = async () => {
@@ -96,6 +110,12 @@ export default function AgentDetail() {
         const toolsRes = await getTools(agentId)
         setTools(toolsRes.tools || [])
       } catch { setTools([]) }
+
+      // Load MCP servers
+      try {
+        const mcpRes = await getMcpServers(agentId)
+        setMcpServers(mcpRes.servers || [])
+      } catch { setMcpServers([]) }
     } catch (e) {
       console.error('Failed to load agent:', e)
     } finally {
@@ -309,6 +329,96 @@ export default function AgentDetail() {
       setToolTestResult({ status: 'error', error: err.message })
     } finally {
       setToolTesting(null)
+    }
+  }
+
+  // ─── MCP handlers ───
+
+  const handleOpenCatalog = async () => {
+    if (mcpCatalog.length === 0) {
+      try {
+        const res = await getMcpCatalog()
+        setMcpCatalog(res.connectors || [])
+        setMcpCategories(res.categories || [])
+      } catch { /* ignore */ }
+    }
+    setShowMcpCatalog(true)
+    setShowMcpCustom(false)
+  }
+
+  const handleConnectCatalog = async (connector) => {
+    const authValue = prompt(`${connector.setup_instructions}\n\nPaste your token/key:`)
+    if (!authValue) return
+    setMcpConnecting(connector.id)
+    try {
+      const serverUrl = prompt('MCP Server URL for ' + connector.name + ':')
+      if (!serverUrl) { setMcpConnecting(null); return }
+      const res = await connectMcpServer(agentId, {
+        name: connector.name,
+        server_url: serverUrl,
+        server_type: connector.id,
+        icon: connector.icon,
+        auth_type: connector.auth_type,
+        auth_value: authValue,
+      })
+      setMcpServers(prev => [res, ...prev])
+      setShowMcpCatalog(false)
+    } catch (err) {
+      alert(err.message || 'Failed to connect')
+    } finally {
+      setMcpConnecting(null)
+    }
+  }
+
+  const handleConnectCustom = async () => {
+    if (!mcpCustom.name.trim() || !mcpCustom.server_url.trim()) {
+      alert('Name and server URL are required')
+      return
+    }
+    setMcpConnecting('custom')
+    try {
+      const res = await connectMcpServer(agentId, {
+        ...mcpCustom,
+        server_type: 'custom',
+      })
+      setMcpServers(prev => [res, ...prev])
+      setShowMcpCustom(false)
+      setMcpCustom({ name: '', server_url: '', auth_type: 'none', auth_value: '' })
+    } catch (err) {
+      alert(err.message || 'Failed to connect')
+    } finally {
+      setMcpConnecting(null)
+    }
+  }
+
+  const handleSyncMcp = async (serverId) => {
+    setMcpSyncing(serverId)
+    try {
+      const res = await syncMcpServer(serverId)
+      setMcpServers(prev => prev.map(s => s.id === serverId ? res : s))
+    } catch (err) {
+      alert(err.message || 'Sync failed')
+    } finally {
+      setMcpSyncing(null)
+    }
+  }
+
+  const handleToggleMcp = async (server) => {
+    try {
+      const res = await updateMcpServer(server.id, { is_enabled: !server.is_enabled })
+      setMcpServers(prev => prev.map(s => s.id === server.id ? res : s))
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  const handleDeleteMcp = async (serverId) => {
+    if (!confirm('Disconnect this MCP server?')) return
+    try {
+      await deleteMcpServer(serverId)
+      setMcpServers(prev => prev.filter(s => s.id !== serverId))
+    } catch (err) {
+      alert(err.message)
     }
   }
 
@@ -758,6 +868,300 @@ export default function AgentDetail() {
             <div style={{ fontSize: '0.84rem', fontWeight: 500 }}>No tools configured</div>
             <div style={{ fontSize: '0.78rem', marginTop: 4 }}>
               Add webhooks to let this agent take actions — log to sheets, send Slack messages, trigger Zapier workflows.
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      {/* MCP Connections */}
+      <div className="card" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Globe size={16} /> Connections
+            {mcpServers.length > 0 && (
+              <span style={{
+                fontSize: '0.65rem', fontWeight: 700, background: 'var(--cane-100)',
+                color: 'var(--cane-700)', padding: '2px 8px', borderRadius: 10,
+              }}>{mcpServers.reduce((sum, s) => sum + (s.tool_count || 0), 0)} tools</span>
+            )}
+          </h3>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button className="btn btn-ghost" onClick={() => { setShowMcpCustom(!showMcpCustom); setShowMcpCatalog(false) }} style={{ fontSize: '0.8rem' }}>
+              <Plus size={14} /> Custom
+            </button>
+            <button className="btn btn-ghost" onClick={handleOpenCatalog} style={{ fontSize: '0.8rem' }}>
+              <Link2 size={14} /> Browse Connectors
+            </button>
+          </div>
+        </div>
+
+        {/* Catalog browser */}
+        {showMcpCatalog && (
+          <div style={{
+            padding: 16, borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--cane-200)', background: 'var(--cane-50)',
+            marginBottom: 16,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>Pre-Built Connectors</div>
+              <button className="btn btn-ghost" onClick={() => setShowMcpCatalog(false)} style={{ padding: '2px 6px' }}>
+                <X size={14} />
+              </button>
+            </div>
+
+            {mcpCatalog.length > 0 ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
+                {mcpCatalog.map(c => {
+                  const alreadyConnected = mcpServers.some(s => s.server_type === c.id)
+                  return (
+                    <div key={c.id} style={{
+                      padding: '12px 14px', borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border)', background: 'white',
+                      opacity: alreadyConnected ? 0.5 : 1,
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                        <span style={{ fontSize: '1.1rem' }}>{c.icon}</span>
+                        <div style={{ fontWeight: 600, fontSize: '0.84rem' }}>{c.name}</div>
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 10, lineHeight: 1.4 }}>
+                        {c.description.length > 90 ? c.description.slice(0, 90) + '...' : c.description}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {(c.example_tools || []).slice(0, 2).map(t => (
+                            <span key={t} style={{
+                              fontSize: '0.62rem', padding: '1px 5px', borderRadius: 3,
+                              background: 'var(--bg)', color: 'var(--text-muted)',
+                            }}>{t}</span>
+                          ))}
+                        </div>
+                        {alreadyConnected ? (
+                          <span style={{ fontSize: '0.7rem', color: 'var(--success)', fontWeight: 600 }}>Connected</span>
+                        ) : (
+                          <button
+                            className="btn btn-primary"
+                            onClick={() => handleConnectCatalog(c)}
+                            disabled={mcpConnecting === c.id}
+                            style={{ fontSize: '0.72rem', padding: '4px 10px' }}
+                          >
+                            {mcpConnecting === c.id ? '...' : 'Connect'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: 16, color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                Loading connectors...
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Custom server form */}
+        {showMcpCustom && (
+          <div style={{
+            padding: 16, borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--cane-200)', background: 'var(--cane-50)',
+            marginBottom: 16,
+          }}>
+            <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: 14 }}>Connect Custom MCP Server</div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Server Name
+                </label>
+                <input
+                  className="form-input"
+                  value={mcpCustom.name}
+                  onChange={e => setMcpCustom({ ...mcpCustom, name: e.target.value })}
+                  placeholder="e.g. My CRM Server"
+                  style={{ fontSize: '0.84rem' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Server URL
+                </label>
+                <input
+                  className="form-input"
+                  value={mcpCustom.server_url}
+                  onChange={e => setMcpCustom({ ...mcpCustom, server_url: e.target.value })}
+                  placeholder="https://mcp.example.com/sse"
+                  style={{ fontSize: '0.84rem' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+              <div>
+                <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Auth Type
+                </label>
+                <select
+                  className="form-input"
+                  value={mcpCustom.auth_type}
+                  onChange={e => setMcpCustom({ ...mcpCustom, auth_type: e.target.value })}
+                >
+                  <option value="none">None</option>
+                  <option value="bearer">Bearer Token</option>
+                  <option value="api_key">API Key</option>
+                  <option value="header">Custom Header</option>
+                </select>
+              </div>
+              {mcpCustom.auth_type !== 'none' && (
+                <div>
+                  <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    {mcpCustom.auth_type === 'bearer' ? 'Bearer Token' : mcpCustom.auth_type === 'api_key' ? 'API Key' : 'Header Value'}
+                  </label>
+                  <input
+                    className="form-input"
+                    type="password"
+                    value={mcpCustom.auth_value}
+                    onChange={e => setMcpCustom({ ...mcpCustom, auth_value: e.target.value })}
+                    placeholder="Enter token..."
+                    style={{ fontSize: '0.84rem' }}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className="btn btn-primary"
+                onClick={handleConnectCustom}
+                disabled={mcpConnecting === 'custom'}
+                style={{ fontSize: '0.82rem' }}
+              >
+                <Link2 size={14} /> {mcpConnecting === 'custom' ? 'Connecting...' : 'Connect Server'}
+              </button>
+              <button className="btn btn-ghost" onClick={() => setShowMcpCustom(false)} style={{ fontSize: '0.82rem' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Connected servers list */}
+        {mcpServers.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {mcpServers.map(server => (
+              <div key={server.id} style={{
+                padding: '12px 16px', borderRadius: 'var(--radius-sm)',
+                border: `1px solid ${server.status === 'connected' ? 'var(--cane-200)' : server.status === 'error' ? '#fecaca' : 'var(--border)'}`,
+                background: server.is_enabled ? 'white' : 'var(--bg)',
+                opacity: server.is_enabled ? 1 : 0.6,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+                    <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>{server.icon}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{server.name}</span>
+                        <span style={{
+                          fontSize: '0.6rem', fontWeight: 700, padding: '1px 6px', borderRadius: 8,
+                          background: server.status === 'connected' ? '#f0fdf4' : server.status === 'error' ? '#fef2f2' : 'var(--cane-100)',
+                          color: server.status === 'connected' ? '#166534' : server.status === 'error' ? '#991b1b' : 'var(--cane-700)',
+                        }}>
+                          {server.status === 'connected' ? `${server.tool_count} tools` : server.status}
+                        </span>
+                      </div>
+                      {server.status === 'error' && server.status_message && (
+                        <div style={{ fontSize: '0.72rem', color: '#991b1b', marginTop: 3 }}>
+                          {server.status_message.length > 120 ? server.status_message.slice(0, 120) + '...' : server.status_message}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {server.total_calls > 0 && (
+                      <span style={{
+                        fontSize: '0.68rem', color: 'var(--text-muted)', padding: '2px 8px',
+                        background: 'var(--bg)', borderRadius: 8,
+                      }}>{server.total_calls} calls</span>
+                    )}
+                    <button
+                      className="btn btn-ghost"
+                      onClick={() => handleSyncMcp(server.id)}
+                      disabled={mcpSyncing === server.id}
+                      style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                      title="Re-discover tools"
+                    >
+                      <RefreshCw size={12} className={mcpSyncing === server.id ? 'spinning' : ''} /> Sync
+                    </button>
+                    <button
+                      className="btn btn-ghost"
+                      onClick={() => handleToggleMcp(server)}
+                      style={{ padding: '4px 8px' }}
+                      title={server.is_enabled ? 'Disable' : 'Enable'}
+                    >
+                      {server.is_enabled ? <ToggleRight size={16} style={{ color: 'var(--cane-600)' }} /> : <ToggleLeft size={16} />}
+                    </button>
+                    <button
+                      className="btn btn-ghost"
+                      onClick={() => setMcpExpanded(mcpExpanded === server.id ? null : server.id)}
+                      style={{ padding: '4px 8px' }}
+                      title="Show tools"
+                    >
+                      {mcpExpanded === server.id ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                    </button>
+                    <button
+                      className="btn btn-ghost"
+                      onClick={() => handleDeleteMcp(server.id)}
+                      style={{ padding: '4px 8px' }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Expanded: show discovered tools */}
+                {mcpExpanded === server.id && server.tools && server.tools.length > 0 && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Discovered Tools
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {server.tools.map((t, i) => (
+                        <div key={i} style={{
+                          padding: '6px 10px', borderRadius: 'var(--radius-sm)',
+                          border: '1px solid var(--border)', background: 'var(--bg)',
+                          fontSize: '0.76rem', maxWidth: 300,
+                        }}>
+                          <div style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>{t.name}</div>
+                          {t.description && (
+                            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.3 }}>
+                              {t.description.length > 80 ? t.description.slice(0, 80) + '...' : t.description}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ marginTop: 6, display: 'flex', gap: 8, fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                  <span style={{ padding: '1px 6px', background: 'var(--bg)', borderRadius: 4 }}>{server.server_type}</span>
+                  {server.avg_latency_ms && (
+                    <span style={{ padding: '1px 6px', background: 'var(--bg)', borderRadius: 4 }}>{Math.round(server.avg_latency_ms)}ms avg</span>
+                  )}
+                  <span style={{
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    maxWidth: 250, padding: '1px 6px', background: 'var(--bg)', borderRadius: 4,
+                  }}>{server.server_url}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : !showMcpCatalog && !showMcpCustom ? (
+          <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-muted)' }}>
+            <Globe size={24} style={{ marginBottom: 8, opacity: 0.4 }} />
+            <div style={{ fontSize: '0.84rem', fontWeight: 500 }}>No connections configured</div>
+            <div style={{ fontSize: '0.78rem', marginTop: 4 }}>
+              Connect MCP servers to let this agent interact with external services — calendars, CRMs, email, Slack, and more.
             </div>
           </div>
         ) : null}

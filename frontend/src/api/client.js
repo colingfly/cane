@@ -370,3 +370,48 @@ export async function deleteTool(toolId) {
 export async function testTool(toolId) {
   return request(`/tools/${toolId}/test`, { method: 'POST' })
 }
+
+// ─── MCP Servers ───
+
+export async function getMcpCatalog() {
+  return request('/mcp/catalog')
+}
+
+export async function getMcpServers(workspaceId) {
+  return request(`/mcp/servers?workspace_id=${workspaceId}`)
+}
+
+export async function connectMcpServer(workspaceId, config) {
+  const qs = new URLSearchParams({
+    workspace_id: workspaceId,
+    name: config.name,
+    server_url: config.server_url,
+    server_type: config.server_type || 'custom',
+    icon: config.icon || '🔌',
+    auth_type: config.auth_type || 'none',
+    auth_header: config.auth_header || 'Authorization',
+    auth_value: config.auth_value || '',
+  })
+  return request(`/mcp/servers?${qs.toString()}`, { method: 'POST' })
+}
+
+export async function updateMcpServer(serverId, config) {
+  const qs = new URLSearchParams()
+  Object.entries(config).forEach(([k, v]) => {
+    if (v !== undefined) qs.set(k, String(v))
+  })
+  return request(`/mcp/servers/${serverId}?${qs.toString()}`, { method: 'PUT' })
+}
+
+export async function deleteMcpServer(serverId) {
+  return request(`/mcp/servers/${serverId}`, { method: 'DELETE' })
+}
+
+export async function syncMcpServer(serverId) {
+  return request(`/mcp/servers/${serverId}/sync`, { method: 'POST' })
+}
+
+export async function testMcpTool(serverId, toolName, args = '{}') {
+  const qs = new URLSearchParams({ tool_name: toolName, arguments: args })
+  return request(`/mcp/servers/${serverId}/test?${qs.toString()}`, { method: 'POST' })
+}
