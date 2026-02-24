@@ -225,6 +225,14 @@ export async function generateAgentPrompt(agentId) {
   return request(`/agents/${agentId}/generate-prompt`, { method: 'POST' })
 }
 
+export async function generateReplicaPrompt(agentId, personality) {
+  return request(`/agents/${agentId}/generate-replica-prompt`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(personality),
+  })
+}
+
 // -- Team --
 export async function getTeam() {
   return request('/team')

@@ -74,7 +74,7 @@ export default function Landing() {
           <div className="lp-loop-grid">
             {[
               { num: '01', title: 'Upload anything', desc: 'PDFs, Word docs, spreadsheets, images, audio, video. Cane extracts text, runs OCR, transcribes media, and chunks everything for semantic search.', tag: 'PDF, DOCX, XLSX, CSV, PNG, MP3, MP4' },
-              { num: '02', title: 'Build a specialized agent', desc: 'Pick a template or start from scratch. Upload domain files. Auto-generate a system prompt tuned to your content. Add webhook tools and MCP connections.', tag: 'Templates / Custom / Marketplace Packs' },
+              { num: '02', title: 'Build a specialized agent', desc: 'Pick a template or start from scratch. Build a support agent, compliance bot, or a digital replica of yourself. Auto-generate a system prompt tuned to your content.', tag: 'Support / Compliance / Ops / Digital Replica' },
               { num: '03', title: 'Evaluate and verify', desc: 'Write test cases. Define scoring criteria. Run automated evaluations with LLM-as-Judge. Iterate until your agent meets the quality bar.', tag: 'LLM-as-Judge with weighted criteria' },
               { num: '04', title: 'Deploy everywhere', desc: 'Embed on any website with one script tag. Customize colors, greeting, and logo. Track conversations with built-in analytics. Share on the marketplace.', tag: 'Widget / API / Marketplace / Analytics' },
             ].map((card, i) => (

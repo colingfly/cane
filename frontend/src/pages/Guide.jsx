@@ -279,6 +279,26 @@ function AgentsTab() {
           a="Yes. On the Agent Builder page, click the trash icon on any agent card. This deletes the agent, its files, tools, MCP connections, evaluations, analytics logs, and any marketplace listings. This action cannot be undone."
         />
       </SectionBlock>
+
+      <SectionBlock title="Digital Replica">
+        <QA
+          q="What is a Digital Replica?"
+          a='A Digital Replica is an AI clone of a specific person. It responds to questions the way that person would — using their tone, vocabulary, opinions, and communication style. Upload writing samples (emails, social posts, messages, documents), fill in a personality profile, and Cane generates a system prompt that captures the person&apos;s voice.'
+        />
+        <QA
+          q="How do I build one?"
+          a='Choose the "Digital Replica" template from the Agent Builder. Upload the person&apos;s writing samples as files — emails, blog posts, social media posts, meeting notes, anything that shows how they communicate. Then fill in the Personality Profile: name, role, communication style, key topics, and personality traits. Click "Generate My Replica" and Cane will analyze everything to create a personalized prompt.'
+        />
+        <QA
+          q="What makes a good replica?"
+          a="Volume and variety of writing samples. The more examples of the person's natural communication, the better the replica. Mix of formats helps: casual messages show their informal voice, professional emails show their work style, social posts show their public personality. 10+ writing samples is a good starting point."
+          note="Tip: After generating the replica prompt, test it by asking questions the person would typically answer. Tweak the prompt or upload more samples to improve accuracy."
+        />
+        <QA
+          q="Can I deploy a replica on my website?"
+          a='Yes. A Digital Replica is a full agent — you can embed it as a chat widget, access it via API, or publish it on the marketplace. Imagine an "Ask Colin" widget on your company site where visitors can talk to your AI clone 24/7.'
+        />
+      </SectionBlock>
     </div>
   )
 }

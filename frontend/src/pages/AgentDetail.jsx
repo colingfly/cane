@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, Upload, Trash2, FileText, Sparkles, Save, ToggleLeft, ToggleRight, MessageSquare, Store, Wrench, Zap, Play, Plus, ChevronDown, ChevronUp, RefreshCw, Link2, Globe, X, BarChart3, Palette } from 'lucide-react'
 import {
-  getAgent, updateAgent, generateAgentPrompt,
+  getAgent, updateAgent, generateAgentPrompt, generateReplicaPrompt,
   getDocuments, uploadDocument, deleteDocument, getDocumentStatus,
   publishToMarketplace, getTools, createTool, updateTool, deleteTool, testTool,
   getMcpCatalog, getMcpServers, connectMcpServer, updateMcpServer, deleteMcpServer, syncMcpServer,
@@ -100,6 +100,12 @@ export default function AgentDetail() {
   })
   const [widgetDirty, setWidgetDirty] = useState(false)
   const [widgetSaving, setWidgetSaving] = useState(false)
+
+  // Replica personality
+  const [replicaProfile, setReplicaProfile] = useState({
+    name: '', role: '', style: '', topics: '', traits: '',
+  })
+  const [replicaGenerating, setReplicaGenerating] = useState(false)
 
   useEffect(() => { loadAgent() }, [agentId])
 
@@ -643,6 +649,123 @@ export default function AgentDetail() {
           </div>
         )}
       </div>
+
+      {/* Replica Personality Profile */}
+      {agent.agent_type === 'digital_replica' && (
+        <div className="card" style={{ marginBottom: 24, borderColor: 'rgba(200,150,62,0.25)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              Personality Profile
+              <span style={{
+                fontSize: '0.55rem', fontWeight: 600, background: 'var(--accent)', color: 'white',
+                padding: '1px 6px', borderRadius: 8,
+              }}>REPLICA</span>
+            </h3>
+          </div>
+          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.6 }}>
+            Tell us about the person this replica represents. Upload their writing samples as files above, then fill in the profile below. We'll analyze everything to generate a system prompt that captures their voice.
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+            <div>
+              <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Name</label>
+              <input
+                type="text" placeholder="Colin Flynn"
+                value={replicaProfile.name}
+                onChange={e => setReplicaProfile(p => ({ ...p, name: e.target.value }))}
+                style={{
+                  width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--rule)', background: 'var(--paper)',
+                  color: 'var(--text)', fontSize: '0.8125rem',
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Role / What they do</label>
+              <input
+                type="text" placeholder="CEO at Cane, builds AI products"
+                value={replicaProfile.role}
+                onChange={e => setReplicaProfile(p => ({ ...p, role: e.target.value }))}
+                style={{
+                  width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--rule)', background: 'var(--paper)',
+                  color: 'var(--text)', fontSize: '0.8125rem',
+                }}
+              />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Communication style</label>
+            <input
+              type="text" placeholder="Direct, casual, uses humor, short sentences, no corporate jargon"
+              value={replicaProfile.style}
+              onChange={e => setReplicaProfile(p => ({ ...p, style: e.target.value }))}
+              style={{
+                width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--rule)', background: 'var(--paper)',
+                color: 'var(--text)', fontSize: '0.8125rem',
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Key topics they know about</label>
+            <input
+              type="text" placeholder="AI agents, SaaS, product strategy, startups, sales"
+              value={replicaProfile.topics}
+              onChange={e => setReplicaProfile(p => ({ ...p, topics: e.target.value }))}
+              style={{
+                width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--rule)', background: 'var(--paper)',
+                color: 'var(--text)', fontSize: '0.8125rem',
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Personality traits</label>
+            <input
+              type="text" placeholder="Ambitious, builder mentality, moves fast, values authenticity"
+              value={replicaProfile.traits}
+              onChange={e => setReplicaProfile(p => ({ ...p, traits: e.target.value }))}
+              style={{
+                width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--rule)', background: 'var(--paper)',
+                color: 'var(--text)', fontSize: '0.8125rem',
+              }}
+            />
+          </div>
+
+          <button
+            className="btn btn-primary"
+            disabled={replicaGenerating || !replicaProfile.name.trim()}
+            onClick={async () => {
+              setReplicaGenerating(true)
+              try {
+                const res = await generateReplicaPrompt(agentId, replicaProfile)
+                if (res.system_prompt) {
+                  setEditPrompt(res.system_prompt)
+                  setAgent(prev => ({ ...prev, system_prompt: res.system_prompt }))
+                  setDirty(false)
+                }
+              } catch (e) {
+                alert(e.message || 'Failed to generate replica prompt')
+              } finally {
+                setReplicaGenerating(false)
+              }
+            }}
+            style={{ width: '100%' }}
+          >
+            <Sparkles size={14} style={{ marginRight: 6 }} />
+            {replicaGenerating ? 'Analyzing personality & writing samples...' : 'Generate My Replica'}
+          </button>
+
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 8, textAlign: 'center' }}>
+            Upload writing samples (emails, posts, messages) as files above for best results. The more samples, the more accurate the replica.
+          </div>
+        </div>
+      )}
 
       {/* System Prompt */}
       <div className="card" style={{ marginBottom: 24 }}>

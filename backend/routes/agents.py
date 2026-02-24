@@ -3,7 +3,7 @@ routes/agents.py — Agent CRUD, templates, and prompt generation.
 """
 import traceback
 
-from fastapi import APIRouter, Form, Depends
+from fastapi import APIRouter, Form, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -11,7 +11,7 @@ from sqlalchemy import text
 from database import get_db
 from db_models import Tenant, User, Workspace, Document, SearchLog, ApiKey
 from auth import get_current_user
-from agent_prompts import get_template, list_templates, auto_generate_prompt
+from agent_prompts import get_template, list_templates, auto_generate_prompt, generate_replica_prompt
 from security import sanitize_form_field
 from services.limits import check_agent_limit
 from services.chroma import text_col, image_col
@@ -276,3 +276,47 @@ def generate_agent_prompt(
     ws.system_prompt = prompt
     db.commit()
     return {"system_prompt": prompt, "documents_analyzed": len(file_previews)}
+
+
+@router.post("/{agent_id}/generate-replica-prompt")
+async def generate_replica_prompt_endpoint(
+    agent_id: str, request: Request,
+    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """Generate a personalized digital replica prompt from personality profile + writing samples."""
+    ws = db.query(Workspace).filter(
+        Workspace.id == agent_id, Workspace.tenant_id == user.tenant_id,
+        Workspace.agent_type.isnot(None),
+    ).first()
+    if not ws:
+        return JSONResponse({"error": "Agent not found"}, status_code=404)
+
+    body = await request.json()
+    personality = {
+        "name": body.get("name", ""),
+        "role": body.get("role", ""),
+        "style": body.get("style", ""),
+        "topics": body.get("topics", ""),
+        "traits": body.get("traits", ""),
+    }
+
+    # Pull writing samples from uploaded documents
+    writing_samples = ""
+    try:
+        where = {"$and": [{"tenant_id": user.tenant_id}, {"workspace_id": agent_id}]}
+        chunks = text_col.get(where=where, include=["documents"])
+        docs = chunks.get("documents", [])
+        writing_samples = "\n\n---\n\n".join(docs[:20])  # First 20 chunks
+    except Exception:
+        pass
+
+    prompt = generate_replica_prompt(personality, writing_samples)
+    if not prompt:
+        return JSONResponse(
+            {"error": "Failed to generate replica prompt. Upload some writing samples and try again."},
+            status_code=500,
+        )
+
+    ws.system_prompt = prompt
+    db.commit()
+    return {"system_prompt": prompt}
