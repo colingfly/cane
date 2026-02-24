@@ -91,6 +91,7 @@ class Workspace(Base):
     agent_icon = Column(String(10), default="")                 # Emoji icon
     agent_description = Column(Text, default="")                # Short description
     show_on_homepage = Column(Boolean, default=False)           # Show in search page workspace dropdown
+    widget_config = Column(Text, default="{}")                   # JSON: widget appearance settings
 
     # Relationships
     tenant = relationship("Tenant", back_populates="workspaces")

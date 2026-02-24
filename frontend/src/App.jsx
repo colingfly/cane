@@ -16,6 +16,7 @@ import Marketplace from './pages/Marketplace'
 import MarketplaceDetail from './pages/MarketplaceDetail'
 import Environments from './pages/Environments'
 import EnvironmentDetail from './pages/EnvironmentDetail'
+import Analytics from './pages/Analytics'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -71,6 +72,12 @@ export default function App() {
       <Route path="/agents/:agentId" element={
         <ProtectedRoute>
           <Layout><AgentDetail /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/agents/:agentId/analytics" element={
+        <ProtectedRoute>
+          <Layout><Analytics /></Layout>
         </ProtectedRoute>
       } />
 

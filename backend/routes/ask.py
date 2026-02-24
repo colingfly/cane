@@ -17,6 +17,8 @@ from security import sanitize_query
 from services.limits import check_search_limit
 from services.rag import build_context, build_system_prompt, call_claude
 from streaming import stream_claude, get_conversation_history, save_conversation_turn, _sse
+from services.analytics import log_conversation
+import time
 
 router = APIRouter(prefix="/api", tags=["ask"])
 
@@ -65,6 +67,7 @@ def ask(
         from services.tools import get_all_tools
         from tool_executor import call_claude_with_tools
 
+        t0 = time.time()
         claude_tools, tool_lookup = get_all_tools(workspace_id, user.tenant_id, db) if workspace_id else ([], {})
 
         if claude_tools:
@@ -75,6 +78,7 @@ def ask(
             )
         else:
             summary = call_claude(user_prompt, system=system_prompt)
+        elapsed_ms = int((time.time() - t0) * 1000)
 
         # Log
         log = SearchLog(
@@ -83,6 +87,14 @@ def ask(
         )
         db.add(log)
         db.commit()
+
+        # Analytics
+        if workspace_id:
+            log_conversation(
+                db, tenant_id=user.tenant_id, workspace_id=workspace_id,
+                query=q, answer=summary, channel="internal", user_id=user.id,
+                chunks_used=ctx.chunks_used, sources=ctx.sources, response_time_ms=elapsed_ms,
+            )
 
         return {
             "status": "ok", "summary": summary, "model": CLAUDE_MODEL,

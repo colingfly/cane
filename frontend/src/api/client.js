@@ -429,3 +429,26 @@ export async function getPackDetail(packId) {
 export async function clonePack(packId) {
   return request(`/packs/${packId}/clone`, { method: 'POST' })
 }
+
+// ─── Analytics ───
+
+export async function getAnalytics(workspaceId, days = 30) {
+  return request(`/analytics/${workspaceId}?days=${days}`)
+}
+
+export async function submitFeedback(conversationId, vote) {
+  return request(`/analytics/feedback?conversation_id=${conversationId}&vote=${vote}`, { method: 'POST' })
+}
+
+// ─── Widget Config ───
+
+export async function getWidgetConfig(workspaceId) {
+  return request(`/agents/${workspaceId}/widget-config`)
+}
+
+export async function updateWidgetConfig(workspaceId, config) {
+  return request(`/agents/${workspaceId}/widget-config`, {
+    method: 'PUT',
+    body: JSON.stringify(config),
+  })
+}

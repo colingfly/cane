@@ -14,6 +14,8 @@ from services.chroma import text_col
 from services.search import build_tenant_where
 from services.rag import build_system_prompt
 
+import time
+
 router = APIRouter(prefix="/v1", tags=["api_v1"])
 
 
@@ -88,7 +90,9 @@ async def v1_ask(
     # Call Claude (with tools if configured)
     from services.tools import get_all_tools
     from tool_executor import call_claude_with_tools
+    from services.analytics import log_conversation
 
+    t0 = time.time()
     claude_tools, tool_lookup = get_all_tools(workspace_id, api_key.tenant_id, db) if workspace_id else ([], {})
 
     answer = ""
@@ -104,6 +108,7 @@ async def v1_ask(
     # Fallback or standard call
     if not answer or not answer.strip():
         answer = _plain_claude_call(system, user_msg)
+    elapsed_ms = int((time.time() - t0) * 1000)
 
     # Log
     log = SearchLog(
@@ -112,6 +117,15 @@ async def v1_ask(
     )
     db.add(log)
     db.commit()
+
+    # Analytics — detect widget vs API by checking header
+    channel = "api"
+    if workspace_id:
+        log_conversation(
+            db, tenant_id=api_key.tenant_id, workspace_id=workspace_id,
+            query=query, answer=answer, channel=channel,
+            chunks_used=len(context_chunks), sources=sources, response_time_ms=elapsed_ms,
+        )
 
     return {"answer": answer, "sources": sources, "chunks_used": len(context_chunks), "model": CLAUDE_MODEL}
 

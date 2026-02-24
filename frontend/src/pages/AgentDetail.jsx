@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Upload, Trash2, FileText, Sparkles, Save, ToggleLeft, ToggleRight, MessageSquare, Store, Wrench, Zap, Play, Plus, ChevronDown, ChevronUp, RefreshCw, Link2, Globe, X } from 'lucide-react'
+import { ArrowLeft, Upload, Trash2, FileText, Sparkles, Save, ToggleLeft, ToggleRight, MessageSquare, Store, Wrench, Zap, Play, Plus, ChevronDown, ChevronUp, RefreshCw, Link2, Globe, X, BarChart3, Palette } from 'lucide-react'
 import {
   getAgent, updateAgent, generateAgentPrompt,
   getDocuments, uploadDocument, deleteDocument, getDocumentStatus,
   publishToMarketplace, getTools, createTool, updateTool, deleteTool, testTool,
   getMcpCatalog, getMcpServers, connectMcpServer, updateMcpServer, deleteMcpServer, syncMcpServer,
+  getWidgetConfig, updateWidgetConfig,
 } from '../api/client'
 import { getEnvironments, getRuns } from '../api/eval'
 
@@ -91,6 +92,15 @@ export default function AgentDetail() {
     name: '', server_url: '', auth_type: 'none', auth_value: '',
   })
 
+  // Widget config
+  const [widgetConfig, setWidgetConfig] = useState({
+    color: '#8B7355', greeting: 'Hi! Ask me anything.', position: 'right',
+    subtitle: 'Powered by Cane', placeholder: 'Type a message...',
+    border_radius: '16', logo_url: '', auto_open: '0',
+  })
+  const [widgetDirty, setWidgetDirty] = useState(false)
+  const [widgetSaving, setWidgetSaving] = useState(false)
+
   useEffect(() => { loadAgent() }, [agentId])
 
   const loadAgent = async () => {
@@ -117,6 +127,14 @@ export default function AgentDetail() {
         const mcpRes = await getMcpServers(agentId)
         setMcpServers(mcpRes.servers || [])
       } catch { setMcpServers([]) }
+
+      // Load widget config
+      try {
+        const wcRes = await getWidgetConfig(agentId)
+        if (wcRes.config && Object.keys(wcRes.config).length > 0) {
+          setWidgetConfig(prev => ({ ...prev, ...wcRes.config }))
+        }
+      } catch { /* ignore */ }
     } catch (e) {
       console.error('Failed to load agent:', e)
     } finally {
@@ -435,6 +453,23 @@ export default function AgentDetail() {
     }
   }
 
+  const handleWidgetChange = (key, value) => {
+    setWidgetConfig(prev => ({ ...prev, [key]: value }))
+    setWidgetDirty(true)
+  }
+
+  const handleSaveWidget = async () => {
+    setWidgetSaving(true)
+    try {
+      await updateWidgetConfig(agentId, widgetConfig)
+      setWidgetDirty(false)
+    } catch (err) {
+      alert(err.message || 'Failed to save widget config')
+    } finally {
+      setWidgetSaving(false)
+    }
+  }
+
   if (loading) return <div className="loading-center"><div className="spinner" /></div>
   if (!agent) return <div className="fade-in"><p>Agent not found.</p></div>
 
@@ -478,14 +513,19 @@ export default function AgentDetail() {
               onBlur={e => e.target.style.borderBottomColor = 'transparent'}
             />
           </div>
-          <button
-            className={dirty ? "btn btn-primary" : "btn btn-outline"}
-            onClick={handleSave}
-            disabled={saving || !dirty}
-            style={{ flexShrink: 0, opacity: dirty ? 1 : 0.4 }}
-          >
-            <Save size={14} /> {saving ? 'Saving...' : dirty ? 'Save Agent' : 'Saved'}
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <Link to={`/agents/${agentId}/analytics`} className="btn btn-outline" style={{ fontSize: '0.82rem' }}>
+              <BarChart3 size={14} /> Analytics
+            </Link>
+            <button
+              className={dirty ? "btn btn-primary" : "btn btn-outline"}
+              onClick={handleSave}
+              disabled={saving || !dirty}
+              style={{ opacity: dirty ? 1 : 0.4 }}
+            >
+              <Save size={14} /> {saving ? 'Saving...' : dirty ? 'Save Agent' : 'Saved'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1247,33 +1287,114 @@ export default function AgentDetail() {
         ) : null}
       </div>
 
-      {/* Embed Widget */}
+      {/* Widget Customizer + Embed */}
       {agent.system_prompt && (
         <div className="card" style={{ marginBottom: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <MessageSquare size={16} /> Embed on Your Website
+              <Palette size={16} /> Widget &amp; Embed
             </h3>
+            {widgetDirty && (
+              <button className="btn btn-primary" onClick={handleSaveWidget} disabled={widgetSaving} style={{ fontSize: '0.8rem' }}>
+                <Save size={13} /> {widgetSaving ? 'Saving...' : 'Save Config'}
+              </button>
+            )}
           </div>
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: 14 }}>
-            Add this agent to any website with one line of code. Create an API key in{' '}
-            <Link to="/settings" style={{ color: 'var(--accent)' }}>Settings → API Keys</Link>{' '}
-            scoped to this agent, then paste the snippet below.
+
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: 16 }}>
+            Customize how the chat widget looks on your site. Create an API key in{' '}
+            <Link to="/settings" style={{ color: 'var(--accent)' }}>Settings</Link>, then copy the snippet below.
           </div>
+
+          {/* Config grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
+            <div>
+              <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Brand Color</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input type="color" value={widgetConfig.color} onChange={e => handleWidgetChange('color', e.target.value)}
+                  style={{ width: 36, height: 30, padding: 0, border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer' }} />
+                <input type="text" value={widgetConfig.color} onChange={e => handleWidgetChange('color', e.target.value)}
+                  className="input" style={{ flex: 1, fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }} />
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Position</label>
+              <select value={widgetConfig.position} onChange={e => handleWidgetChange('position', e.target.value)}
+                className="input" style={{ fontSize: '0.8rem', width: '100%' }}>
+                <option value="right">Bottom Right</option>
+                <option value="left">Bottom Left</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Greeting</label>
+              <input type="text" value={widgetConfig.greeting} onChange={e => handleWidgetChange('greeting', e.target.value)}
+                className="input" style={{ width: '100%', fontSize: '0.8rem' }} />
+            </div>
+            <div>
+              <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Subtitle</label>
+              <input type="text" value={widgetConfig.subtitle} onChange={e => handleWidgetChange('subtitle', e.target.value)}
+                className="input" style={{ width: '100%', fontSize: '0.8rem' }} />
+            </div>
+            <div>
+              <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Placeholder</label>
+              <input type="text" value={widgetConfig.placeholder} onChange={e => handleWidgetChange('placeholder', e.target.value)}
+                className="input" style={{ width: '100%', fontSize: '0.8rem' }} />
+            </div>
+            <div>
+              <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Border Radius</label>
+              <input type="text" value={widgetConfig.border_radius} onChange={e => handleWidgetChange('border_radius', e.target.value)}
+                className="input" style={{ width: '100%', fontSize: '0.8rem' }} placeholder="16" />
+            </div>
+            <div>
+              <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Logo URL</label>
+              <input type="text" value={widgetConfig.logo_url} onChange={e => handleWidgetChange('logo_url', e.target.value)}
+                className="input" style={{ width: '100%', fontSize: '0.8rem' }} placeholder="https://..." />
+            </div>
+            <div>
+              <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Auto-open (seconds)</label>
+              <input type="text" value={widgetConfig.auto_open} onChange={e => handleWidgetChange('auto_open', e.target.value)}
+                className="input" style={{ width: '100%', fontSize: '0.8rem' }} placeholder="0 = disabled" />
+            </div>
+          </div>
+
+          {/* Live preview bubble */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Preview</div>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 14,
+              padding: '14px 18px', background: 'var(--bg)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)',
+            }}>
+              <div style={{
+                width: 48, height: 48, borderRadius: '50%', background: widgetConfig.color,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#fff', flexShrink: 0, boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
+              }}>
+                <MessageSquare size={20} />
+              </div>
+              <div style={{
+                padding: '10px 16px', borderRadius: widgetConfig.border_radius + 'px',
+                background: 'white', border: '1px solid var(--border)',
+                maxWidth: 280, boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+              }}>
+                <div style={{ fontWeight: 700, fontSize: '0.82rem', marginBottom: 2 }}>{agent.name}</div>
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginBottom: 6 }}>{widgetConfig.subtitle}</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{widgetConfig.greeting}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Embed snippet */}
+          <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Embed Code</div>
           <div style={{
             position: 'relative',
-            background: '#1e1e2e',
-            borderRadius: 'var(--radius-sm)',
-            padding: '16px 18px',
-            fontSize: '0.78rem',
+            background: '#1e1e2e', borderRadius: 'var(--radius-sm)',
+            padding: '16px 18px', fontSize: '0.78rem',
             fontFamily: "'SF Mono', Consolas, 'Liberation Mono', monospace",
-            color: '#cdd6f4',
-            lineHeight: 1.6,
-            overflow: 'auto',
+            color: '#cdd6f4', lineHeight: 1.6, overflow: 'auto',
           }}>
             <button
               onClick={() => {
-                const code = `<script\n  src="${window.location.origin}/widget.js"\n  data-api-key="YOUR_API_KEY"\n  data-agent-name="${agent.name}"\n  data-workspace-id="${agentId}"\n  data-color="#8B7355"\n  data-greeting="Hi! Ask me anything."\n></script>`
+                const code = `<script\n  src="${window.location.origin}/widget.js"\n  data-api-key="YOUR_API_KEY"\n  data-agent-name="${agent.name}"\n  data-workspace-id="${agentId}"\n  data-color="${widgetConfig.color}"\n  data-greeting="${widgetConfig.greeting}"\n  data-position="${widgetConfig.position}"\n  data-subtitle="${widgetConfig.subtitle}"\n  data-placeholder="${widgetConfig.placeholder}"\n  data-border-radius="${widgetConfig.border_radius}"\n${widgetConfig.logo_url ? `  data-logo-url="${widgetConfig.logo_url}"\n` : ''}${widgetConfig.auto_open !== '0' ? `  data-auto-open="${widgetConfig.auto_open}"\n` : ''}></script>`
                 navigator.clipboard.writeText(code).then(() => {
                   const btn = document.querySelector('#copy-embed-btn')
                   if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 1500) }
@@ -1292,13 +1413,15 @@ export default function AgentDetail() {
             {'  '}<span style={{ color: '#a6e3a1' }}>data-api-key</span>=<span style={{ color: '#f9e2af' }}>"YOUR_API_KEY"</span><br />
             {'  '}<span style={{ color: '#a6e3a1' }}>data-agent-name</span>=<span style={{ color: '#f9e2af' }}>"{agent.name}"</span><br />
             {'  '}<span style={{ color: '#a6e3a1' }}>data-workspace-id</span>=<span style={{ color: '#f9e2af' }}>"{agentId}"</span><br />
-            {'  '}<span style={{ color: '#a6e3a1' }}>data-color</span>=<span style={{ color: '#f9e2af' }}>"#8B7355"</span><br />
-            {'  '}<span style={{ color: '#a6e3a1' }}>data-greeting</span>=<span style={{ color: '#f9e2af' }}>"Hi! Ask me anything."</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-color</span>=<span style={{ color: '#f9e2af' }}>"{widgetConfig.color}"</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-greeting</span>=<span style={{ color: '#f9e2af' }}>"{widgetConfig.greeting}"</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-position</span>=<span style={{ color: '#f9e2af' }}>"{widgetConfig.position}"</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-subtitle</span>=<span style={{ color: '#f9e2af' }}>"{widgetConfig.subtitle}"</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-placeholder</span>=<span style={{ color: '#f9e2af' }}>"{widgetConfig.placeholder}"</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-border-radius</span>=<span style={{ color: '#f9e2af' }}>"{widgetConfig.border_radius}"</span><br />
+            {widgetConfig.logo_url && <>{'  '}<span style={{ color: '#a6e3a1' }}>data-logo-url</span>=<span style={{ color: '#f9e2af' }}>"{widgetConfig.logo_url}"</span><br /></>}
+            {widgetConfig.auto_open !== '0' && <>{'  '}<span style={{ color: '#a6e3a1' }}>data-auto-open</span>=<span style={{ color: '#f9e2af' }}>"{widgetConfig.auto_open}"</span><br /></>}
             <span style={{ color: '#89b4fa' }}>&gt;&lt;/script&gt;</span>
-          </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 10 }}>
-            Replace <code style={{ background: 'var(--bg)', padding: '1px 5px', borderRadius: 4, fontSize: '0.73rem' }}>YOUR_API_KEY</code> with
-            a key from Settings. Customize <code style={{ background: 'var(--bg)', padding: '1px 5px', borderRadius: 4, fontSize: '0.73rem' }}>data-color</code> and <code style={{ background: 'var(--bg)', padding: '1px 5px', borderRadius: 4, fontSize: '0.73rem' }}>data-greeting</code> to match your brand.
           </div>
         </div>
       )}

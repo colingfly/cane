@@ -24,6 +24,11 @@
   var POSITION = (scriptTag && scriptTag.getAttribute('data-position')) || 'right';
   var GREETING = (scriptTag && scriptTag.getAttribute('data-greeting')) || ('Hi! I\'m ' + AGENT_NAME + '. Ask me anything.');
   var WORKSPACE_ID = (scriptTag && scriptTag.getAttribute('data-workspace-id')) || '';
+  var SUBTITLE = (scriptTag && scriptTag.getAttribute('data-subtitle')) || 'Powered by Cane';
+  var PLACEHOLDER = (scriptTag && scriptTag.getAttribute('data-placeholder')) || 'Type a message...';
+  var BORDER_RADIUS = (scriptTag && scriptTag.getAttribute('data-border-radius')) || '16';
+  var LOGO_URL = (scriptTag && scriptTag.getAttribute('data-logo-url')) || '';
+  var AUTO_OPEN = parseInt((scriptTag && scriptTag.getAttribute('data-auto-open')) || '0', 10);
 
   // Derive API base URL from script src
   var scriptSrc = (scriptTag && scriptTag.src) || '';
@@ -87,7 +92,7 @@
       height: 560px;\
       max-height: calc(100vh - 140px);\
       background: #ffffff;\
-      border-radius: 16px;\
+      border-radius: ' + BORDER_RADIUS + 'px;\
       box-shadow: 0 8px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);\
       border: 1px solid #e5e7eb;\
       display: none;\
@@ -250,8 +255,8 @@
     <div id="cw-panel">\
       <div id="cw-header">\
         <div>\
-          <div id="cw-header-title">' + AGENT_NAME + '</div>\
-          <div id="cw-header-sub">Powered by Cane</div>\
+          <div id="cw-header-title">' + (LOGO_URL ? '<img src="' + LOGO_URL + '" style="height:20px;margin-right:8px;vertical-align:middle;border-radius:3px" />' : '') + AGENT_NAME + '</div>\
+          <div id="cw-header-sub">' + SUBTITLE + '</div>\
         </div>\
         <button id="cw-close" aria-label="Close">\
           <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>\
@@ -261,7 +266,7 @@
         <div class="cw-msg cw-bot">' + GREETING + '</div>\
       </div>\
       <div id="cw-input-area">\
-        <input id="cw-input" placeholder="Type a message..." autocomplete="off" />\
+        <input id="cw-input" placeholder="' + PLACEHOLDER + '" autocomplete="off" />\
         <button id="cw-send" aria-label="Send">\
           <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>\
         </button>\
@@ -410,6 +415,11 @@
   });
 
   console.log('[Cane Widget] Loaded — Agent: ' + AGENT_NAME + ', API: ' + API_BASE);
+
+  // Auto-open after delay if configured
+  if (AUTO_OPEN > 0) {
+    setTimeout(function() { if (!isOpen) toggle(); }, AUTO_OPEN * 1000);
+  }
 
   } catch(err) {
     console.error('[Cane Widget] Init error:', err);
