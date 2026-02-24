@@ -86,12 +86,17 @@ def get_all_tools(
         tool_lookup[safe_name] = ToolRef(source="webhook", webhook_tool=t)
 
     # 2) MCP server tools
-    mcp_servers = db.query(McpServer).filter(
-        McpServer.workspace_id == workspace_id,
-        McpServer.tenant_id == tenant_id,
-        McpServer.is_enabled == True,
-        McpServer.status == "connected",
-    ).all()
+    try:
+        mcp_servers = db.query(McpServer).filter(
+            McpServer.workspace_id == workspace_id,
+            McpServer.tenant_id == tenant_id,
+            McpServer.is_enabled == True,
+            McpServer.status == "connected",
+        ).all()
+    except Exception as e:
+        print(f"  [Tools] MCP query skipped (table may not exist): {e}")
+        db.rollback()
+        mcp_servers = []
 
     for server in mcp_servers:
         try:
