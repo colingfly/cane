@@ -25,12 +25,15 @@ from fastapi import APIRouter, HTTPException, Request
 
 router = APIRouter(prefix="/api/email", tags=["email"])
 
-# ── Config from env ──
-GMAIL_CLIENT_ID = os.getenv("GMAIL_CLIENT_ID", "")
-GMAIL_CLIENT_SECRET = os.getenv("GMAIL_CLIENT_SECRET", "")
-GMAIL_REFRESH_TOKEN = os.getenv("GMAIL_REFRESH_TOKEN", "")
-GMAIL_FROM_EMAIL = os.getenv("GMAIL_FROM_EMAIL", "")
-GMAIL_FROM_NAME = os.getenv("GMAIL_FROM_NAME", "Cane")
+# ── Config from env (read at request time to handle late injection) ──
+def _gmail_config():
+    return {
+        "client_id": os.getenv("GMAIL_CLIENT_ID", ""),
+        "client_secret": os.getenv("GMAIL_CLIENT_SECRET", ""),
+        "refresh_token": os.getenv("GMAIL_REFRESH_TOKEN", ""),
+        "from_email": os.getenv("GMAIL_FROM_EMAIL", ""),
+        "from_name": os.getenv("GMAIL_FROM_NAME", "Cane"),
+    }
 
 # Cache the access token in memory
 _token_cache = {"access_token": None}
@@ -38,13 +41,14 @@ _token_cache = {"access_token": None}
 
 def _refresh_access_token() -> str:
     """Use the refresh token to get a fresh access token from Google."""
-    if not GMAIL_CLIENT_ID or not GMAIL_CLIENT_SECRET or not GMAIL_REFRESH_TOKEN:
+    cfg = _gmail_config()
+    if not cfg["client_id"] or not cfg["client_secret"] or not cfg["refresh_token"]:
         raise HTTPException(500, "Gmail credentials not configured. Set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN env vars.")
 
     data = urllib.parse.urlencode({
-        "client_id": GMAIL_CLIENT_ID,
-        "client_secret": GMAIL_CLIENT_SECRET,
-        "refresh_token": GMAIL_REFRESH_TOKEN,
+        "client_id": cfg["client_id"],
+        "client_secret": cfg["client_secret"],
+        "refresh_token": cfg["refresh_token"],
         "grant_type": "refresh_token",
     }).encode()
 
@@ -77,6 +81,7 @@ def _get_access_token() -> str:
 
 def _send_gmail(to: str, subject: str, body: str, is_html: bool = False) -> dict:
     """Send an email via Gmail API."""
+    cfg = _gmail_config()
     access_token = _get_access_token()
 
     # Build the email
@@ -87,7 +92,7 @@ def _send_gmail(to: str, subject: str, body: str, is_html: bool = False) -> dict
     else:
         msg = MIMEText(body)
 
-    from_header = f"{GMAIL_FROM_NAME} <{GMAIL_FROM_EMAIL}>" if GMAIL_FROM_EMAIL else GMAIL_FROM_NAME
+    from_header = f"{cfg['from_name']} <{cfg['from_email']}>" if cfg['from_email'] else cfg['from_name']
     msg["to"] = to
     msg["from"] = from_header
     msg["subject"] = subject
@@ -166,15 +171,24 @@ async def send_email(request: Request):
 
 # ─── Health check ───
 
+@router.get("/debug-env")
+def debug_env():
+    """Temporary: check which GMAIL env vars exist at all."""
+    import os
+    gmail_vars = {k: '✓ set' for k, v in os.environ.items() if 'GMAIL' in k.upper()}
+    return {"gmail_env_vars_found": gmail_vars, "total_env_vars": len(os.environ)}
+
+
 @router.get("/status")
 def email_status():
     """Check if Gmail credentials are configured."""
-    configured = bool(GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET and GMAIL_REFRESH_TOKEN)
+    cfg = _gmail_config()
+    configured = bool(cfg["client_id"] and cfg["client_secret"] and cfg["refresh_token"])
     return {
         "configured": configured,
-        "from_email": GMAIL_FROM_EMAIL or "(not set)",
-        "from_name": GMAIL_FROM_NAME,
-        "has_client_id": bool(GMAIL_CLIENT_ID),
-        "has_client_secret": bool(GMAIL_CLIENT_SECRET),
-        "has_refresh_token": bool(GMAIL_REFRESH_TOKEN),
+        "from_email": cfg["from_email"] or "(not set)",
+        "from_name": cfg["from_name"],
+        "has_client_id": bool(cfg["client_id"]),
+        "has_client_secret": bool(cfg["client_secret"]),
+        "has_refresh_token": bool(cfg["refresh_token"]),
     }
