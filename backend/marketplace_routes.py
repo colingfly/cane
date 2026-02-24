@@ -370,143 +370,154 @@ def clone_listing(
     if not listing:
         return JSONResponse({"error": "Listing not found"}, status_code=404)
 
-    # ─── Create agent (workspace) ───
-    new_ws = Workspace(
-        tenant_id=user.tenant_id,
-        name=f"{listing.name}",
-        description=listing.description,
-        agent_type=listing.agent_type,
-        system_prompt=listing.system_prompt,
-        agent_icon=listing.icon,
-        agent_description=listing.description,
-        show_on_homepage=False,
-    )
-    db.add(new_ws)
-    db.flush()  # get the ID
-
-    # ─── Transfer documents for open/licensed packs ───
-    docs_transferred = 0
-    if listing.pack_type in ("open", "licensed"):
-        source_dir = UPLOAD_DIR / listing.publisher_tenant_id
-        dest_dir = UPLOAD_DIR / user.tenant_id
-        dest_dir.mkdir(parents=True, exist_ok=True)
-
-        # Get tenant/workspace names for ingestion metadata
-        cloner_tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
-        cloner_tenant_name = cloner_tenant.name if cloner_tenant else ""
-
-        doc_meta = json.loads(listing.included_documents or "[]")
-        for dm in doc_meta:
-            filename = dm.get("filename", "")
-            if not filename:
-                continue
-
-            source_file = source_dir / filename
-            if not source_file.exists():
-                print(f"  [Clone] Source file not found: {source_file}")
-                continue
-
-            # Copy file to cloner's upload directory
-            dest_file = dest_dir / filename
-            shutil.copy2(str(source_file), str(dest_file))
-
-            # Create document record
-            new_doc = Document(
-                tenant_id=user.tenant_id,
-                workspace_id=new_ws.id,
-                uploaded_by=user.id,
-                filename=filename,
-                file_type=dm.get("file_type", ""),
-                file_size_bytes=source_file.stat().st_size,
-                status="processing",
-            )
-            db.add(new_doc)
-            db.flush()
-
-            # Queue background ingestion
-            background_tasks.add_task(
-                _ingest_cloned_doc,
-                doc_id=new_doc.id,
-                filepath=str(dest_file),
-                tenant_id=user.tenant_id,
-                workspace_id=new_ws.id,
-                tenant_name=cloner_tenant_name,
-                workspace_name=new_ws.name,
-            )
-            docs_transferred += 1
-            print(f"  [Clone] Queued ingestion: {filename}")
-
-    # ─── Create eval environment with test cases + criteria ───
-    new_env_id = None
-    test_cases = json.loads(listing.test_cases_snapshot or "[]")
-    criteria = json.loads(listing.criteria_snapshot or "[]")
-    custom_rules = json.loads(listing.custom_rules_snapshot or "[]")
-
-    if test_cases:
-        new_env = Environment(
+    try:
+        # ─── Create agent (workspace) ───
+        new_ws = Workspace(
             tenant_id=user.tenant_id,
-            workspace_id=new_ws.id,
-            name=f"{listing.name} — Eval",
-            description=f"Cloned from marketplace: {listing.name}",
-            created_by=user.id,
+            name=f"{listing.name}",
+            description=listing.description,
+            agent_type=listing.agent_type or "custom",
+            system_prompt=listing.system_prompt,
+            agent_icon=listing.icon,
+            agent_description=listing.description,
+            show_on_homepage=False,
         )
-        db.add(new_env)
-        db.flush()
-        new_env_id = new_env.id
+        db.add(new_ws)
+        db.flush()  # get the ID
 
-        # Clone test cases
-        for i, tc in enumerate(test_cases):
-            db.add(TestCase(
-                environment_id=new_env.id,
-                question=tc.get("question", ""),
-                expected_answer=tc.get("expected_answer", ""),
-                tags=tc.get("tags"),
-                sort_order=tc.get("sort_order", i),
-            ))
+        # ─── Transfer documents for open/licensed packs ───
+        docs_transferred = 0
+        if listing.pack_type in ("open", "licensed"):
+            source_dir = UPLOAD_DIR / listing.publisher_tenant_id
+            dest_dir = UPLOAD_DIR / user.tenant_id
+            dest_dir.mkdir(parents=True, exist_ok=True)
 
-        # Clone criteria
-        for c in criteria:
-            db.add(JudgeCriteria(
-                environment_id=new_env.id,
-                key=c.get("key", ""),
-                label=c.get("label", ""),
-                description=c.get("description", ""),
-                weight=c.get("weight", 25),
-                is_enabled=c.get("is_enabled", True),
-            ))
+            # Get tenant/workspace names for ingestion metadata
+            cloner_tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+            cloner_tenant_name = cloner_tenant.name if cloner_tenant else ""
 
-        # Clone custom rules
-        for i, rule in enumerate(custom_rules):
-            db.add(JudgeCustomRule(
-                environment_id=new_env.id,
-                rule_text=rule,
-                sort_order=i,
-            ))
+            doc_meta = json.loads(listing.included_documents or "[]")
+            for dm in doc_meta:
+                filename = dm.get("filename", "")
+                if not filename:
+                    continue
 
-    # ─── Record the clone ───
-    clone = MarketplaceClone(
-        listing_id=listing_id,
-        cloned_by_tenant_id=user.tenant_id,
-        cloned_by_user_id=user.id,
-        cloned_workspace_id=new_ws.id,
-        cloned_environment_id=new_env_id,
-    )
-    db.add(clone)
+                source_file = source_dir / filename
+                if not source_file.exists():
+                    print(f"  [Clone] Source file not found: {source_file}")
+                    continue
 
-    # Update listing stats
-    listing.clone_count = (listing.clone_count or 0) + 1
+                # Copy file to cloner's upload directory
+                dest_file = dest_dir / filename
+                shutil.copy2(str(source_file), str(dest_file))
 
-    db.commit()
+                # Create document record
+                new_doc = Document(
+                    tenant_id=user.tenant_id,
+                    workspace_id=new_ws.id,
+                    uploaded_by=user.id,
+                    filename=filename,
+                    file_type=dm.get("file_type", ""),
+                    file_size_bytes=source_file.stat().st_size,
+                    status="processing",
+                )
+                db.add(new_doc)
+                db.flush()
 
-    print(f"  [Marketplace] Cloned: {listing.name} → tenant={user.tenant_id}, agent={new_ws.id}, env={new_env_id}, docs={docs_transferred}")
+                # Queue background ingestion
+                background_tasks.add_task(
+                    _ingest_cloned_doc,
+                    doc_id=new_doc.id,
+                    filepath=str(dest_file),
+                    tenant_id=user.tenant_id,
+                    workspace_id=new_ws.id,
+                    tenant_name=cloner_tenant_name,
+                    workspace_name=new_ws.name,
+                )
+                docs_transferred += 1
+                print(f"  [Clone] Queued ingestion: {filename}")
 
-    return {
-        "status": "cloned",
-        "agent_id": new_ws.id,
-        "environment_id": new_env_id,
-        "listing_name": listing.name,
-        "documents_transferred": docs_transferred,
-    }
+        # ─── Create eval environment with test cases + criteria ───
+        new_env_id = None
+        test_cases = json.loads(listing.test_cases_snapshot or "[]")
+        criteria = json.loads(listing.criteria_snapshot or "[]")
+        custom_rules = json.loads(listing.custom_rules_snapshot or "[]")
+
+        if test_cases:
+            new_env = Environment(
+                tenant_id=user.tenant_id,
+                workspace_id=new_ws.id,
+                name=f"{listing.name} — Eval",
+                description=f"Cloned from marketplace: {listing.name}",
+                created_by=user.id,
+            )
+            db.add(new_env)
+            db.flush()
+            new_env_id = new_env.id
+
+            # Clone test cases
+            for i, tc in enumerate(test_cases):
+                db.add(TestCase(
+                    environment_id=new_env.id,
+                    question=tc.get("question", ""),
+                    expected_answer=tc.get("expected_answer", ""),
+                    tags=tc.get("tags"),
+                    sort_order=tc.get("sort_order", i),
+                ))
+
+            # Clone criteria
+            for c in criteria:
+                db.add(JudgeCriteria(
+                    environment_id=new_env.id,
+                    key=c.get("key", ""),
+                    label=c.get("label", ""),
+                    description=c.get("description", ""),
+                    weight=c.get("weight", 25),
+                    is_enabled=c.get("is_enabled", True),
+                ))
+
+            # Clone custom rules
+            for i, rule in enumerate(custom_rules):
+                rule_text = rule if isinstance(rule, str) else rule.get("rule_text", str(rule))
+                db.add(JudgeCustomRule(
+                    environment_id=new_env.id,
+                    rule_text=rule_text,
+                    sort_order=i,
+                ))
+
+        # ─── Record the clone ───
+        clone = MarketplaceClone(
+            listing_id=listing_id,
+            cloned_by_tenant_id=user.tenant_id,
+            cloned_by_user_id=user.id,
+            cloned_workspace_id=new_ws.id,
+            cloned_environment_id=new_env_id,
+        )
+        db.add(clone)
+
+        # Update listing stats
+        listing.clone_count = (listing.clone_count or 0) + 1
+
+        db.commit()
+
+        print(f"  [Marketplace] Cloned: {listing.name} → tenant={user.tenant_id}, agent={new_ws.id}, env={new_env_id}, docs={docs_transferred}")
+
+        return {
+            "status": "cloned",
+            "agent_id": new_ws.id,
+            "environment_id": new_env_id,
+            "listing_name": listing.name,
+            "documents_transferred": docs_transferred,
+        }
+
+    except Exception as e:
+        db.rollback()
+        print(f"  [Marketplace] Clone FAILED for {listing_id}: {e}")
+        traceback.print_exc()
+        return JSONResponse(
+            {"error": f"Clone failed: {str(e)[:200]}"},
+            status_code=500,
+        )
 
 
 # ─── Delist ───

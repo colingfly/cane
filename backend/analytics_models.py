@@ -30,9 +30,9 @@ class ConversationLog(Base):
     chunks_used = Column(Integer, default=0)
 
     # Response
-    answer_preview = Column(Text, default="")               # first 500 chars
-    sources_used = Column(Text, default="[]")               # JSON array of filenames
-    tools_called = Column(Text, default="[]")               # JSON array of tool names invoked
+    answer_preview = Column(Text, nullable=True)                # first 500 chars
+    sources_used = Column(Text, nullable=True)                  # JSON array of filenames
+    tools_called = Column(Text, nullable=True)                  # JSON array of tool names invoked
     response_time_ms = Column(Integer, nullable=True)
 
     # Quality signals

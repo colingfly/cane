@@ -208,35 +208,38 @@ def _migrate_mcp_servers_table():
 def _migrate_conversation_logs_table():
     insp = inspect(engine)
     if "conversation_logs" not in insp.get_table_names():
-        with engine.begin() as conn:
-            conn.execute(text("""
-                CREATE TABLE conversation_logs (
-                    id VARCHAR(36) PRIMARY KEY,
-                    tenant_id VARCHAR(36) NOT NULL,
-                    workspace_id VARCHAR(36) NOT NULL,
-                    user_id VARCHAR(36),
-                    session_id VARCHAR(100),
-                    channel VARCHAR(20) DEFAULT 'internal',
-                    query TEXT NOT NULL,
-                    chunks_used INT DEFAULT 0,
-                    answer_preview TEXT DEFAULT '',
-                    sources_used TEXT DEFAULT '[]',
-                    tools_called TEXT DEFAULT '[]',
-                    response_time_ms INT,
-                    thumbs_up INT DEFAULT 0,
-                    thumbs_down INT DEFAULT 0,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (tenant_id) REFERENCES tenants(id),
-                    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
-                )
-            """))
-            conn.execute(text(
-                "CREATE INDEX idx_convlog_workspace ON conversation_logs(workspace_id, created_at)"
-            ))
-            conn.execute(text(
-                "CREATE INDEX idx_convlog_tenant ON conversation_logs(tenant_id, created_at)"
-            ))
-        print("  [DB] conversation_logs table created")
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("""
+                    CREATE TABLE conversation_logs (
+                        id VARCHAR(36) PRIMARY KEY,
+                        tenant_id VARCHAR(36) NOT NULL,
+                        workspace_id VARCHAR(36) NOT NULL,
+                        user_id VARCHAR(36),
+                        session_id VARCHAR(100),
+                        channel VARCHAR(20) DEFAULT 'internal',
+                        query TEXT NOT NULL,
+                        chunks_used INT DEFAULT 0,
+                        answer_preview TEXT,
+                        sources_used TEXT,
+                        tools_called TEXT,
+                        response_time_ms INT,
+                        thumbs_up INT DEFAULT 0,
+                        thumbs_down INT DEFAULT 0,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+                        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+                    )
+                """))
+                conn.execute(text(
+                    "CREATE INDEX idx_convlog_workspace ON conversation_logs(workspace_id, created_at)"
+                ))
+                conn.execute(text(
+                    "CREATE INDEX idx_convlog_tenant ON conversation_logs(tenant_id, created_at)"
+                ))
+            print("  [DB] conversation_logs table created")
+        except Exception as e:
+            print(f"  [DB] conversation_logs migration failed: {e}")
     else:
         print("  [DB] conversation_logs table already exists")
 
@@ -245,8 +248,11 @@ def _migrate_widget_config_columns():
     insp = inspect(engine)
     cols = {c["name"] for c in insp.get_columns("workspaces")}
     if "widget_config" not in cols:
-        with engine.begin() as conn:
-            conn.execute(text(
-                "ALTER TABLE workspaces ADD COLUMN widget_config TEXT DEFAULT '{}'"
-            ))
-        print("  [DB] Added widget_config column to workspaces")
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE workspaces ADD COLUMN widget_config TEXT NULL"
+                ))
+            print("  [DB] Added widget_config column to workspaces")
+        except Exception as e:
+            print(f"  [DB] widget_config migration failed: {e}")
