@@ -25,7 +25,7 @@ class McpServer(Base):
     name = Column(String(255), nullable=False)             # "Google Calendar", "Slack", custom name
     server_url = Column(Text, nullable=False)               # MCP server endpoint URL
     server_type = Column(String(50), default="custom")      # "custom" | catalog key like "google_calendar"
-    icon = Column(String(10), default="🔌")                 # Emoji or short icon
+    icon = Column(String(10), default="MC")                  # Short label (2 chars)
 
     # Auth
     auth_type = Column(String(50), default="none")          # "none" | "bearer" | "api_key" | "header"

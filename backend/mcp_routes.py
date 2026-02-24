@@ -87,7 +87,7 @@ def connect_server(
     name: str = Query(...),
     server_url: str = Query(...),
     server_type: str = Query("custom"),
-    icon: str = Query("🔌"),
+    icon: str = Query("MC"),
     auth_type: str = Query("none"),
     auth_header: str = Query("Authorization"),
     auth_value: str = Query(""),

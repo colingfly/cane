@@ -8,7 +8,7 @@ Each entry provides the server URL template and auth requirements.
 CONNECTORS = {
     "google_calendar": {
         "name": "Google Calendar",
-        "icon": "📅",
+        "icon": "GC",
         "description": "Read and create calendar events. Check availability, schedule meetings, manage RSVPs.",
         "category": "productivity",
         "server_url": "",
@@ -19,7 +19,7 @@ CONNECTORS = {
     },
     "slack": {
         "name": "Slack",
-        "icon": "💬",
+        "icon": "SL",
         "description": "Send messages, read channels, manage conversations. Post alerts, summaries, and updates.",
         "category": "communication",
         "server_url": "",
@@ -30,7 +30,7 @@ CONNECTORS = {
     },
     "gmail": {
         "name": "Gmail",
-        "icon": "📧",
+        "icon": "GM",
         "description": "Send emails, read inbox, search messages. Automate follow-ups, notifications, and replies.",
         "category": "communication",
         "server_url": "",
@@ -41,7 +41,7 @@ CONNECTORS = {
     },
     "notion": {
         "name": "Notion",
-        "icon": "📝",
+        "icon": "NT",
         "description": "Read and write Notion pages and databases. Create entries, update records, search content.",
         "category": "productivity",
         "server_url": "",
@@ -52,7 +52,7 @@ CONNECTORS = {
     },
     "hubspot": {
         "name": "HubSpot CRM",
-        "icon": "🏢",
+        "icon": "HS",
         "description": "Manage contacts, deals, and companies. Create records, update pipelines, log activities.",
         "category": "crm",
         "server_url": "",
@@ -63,7 +63,7 @@ CONNECTORS = {
     },
     "airtable": {
         "name": "Airtable",
-        "icon": "📊",
+        "icon": "AT",
         "description": "Read and write Airtable bases. Query records, create entries, update fields.",
         "category": "productivity",
         "server_url": "",
@@ -74,7 +74,7 @@ CONNECTORS = {
     },
     "github": {
         "name": "GitHub",
-        "icon": "🐙",
+        "icon": "GH",
         "description": "Manage repos, issues, and pull requests. Create issues, comment, search code.",
         "category": "development",
         "server_url": "",
@@ -85,7 +85,7 @@ CONNECTORS = {
     },
     "jira": {
         "name": "Jira",
-        "icon": "🎫",
+        "icon": "JR",
         "description": "Manage projects, issues, and sprints. Create tickets, update statuses, assign work.",
         "category": "development",
         "server_url": "",
@@ -96,7 +96,7 @@ CONNECTORS = {
     },
     "stripe": {
         "name": "Stripe",
-        "icon": "💳",
+        "icon": "ST",
         "description": "Look up customers, payments, subscriptions, and invoices. Read-only financial data.",
         "category": "finance",
         "server_url": "",
@@ -107,7 +107,7 @@ CONNECTORS = {
     },
     "twilio": {
         "name": "Twilio SMS",
-        "icon": "📱",
+        "icon": "TW",
         "description": "Send and receive SMS messages. Look up phone numbers, check message status.",
         "category": "communication",
         "server_url": "",
@@ -118,7 +118,7 @@ CONNECTORS = {
     },
     "salesforce": {
         "name": "Salesforce",
-        "icon": "☁️",
+        "icon": "SF",
         "description": "Manage leads, contacts, opportunities, and accounts. Query and update CRM records.",
         "category": "crm",
         "server_url": "",
@@ -129,7 +129,7 @@ CONNECTORS = {
     },
     "sendgrid": {
         "name": "SendGrid Email",
-        "icon": "✉️",
+        "icon": "SG",
         "description": "Send transactional and marketing emails. Manage contacts, templates, and campaigns.",
         "category": "communication",
         "server_url": "",
@@ -142,11 +142,11 @@ CONNECTORS = {
 
 # ── Categories for UI grouping ──
 CATEGORIES = {
-    "communication": {"name": "Communication", "icon": "💬"},
-    "productivity": {"name": "Productivity", "icon": "📋"},
-    "crm": {"name": "CRM & Sales", "icon": "🏢"},
-    "development": {"name": "Development", "icon": "💻"},
-    "finance": {"name": "Finance", "icon": "💰"},
+    "communication": {"name": "Communication", "icon": "SL"},
+    "productivity": {"name": "Productivity", "icon": "PR"},
+    "crm": {"name": "CRM & Sales", "icon": "HS"},
+    "development": {"name": "Development", "icon": "DV"},
+    "finance": {"name": "Finance", "icon": "FN"},
 }
 
 

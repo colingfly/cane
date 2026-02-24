@@ -920,7 +920,11 @@ export default function AgentDetail() {
                       opacity: alreadyConnected ? 0.5 : 1,
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                        <span style={{ fontSize: '1.1rem' }}>{c.icon}</span>
+                        <div style={{
+                          width: 28, height: 28, borderRadius: 6, background: 'var(--cane-200)', color: 'var(--cane-700)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.6rem', letterSpacing: '0.02em', flexShrink: 0,
+                        }}>{c.icon}</div>
                         <div style={{ fontWeight: 600, fontSize: '0.84rem' }}>{c.name}</div>
                       </div>
                       <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 10, lineHeight: 1.4 }}>
@@ -1057,7 +1061,11 @@ export default function AgentDetail() {
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-                    <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>{server.icon}</span>
+                    <div style={{
+                      width: 30, height: 30, borderRadius: 7, background: 'var(--cane-200)', color: 'var(--cane-700)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.65rem', letterSpacing: '0.02em', flexShrink: 0,
+                    }}>{server.icon}</div>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{server.name}</span>
