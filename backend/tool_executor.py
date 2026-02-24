@@ -213,12 +213,33 @@ def call_claude_with_tools(
                     continue
 
                 # Route to unified executor if using ToolRef, legacy path otherwise
-                if isinstance(ref, ToolRef):
-                    exec_result = execute_tool_call(tool_name, tool_input, tool_lookup, db_session)
-                else:
-                    # Legacy: ref is an AgentTool record
-                    exec_result = execute_tool(ref, tool_input)
-                    if db_session:
+                # Check if fire-and-forget BEFORE executing
+                is_fire_forget = False
+                if isinstance(ref, ToolRef) and ref.source == "webhook" and ref.webhook_tool:
+                    is_fire_forget = ref.webhook_tool.fire_and_forget
+                elif not isinstance(ref, ToolRef) and hasattr(ref, 'fire_and_forget'):
+                    is_fire_forget = ref.fire_and_forget
+
+                if is_fire_forget:
+                    # Actually fire and forget — run in background thread
+                    import threading
+                    def _bg_execute(r, name, inp, lookup, db_sess):
+                        try:
+                            import time
+                            time.sleep(1)  # Brief delay to let request routing settle
+                            if isinstance(r, ToolRef):
+                                res = execute_tool_call(name, inp, lookup, None)
+                            else:
+                                res = execute_tool(r, inp)
+                            print(f"  [Tools] BG executed {name}: status={res['status']}")
+                        except Exception as e:
+                            print(f"  [Tools] BG execute {name} failed: {e}")
+                    t = threading.Thread(target=_bg_execute, args=(ref, tool_name, tool_input, tool_lookup, None))
+                    t.daemon = True
+                    t.start()
+
+                    # Update execution count
+                    if db_session and not isinstance(ref, ToolRef) and hasattr(ref, 'execution_count'):
                         try:
                             ref.execution_count = (ref.execution_count or 0) + 1
                             ref.last_executed_at = datetime.utcnow()
@@ -226,15 +247,24 @@ def call_claude_with_tools(
                         except Exception:
                             pass
 
-                print(f"  [Tools] Executed {tool_name}: status={exec_result['status']}")
+                    exec_result = {"status": "ok", "body": "fired"}
+                    print(f"  [Tools] Fire-and-forget {tool_name}: dispatched to background")
+                else:
+                    if isinstance(ref, ToolRef):
+                        exec_result = execute_tool_call(tool_name, tool_input, tool_lookup, db_session)
+                    else:
+                        exec_result = execute_tool(ref, tool_input)
+                        if db_session:
+                            try:
+                                ref.execution_count = (ref.execution_count or 0) + 1
+                                ref.last_executed_at = datetime.utcnow()
+                                db_session.commit()
+                            except Exception:
+                                pass
+
+                    print(f"  [Tools] Executed {tool_name}: status={exec_result['status']}")
 
                 # Build tool result for Claude
-                is_fire_forget = False
-                if isinstance(ref, ToolRef) and ref.source == "webhook" and ref.webhook_tool:
-                    is_fire_forget = ref.webhook_tool.fire_and_forget
-                elif not isinstance(ref, ToolRef) and hasattr(ref, 'fire_and_forget'):
-                    is_fire_forget = ref.fire_and_forget
-
                 if is_fire_forget:
                     result_content = json.dumps({
                         "status": "executed",
