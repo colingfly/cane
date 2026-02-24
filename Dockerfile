@@ -9,6 +9,7 @@ WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm ci --production=false
 COPY frontend/ ./
+ARG CACHEBUST=11
 RUN npm run build
 
 # Stage 2: Python dependencies (cached layer)
