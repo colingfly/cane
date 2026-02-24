@@ -94,6 +94,7 @@ from routes.api_v1 import router as api_v1_router
 from eval_routes import router as eval_router
 from marketplace_routes import router as marketplace_router
 from tool_routes import router as tool_router
+from mcp_routes import router as mcp_router
 
 app.include_router(auth_router)
 app.include_router(documents_router)
@@ -107,6 +108,7 @@ app.include_router(api_v1_router)
 app.include_router(eval_router)
 app.include_router(marketplace_router)
 app.include_router(tool_router)
+app.include_router(mcp_router)
 
 
 # ── Health check ──

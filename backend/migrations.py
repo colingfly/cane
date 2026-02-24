@@ -13,6 +13,7 @@ def run_all():
     _migrate_api_keys_table()
     _migrate_marketplace_tables()
     _migrate_agent_tools_table()
+    _migrate_mcp_servers_table()
 
 
 def _migrate_agent_columns():
@@ -165,3 +166,38 @@ def _migrate_agent_tools_table():
         print("  [DB] agent_tools table created")
     else:
         print("  [DB] agent_tools table already exists")
+
+
+def _migrate_mcp_servers_table():
+    insp = inspect(engine)
+    if "mcp_servers" not in insp.get_table_names():
+        with engine.begin() as conn:
+            conn.execute(text("""
+                CREATE TABLE mcp_servers (
+                    id VARCHAR(36) PRIMARY KEY,
+                    workspace_id VARCHAR(36) NOT NULL,
+                    tenant_id VARCHAR(36) NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    server_url TEXT NOT NULL,
+                    server_type VARCHAR(50) DEFAULT 'custom',
+                    icon VARCHAR(10) DEFAULT '🔌',
+                    auth_type VARCHAR(50) DEFAULT 'none',
+                    auth_header VARCHAR(255) DEFAULT 'Authorization',
+                    auth_value TEXT DEFAULT '',
+                    discovered_tools TEXT DEFAULT '[]',
+                    tool_count INT DEFAULT 0,
+                    is_enabled TINYINT(1) DEFAULT 1,
+                    status VARCHAR(20) DEFAULT 'pending',
+                    status_message TEXT DEFAULT '',
+                    last_synced_at DATETIME,
+                    total_calls INT DEFAULT 0,
+                    avg_latency_ms FLOAT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+                    FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+                )
+            """))
+        print("  [DB] mcp_servers table created")
+    else:
+        print("  [DB] mcp_servers table already exists")

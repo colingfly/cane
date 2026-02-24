@@ -125,6 +125,7 @@ def admin_delete_tenant(tenant_id: str, user: User = Depends(require_admin), db:
     from marketplace_models import MarketplaceListing, MarketplaceClone
     from eval_models import EvalResult, EvalRun, JudgeCustomRule, JudgeCriteria, TestCase, Environment
     from tool_models import AgentTool
+    from mcp_models import McpServer
 
     listing_ids = [l.id for l in db.query(MarketplaceListing).filter(MarketplaceListing.publisher_tenant_id == tenant_id).all()]
     db.query(MarketplaceClone).filter(MarketplaceClone.cloned_by_tenant_id == tenant_id).delete(synchronize_session=False)
@@ -144,6 +145,7 @@ def admin_delete_tenant(tenant_id: str, user: User = Depends(require_admin), db:
     db.query(Environment).filter(Environment.tenant_id == tenant_id).delete(synchronize_session=False)
 
     db.query(AgentTool).filter(AgentTool.tenant_id == tenant_id).delete(synchronize_session=False)
+    db.query(McpServer).filter(McpServer.tenant_id == tenant_id).delete(synchronize_session=False)
     db.query(ApiKey).filter(ApiKey.tenant_id == tenant_id).delete(synchronize_session=False)
     db.query(SearchLog).filter(SearchLog.tenant_id == tenant_id).delete(synchronize_session=False)
     db.query(Document).filter(Document.tenant_id == tenant_id).delete(synchronize_session=False)

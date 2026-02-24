@@ -140,15 +140,11 @@ def call_claude_with_tools(
     Call Claude with tool definitions. If Claude wants to use a tool,
     execute it and feed the result back. Returns the final text response.
 
-    tool_lookup: dict mapping tool_name -> AgentTool record
+    tool_lookup: dict mapping tool_name -> ToolRef (from services.tools)
+                 OR dict mapping tool_name -> AgentTool (legacy webhook-only)
     """
     from services.claude import call_with_tools as _sdk_call
-
-    # Strip internal _tool_id from tool defs before sending to Claude
-    clean_tools = []
-    for t in tools:
-        clean = {k: v for k, v in t.items() if not k.startswith("_")}
-        clean_tools.append(clean)
+    from services.tools import ToolRef, execute_tool_call
 
     # Add instruction to always provide text answer
     enhanced_system = system + "\n\nIMPORTANT: You MUST always provide a complete text answer to the user's question. If you also call tools, you must STILL include your full written answer."
@@ -162,7 +158,7 @@ def call_claude_with_tools(
             response = _sdk_call(
                 messages=current_messages,
                 system=enhanced_system,
-                tools=clean_tools,
+                tools=tools,
             )
         except Exception as e:
             print(f"  [Tools] Claude API error on iteration {iteration}: {e}")
@@ -183,7 +179,6 @@ def call_claude_with_tools(
             break
 
         # Claude wants to use tools — process each tool_use block
-        # Convert content blocks to dicts for the messages API
         content_dicts = []
         for block in content:
             if block.type == "text":
@@ -207,9 +202,9 @@ def call_claude_with_tools(
 
                 print(f"  [Tools] Claude wants to call: {tool_name} with input: {json.dumps(tool_input)[:200]}")
 
-                # Find the tool record
-                tool_record = tool_lookup.get(tool_name)
-                if not tool_record:
+                ref = tool_lookup.get(tool_name)
+
+                if ref is None:
                     tool_results.append({
                         "type": "tool_result",
                         "tool_use_id": tool_use_id,
@@ -217,27 +212,36 @@ def call_claude_with_tools(
                     })
                     continue
 
-                # Execute the tool
-                exec_result = execute_tool(tool_record, tool_input)
-                print(f"  [Tools] Executed {tool_name}: status={exec_result['status']}, code={exec_result.get('status_code')}")
+                # Route to unified executor if using ToolRef, legacy path otherwise
+                if isinstance(ref, ToolRef):
+                    exec_result = execute_tool_call(tool_name, tool_input, tool_lookup, db_session)
+                else:
+                    # Legacy: ref is an AgentTool record
+                    exec_result = execute_tool(ref, tool_input)
+                    if db_session:
+                        try:
+                            ref.execution_count = (ref.execution_count or 0) + 1
+                            ref.last_executed_at = datetime.utcnow()
+                            db_session.commit()
+                        except Exception:
+                            pass
 
-                # Update stats
-                if db_session:
-                    try:
-                        tool_record.execution_count = (tool_record.execution_count or 0) + 1
-                        tool_record.last_executed_at = datetime.utcnow()
-                        db_session.commit()
-                    except Exception:
-                        pass
+                print(f"  [Tools] Executed {tool_name}: status={exec_result['status']}")
 
                 # Build tool result for Claude
-                if tool_record.fire_and_forget:
+                is_fire_forget = False
+                if isinstance(ref, ToolRef) and ref.source == "webhook" and ref.webhook_tool:
+                    is_fire_forget = ref.webhook_tool.fire_and_forget
+                elif not isinstance(ref, ToolRef) and hasattr(ref, 'fire_and_forget'):
+                    is_fire_forget = ref.fire_and_forget
+
+                if is_fire_forget:
                     result_content = json.dumps({
                         "status": "executed",
-                        "message": f"Webhook fired successfully" if exec_result["status"] == "ok" else f"Webhook failed: {exec_result['body'][:200]}"
+                        "message": "Webhook fired successfully" if exec_result["status"] == "ok" else f"Webhook failed: {exec_result['body'][:200]}"
                     })
                 else:
-                    result_content = exec_result["body"][:2000] if exec_result["body"] else json.dumps(exec_result)
+                    result_content = exec_result.get("body", "")[:2000] or json.dumps(exec_result)
 
                 tool_results.append({
                     "type": "tool_result",

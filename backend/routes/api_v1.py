@@ -86,19 +86,13 @@ async def v1_ask(
     user_msg = f"DOCUMENT EXCERPTS:\n{numbered}\n\nQUESTION: {query}"
 
     # Call Claude (with tools if configured)
-    from tool_models import AgentTool
-    from tool_executor import build_claude_tools, call_claude_with_tools
+    from services.tools import get_all_tools
+    from tool_executor import call_claude_with_tools
 
-    workspace_tools = db.query(AgentTool).filter(
-        AgentTool.workspace_id == workspace_id,
-        AgentTool.tenant_id == api_key.tenant_id,
-        AgentTool.is_enabled == True,
-    ).all() if workspace_id else []
+    claude_tools, tool_lookup = get_all_tools(workspace_id, api_key.tenant_id, db) if workspace_id else ([], {})
 
     answer = ""
-    if workspace_tools:
-        claude_tools = build_claude_tools(workspace_tools)
-        tool_lookup = {t.name.replace(" ", "_").lower()[:64]: t for t in workspace_tools}
+    if claude_tools:
         try:
             answer = call_claude_with_tools(
                 messages=[{"role": "user", "content": user_msg}],

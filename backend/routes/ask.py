@@ -61,19 +61,13 @@ def ask(
     user_prompt = f"Question: {q}\n\nDocument Excerpts:\n{ctx.context}\n\nProvide a clear answer based on the above."
 
     try:
-        # Check for tools
-        from tool_models import AgentTool
-        from tool_executor import build_claude_tools, call_claude_with_tools
+        # Load all tools (webhooks + MCP)
+        from services.tools import get_all_tools
+        from tool_executor import call_claude_with_tools
 
-        workspace_tools = db.query(AgentTool).filter(
-            AgentTool.workspace_id == workspace_id,
-            AgentTool.tenant_id == user.tenant_id,
-            AgentTool.is_enabled == True,
-        ).all() if workspace_id else []
+        claude_tools, tool_lookup = get_all_tools(workspace_id, user.tenant_id, db) if workspace_id else ([], {})
 
-        if workspace_tools:
-            claude_tools = build_claude_tools(workspace_tools)
-            tool_lookup = {t.name.replace(" ", "_").lower()[:64]: t for t in workspace_tools}
+        if claude_tools:
             messages = [{"role": "user", "content": user_prompt}]
             summary = call_claude_with_tools(
                 messages=messages, system=system_prompt,
@@ -144,17 +138,12 @@ def ask_stream(
         "content": f"Question: {q}\n\nDocument Excerpts:\n{ctx.context}\n\nProvide a clear answer based on the above."
     })
 
-    # Check for tools
-    from tool_models import AgentTool
-    from tool_executor import build_claude_tools, call_claude_with_tools
+    # Load all tools (webhooks + MCP)
+    from services.tools import get_all_tools
+    from tool_executor import call_claude_with_tools
 
-    workspace_tools = db.query(AgentTool).filter(
-        AgentTool.workspace_id == workspace_id,
-        AgentTool.tenant_id == user.tenant_id,
-        AgentTool.is_enabled == True,
-    ).all() if workspace_id else []
-
-    has_tools = len(workspace_tools) > 0
+    claude_tools, tool_lookup = get_all_tools(workspace_id, user.tenant_id, db) if workspace_id else ([], {})
+    has_tools = len(claude_tools) > 0
 
     def generate():
         yield _sse({"type": "meta", "sources": ctx.sources, "images": ctx.images,
@@ -162,8 +151,6 @@ def ask_stream(
 
         if has_tools:
             try:
-                claude_tools = build_claude_tools(workspace_tools)
-                tool_lookup = {t.name.replace(" ", "_").lower()[:64]: t for t in workspace_tools}
                 yield _sse({"type": "tool_status", "message": "Checking tools..."})
 
                 from database import SessionLocal

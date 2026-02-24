@@ -157,6 +157,7 @@ def delete_agent(agent_id: str, user: User = Depends(get_current_user), db: Sess
         from marketplace_models import MarketplaceListing, MarketplaceClone
         from eval_models import Environment, TestCase, JudgeCriteria, JudgeCustomRule, EvalRun, EvalResult
         from tool_models import AgentTool
+        from mcp_models import McpServer
 
         # 1. Marketplace cascade
         listing_ids = [l.id for l in db.query(MarketplaceListing).filter(
@@ -179,8 +180,9 @@ def delete_agent(agent_id: str, user: User = Depends(get_current_user), db: Sess
             db.query(TestCase).filter(TestCase.environment_id.in_(env_ids)).delete(synchronize_session=False)
             db.query(Environment).filter(Environment.id.in_(env_ids)).delete(synchronize_session=False)
 
-        # 3. Tools, API keys, search logs
+        # 3. Tools, MCP servers, API keys, search logs
         db.query(AgentTool).filter(AgentTool.workspace_id == agent_id).delete(synchronize_session=False)
+        db.query(McpServer).filter(McpServer.workspace_id == agent_id).delete(synchronize_session=False)
         db.query(ApiKey).filter(ApiKey.workspace_id == agent_id).delete(synchronize_session=False)
         db.query(SearchLog).filter(SearchLog.workspace_id == agent_id).delete(synchronize_session=False)
 
