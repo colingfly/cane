@@ -53,7 +53,8 @@ def create_agent(
 ):
     """Create a new agent."""
     # Check limit
-    limit_err = check_agent_limit(db, user.tenant_id)
+    tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+    limit_err = check_agent_limit(user.tenant_id, tenant.plan if tenant else "free", db)
     if limit_err:
         return JSONResponse({"error": limit_err}, status_code=403)
 
@@ -62,23 +63,33 @@ def create_agent(
     icon = sanitize_form_field(icon)
 
     tmpl = get_template(agent_type)
+    if tmpl:
+        name = name or tmpl.get("name", "New Agent")
+        icon = icon or tmpl.get("icon", "")
+        description = description or tmpl.get("description", "")
+        system_prompt = tmpl.get("system_prompt", "")
+    else:
+        agent_type = "custom"
+        icon = icon or "CA"
+        system_prompt = ""
+
+    if not name:
+        return JSONResponse({"error": "Agent name is required"}, status_code=400)
 
     ws = Workspace(
-        tenant_id=user.tenant_id,
-        name=name or tmpl.get("name", "New Agent"),
-        description=description or tmpl.get("description", ""),
-        agent_type=agent_type,
-        system_prompt=tmpl.get("system_prompt", ""),
-        agent_icon=icon or tmpl.get("icon", agent_type[:2].upper()),
-        agent_description=tmpl.get("description", ""),
+        tenant_id=user.tenant_id, name=name, description=description,
+        agent_type=agent_type, agent_icon=icon, agent_description=description,
+        system_prompt=system_prompt, show_on_homepage=False, is_default=False,
     )
     db.add(ws)
     db.commit()
+    db.refresh(ws)
 
     return {
         "id": ws.id, "name": ws.name, "agent_type": ws.agent_type,
-        "agent_icon": ws.agent_icon, "agent_description": ws.agent_description,
-        "system_prompt": ws.system_prompt,
+        "agent_icon": ws.agent_icon or "", "agent_description": ws.agent_description or "",
+        "system_prompt": ws.system_prompt or "",
+        "show_on_homepage": getattr(ws, "show_on_homepage", False) or False,
     }
 
 
