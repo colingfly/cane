@@ -28,6 +28,7 @@ export default function Landing() {
         </span>
         <div className="lp-nav-links">
           <a href="#how">How it works</a>
+          <a href="#platform">Platform</a>
           <a href="#deploy">Deploy</a>
           <Link to="/guide">Docs</Link>
           <Link to="/login" className="lp-nav-cta">Sign in</Link>
@@ -36,11 +37,11 @@ export default function Landing() {
 
       {/* Hero */}
       <section className="lp-hero">
-        <div className="lp-hero-badge">Now with agentic tools + verified evaluations</div>
+        <div className="lp-hero-badge">MCP connections + agent marketplace + analytics dashboard</div>
         <h1>Build AI agents that <span className="lp-accent">prove they work.</span></h1>
         <p className="lp-hero-sub">
-          Upload documents. Build a specialized agent. Verify it with automated evaluations.
-          Deploy it on any website with one line of code.
+          Upload documents. Build a specialized agent. Connect it to your tools.
+          Verify it with automated evaluations. Deploy anywhere.
         </p>
         <div className="lp-hero-ctas">
           <Link to="/register" className="lp-btn lp-btn-primary">Start building</Link>
@@ -48,16 +49,16 @@ export default function Landing() {
         </div>
         <div className="lp-hero-proof">
           <div className="lp-hero-stat">
-            <div className="lp-val">28 chunks/sec</div>
-            <div className="lp-label">Document processing</div>
+            <div className="lp-val">Any file type</div>
+            <div className="lp-label">PDF, DOCX, audio, video, images</div>
           </div>
           <div className="lp-hero-stat">
-            <div className="lp-val">5,000+</div>
-            <div className="lp-label">App integrations via webhooks</div>
+            <div className="lp-val">MCP Protocol</div>
+            <div className="lp-label">Connect calendars, CRMs, email</div>
           </div>
           <div className="lp-hero-stat">
             <div className="lp-val">LLM-as-Judge</div>
-            <div className="lp-label">Automated scoring</div>
+            <div className="lp-label">Automated scoring & evals</div>
           </div>
         </div>
       </section>
@@ -73,15 +74,67 @@ export default function Landing() {
           <div className="lp-loop-grid">
             {[
               { num: '01', title: 'Upload anything', desc: 'PDFs, Word docs, spreadsheets, images, audio, video. Cane extracts text, runs OCR, transcribes media, and chunks everything for semantic search.', tag: 'PDF, DOCX, XLSX, CSV, PNG, MP3, MP4' },
-              { num: '02', title: 'Build a specialized agent', desc: 'Pick a template or create your own. Upload domain-specific files. Auto-generate a system prompt tuned to your content, or write your own.', tag: 'Customer Support / Compliance / Internal Ops' },
-              { num: '03', title: 'Evaluate and verify', desc: 'Write test cases. Define scoring criteria. Run automated evaluations. Cane scores every response on accuracy, completeness, relevance, and faithfulness.', tag: 'LLM-as-Judge with weighted criteria' },
-              { num: '04', title: 'Deploy everywhere', desc: 'Embed on any website with one script tag. Access via REST API. Or publish to the marketplace for others to clone and independently verify.', tag: 'Widget / API / Marketplace' },
+              { num: '02', title: 'Build a specialized agent', desc: 'Pick a template or start from scratch. Upload domain files. Auto-generate a system prompt tuned to your content. Add webhook tools and MCP connections.', tag: 'Templates / Custom / Marketplace Packs' },
+              { num: '03', title: 'Evaluate and verify', desc: 'Write test cases. Define scoring criteria. Run automated evaluations with LLM-as-Judge. Iterate until your agent meets the quality bar.', tag: 'LLM-as-Judge with weighted criteria' },
+              { num: '04', title: 'Deploy everywhere', desc: 'Embed on any website with one script tag. Customize colors, greeting, and logo. Track conversations with built-in analytics. Share on the marketplace.', tag: 'Widget / API / Marketplace / Analytics' },
             ].map((card, i) => (
               <div key={i} className="lp-loop-card lp-reveal">
                 <div className="lp-step-num">{card.num}</div>
                 <h3>{card.title}</h3>
                 <p>{card.desc}</p>
                 <span className="lp-tag">{card.tag}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Platform Capabilities */}
+      <section id="platform" className="lp-section">
+        <div className="lp-platform-section">
+          <div className="lp-section-label lp-reveal">Platform</div>
+          <div className="lp-section-title lp-reveal">Everything your agent needs.</div>
+          <p className="lp-section-sub lp-reveal">
+            Not just a chatbot. A full operational intelligence platform.
+          </p>
+          <div className="lp-cap-grid">
+            {[
+              {
+                icon: '🔌', title: 'MCP Connections',
+                desc: 'Connect agents to external services via Model Context Protocol. Browse the catalog or add custom servers. Calendars, CRMs, email, Slack — your agent can interact with them all.',
+                detail: 'Google Calendar · Salesforce · Gmail · Slack · Custom servers',
+              },
+              {
+                icon: '🧰', title: 'Webhook Tools',
+                desc: 'Give agents the ability to take actions. Log to Google Sheets, send Slack notifications, trigger Zapier workflows, call any REST API. Fire-and-forget or wait for responses.',
+                detail: 'POST / GET / PUT · Auth headers · Payload templates',
+              },
+              {
+                icon: '📊', title: 'Analytics Dashboard',
+                desc: 'Track every conversation across every channel. See daily volume, response times, channel breakdown, tool usage, and satisfaction scores. Know exactly how your agent performs.',
+                detail: 'Per-agent metrics · Channel breakdown · Feedback tracking',
+              },
+              {
+                icon: '🎨', title: 'Widget Customization',
+                desc: 'Customize every aspect of the chat widget. Colors, greeting, logo, position, border radius, auto-open delay. Live preview in the builder. One-click embed code generation.',
+                detail: 'Live preview · Logo upload · Position control · Auto-open',
+              },
+              {
+                icon: '🏪', title: 'Agent Marketplace',
+                desc: 'Clone pre-built agent packs with system prompts, eval suites, and test cases. Publish your own agents for others to use. Independent verification through re-running evals.',
+                detail: 'One-click clone · Eval verification · Featured packs',
+              },
+              {
+                icon: '🧪', title: 'Evaluation Engine',
+                desc: 'Define test cases and scoring criteria. Run automated evaluations with LLM-as-Judge. Get pass/warn/fail verdicts per test case. Weighted criteria: accuracy, completeness, relevance, faithfulness.',
+                detail: 'Custom criteria · Custom rules · Score history',
+              },
+            ].map((cap, i) => (
+              <div key={i} className="lp-cap-card lp-reveal">
+                <div className="lp-cap-icon">{cap.icon}</div>
+                <h3>{cap.title}</h3>
+                <p>{cap.desc}</p>
+                <span className="lp-cap-detail">{cap.detail}</span>
               </div>
             ))}
           </div>
@@ -97,10 +150,10 @@ export default function Landing() {
           <div className="lp-widget-layout">
             <div className="lp-widget-text">
               {[
-                { n: '1', t: 'Build your agent', d: 'Upload docs, configure the prompt, add webhook tools for Slack, Sheets, or CRM integration.' },
+                { n: '1', t: 'Build your agent', d: 'Upload docs, configure the prompt, add webhook tools and MCP connections.' },
                 { n: '2', t: 'Verify with evals', d: 'Run automated test suites. Get a score. Iterate until the agent meets your quality bar.' },
-                { n: '3', t: 'Paste one line of code', d: 'Copy the embed snippet. Paste it into your site. Customers see a chat widget. You see analytics.' },
-                { n: '4', t: 'Agent answers, tools fire', d: 'Customer asks a question. Agent answers from your docs. Webhook logs it to your sheet. Slack gets pinged. No code.' },
+                { n: '3', t: 'Customize the widget', d: 'Set colors, greeting, logo, and position. Preview it live. Copy the embed snippet.' },
+                { n: '4', t: 'Track with analytics', d: 'Every conversation is logged. See volume trends, response times, channel breakdown, and feedback scores.' },
               ].map((p, i) => (
                 <div key={i} className="lp-point lp-reveal">
                   <div className="lp-point-num">{p.n}</div>
@@ -151,6 +204,7 @@ export default function Landing() {
               {'  '}<span className="hl-attr">data-workspace-id</span>=<span className="hl-val">"your-agent-id"</span>{'\n'}
               {'  '}<span className="hl-attr">data-color</span>=<span className="hl-val">"#c8963e"</span>{'\n'}
               {'  '}<span className="hl-attr">data-greeting</span>=<span className="hl-val">"Hi! How can I help?"</span>{'\n'}
+              {'  '}<span className="hl-attr">data-logo-url</span>=<span className="hl-val">"https://yoursite.com/logo.png"</span>{'\n'}
               <span className="hl-tag">{'></script>'}</span>
             </pre>
           </div>
@@ -477,6 +531,63 @@ const landingStyles = `
   border: 1px solid rgba(200, 150, 62, 0.15);
 }
 
+/* Platform Capabilities */
+.lp-platform-section {
+  max-width: 1100px;
+  margin: 0 auto;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.lp-cap-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  margin-top: 64px;
+}
+
+.lp-cap-card {
+  padding: 32px 28px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.02);
+  transition: all 0.3s ease;
+}
+
+.lp-cap-card:hover {
+  border-color: rgba(200, 150, 62, 0.2);
+  background: rgba(200, 150, 62, 0.04);
+  transform: translateY(-2px);
+}
+
+.lp-cap-icon {
+  font-size: 1.8rem;
+  margin-bottom: 16px;
+}
+
+.lp-cap-card h3 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #f3efe6;
+  margin-bottom: 8px;
+  letter-spacing: -0.01em;
+}
+
+.lp-cap-card p {
+  font-size: 0.84rem;
+  color: #b5a48a;
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+
+.lp-cap-detail {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  color: #8a7a62;
+  line-height: 1.7;
+}
+
 /* Widget */
 .lp-widget-section {
   max-width: 1100px;
@@ -706,6 +817,7 @@ const landingStyles = `
   .lp-hero { padding: 120px 24px 80px; }
   .lp-hero h1 { font-size: 2.4rem; }
   .lp-loop-grid { grid-template-columns: 1fr; }
+  .lp-cap-grid { grid-template-columns: 1fr; }
   .lp-widget-layout { grid-template-columns: 1fr; gap: 40px; }
   .lp-hero-proof { flex-direction: column; gap: 24px; }
   .lp-footer { flex-direction: column; gap: 24px; text-align: center; }

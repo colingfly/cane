@@ -156,7 +156,10 @@ if _static.is_dir():
         file = _static / full_path
         if file.is_file():
             return FileResponse(str(file))
-        return FileResponse(str(_static / "index.html"))
+        resp = FileResponse(str(_static / "index.html"))
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        return resp
 
 
 # ── Run ──

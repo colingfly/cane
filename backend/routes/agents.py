@@ -6,6 +6,7 @@ import traceback
 from fastapi import APIRouter, Form, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from database import get_db
 from db_models import Tenant, User, Workspace, Document, SearchLog, ApiKey
@@ -50,39 +51,34 @@ def create_agent(
     description: str = Form(""), icon: str = Form(""),
     user: User = Depends(get_current_user), db: Session = Depends(get_db),
 ):
-    tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
-    limit_err = check_agent_limit(user.tenant_id, tenant.plan if tenant else "free", db)
+    """Create a new agent."""
+    # Check limit
+    limit_err = check_agent_limit(db, user.tenant_id)
     if limit_err:
         return JSONResponse({"error": limit_err}, status_code=403)
 
-    template = get_template(agent_type)
-    if template:
-        name = name or template["name"]
-        icon = icon or template.get("icon", "")
-        description = description or template.get("description", "")
-        system_prompt = template.get("system_prompt", "")
-    else:
-        agent_type = "custom"
-        icon = icon or "CA"
-        system_prompt = ""
+    name = sanitize_form_field(name)
+    description = sanitize_form_field(description)
+    icon = sanitize_form_field(icon)
 
-    if not name:
-        return JSONResponse({"error": "Agent name is required"}, status_code=400)
+    tmpl = get_template(agent_type)
 
-    workspace = Workspace(
-        tenant_id=user.tenant_id, name=name, description=description,
-        agent_type=agent_type, agent_icon=icon, agent_description=description,
-        system_prompt=system_prompt, show_on_homepage=False, is_default=False,
+    ws = Workspace(
+        tenant_id=user.tenant_id,
+        name=name or tmpl.get("name", "New Agent"),
+        description=description or tmpl.get("description", ""),
+        agent_type=agent_type,
+        system_prompt=tmpl.get("system_prompt", ""),
+        agent_icon=icon or tmpl.get("icon", agent_type[:2].upper()),
+        agent_description=tmpl.get("description", ""),
     )
-    db.add(workspace)
+    db.add(ws)
     db.commit()
-    db.refresh(workspace)
 
     return {
-        "id": workspace.id, "name": workspace.name, "agent_type": workspace.agent_type,
-        "agent_icon": workspace.agent_icon or "", "agent_description": workspace.agent_description or "",
-        "system_prompt": workspace.system_prompt or "",
-        "show_on_homepage": getattr(workspace, "show_on_homepage", False) or False,
+        "id": ws.id, "name": ws.name, "agent_type": ws.agent_type,
+        "agent_icon": ws.agent_icon, "agent_description": ws.agent_description,
+        "system_prompt": ws.system_prompt,
     }
 
 
@@ -97,8 +93,9 @@ def get_agent(agent_id: str, user: User = Depends(get_current_user), db: Session
 
     doc_count = db.query(Document).filter(Document.workspace_id == ws.id).count()
     return {
-        "id": ws.id, "name": ws.name, "agent_type": ws.agent_type,
-        "agent_icon": ws.agent_icon or "", "agent_description": ws.agent_description or "",
+        "id": ws.id, "name": ws.name, "description": ws.description or "",
+        "agent_type": ws.agent_type, "agent_icon": ws.agent_icon or "",
+        "agent_description": ws.agent_description or "",
         "system_prompt": ws.system_prompt or "",
         "show_on_homepage": getattr(ws, "show_on_homepage", False) or False,
         "document_count": doc_count,
@@ -108,9 +105,8 @@ def get_agent(agent_id: str, user: User = Depends(get_current_user), db: Session
 
 @router.put("/{agent_id}")
 def update_agent(
-    agent_id: str,
-    name: str = Form(None), system_prompt: str = Form(None),
-    agent_description: str = Form(None), agent_icon: str = Form(None),
+    agent_id: str, name: str = Form(None), description: str = Form(None),
+    icon: str = Form(None), system_prompt: str = Form(None),
     show_on_homepage: str = Form(None),
     user: User = Depends(get_current_user), db: Session = Depends(get_db),
 ):
@@ -123,18 +119,16 @@ def update_agent(
 
     if name is not None:
         ws.name = sanitize_form_field(name)
+    if description is not None:
+        ws.agent_description = sanitize_form_field(description)
+    if icon is not None:
+        ws.agent_icon = sanitize_form_field(icon)
     if system_prompt is not None:
         ws.system_prompt = system_prompt
-    if agent_description is not None:
-        ws.agent_description = sanitize_form_field(agent_description)
-    if agent_icon is not None:
-        ws.agent_icon = agent_icon
     if show_on_homepage is not None:
         ws.show_on_homepage = show_on_homepage.lower() in ("true", "1", "yes")
 
     db.commit()
-    db.refresh(ws)
-
     return {
         "id": ws.id, "name": ws.name, "agent_type": ws.agent_type,
         "agent_icon": ws.agent_icon or "", "agent_description": ws.agent_description or "",
@@ -143,9 +137,17 @@ def update_agent(
     }
 
 
+def _safe_delete(db, sql, params):
+    """Execute raw DELETE, silently skip if table doesn't exist."""
+    try:
+        db.execute(text(sql), params)
+    except Exception:
+        pass
+
+
 @router.delete("/{agent_id}")
 def delete_agent(agent_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Delete an agent, its documents, tools, evals, listings, and vector store chunks."""
+    """Delete an agent and all related data (defensive — handles missing tables)."""
     ws = db.query(Workspace).filter(
         Workspace.id == agent_id, Workspace.tenant_id == user.tenant_id,
         Workspace.agent_type.isnot(None),
@@ -154,39 +156,51 @@ def delete_agent(agent_id: str, user: User = Depends(get_current_user), db: Sess
         return JSONResponse({"error": "Agent not found"}, status_code=404)
 
     try:
-        from marketplace_models import MarketplaceListing, MarketplaceClone
-        from eval_models import Environment, TestCase, JudgeCriteria, JudgeCustomRule, EvalRun, EvalResult
-        from tool_models import AgentTool
-        from mcp_models import McpServer
+        # ── 1. Marketplace cascade ──
+        try:
+            from marketplace_models import MarketplaceListing, MarketplaceClone
+            listing_ids = [l.id for l in db.query(MarketplaceListing).filter(
+                MarketplaceListing.source_workspace_id == agent_id
+            ).all()]
+            if listing_ids:
+                db.query(MarketplaceClone).filter(MarketplaceClone.listing_id.in_(listing_ids)).delete(synchronize_session=False)
+                db.query(MarketplaceListing).filter(MarketplaceListing.id.in_(listing_ids)).delete(synchronize_session=False)
+            db.query(MarketplaceClone).filter(MarketplaceClone.cloned_workspace_id == agent_id).delete(synchronize_session=False)
+        except Exception as e:
+            print(f"  [Delete] Marketplace cleanup skipped: {e}")
 
-        # 1. Marketplace cascade
-        listing_ids = [l.id for l in db.query(MarketplaceListing).filter(
-            MarketplaceListing.source_workspace_id == agent_id
-        ).all()]
-        if listing_ids:
-            db.query(MarketplaceClone).filter(MarketplaceClone.listing_id.in_(listing_ids)).delete(synchronize_session=False)
-            db.query(MarketplaceListing).filter(MarketplaceListing.id.in_(listing_ids)).delete(synchronize_session=False)
-        db.query(MarketplaceClone).filter(MarketplaceClone.cloned_workspace_id == agent_id).delete(synchronize_session=False)
+        # ── 2. Eval cascade ──
+        try:
+            from eval_models import Environment, TestCase, JudgeCriteria, JudgeCustomRule, EvalRun, EvalResult
+            env_ids = [e.id for e in db.query(Environment).filter(Environment.workspace_id == agent_id).all()]
+            if env_ids:
+                run_ids = [r.id for r in db.query(EvalRun).filter(EvalRun.environment_id.in_(env_ids)).all()]
+                if run_ids:
+                    db.query(EvalResult).filter(EvalResult.eval_run_id.in_(run_ids)).delete(synchronize_session=False)
+                db.query(EvalRun).filter(EvalRun.environment_id.in_(env_ids)).delete(synchronize_session=False)
+                db.query(JudgeCustomRule).filter(JudgeCustomRule.environment_id.in_(env_ids)).delete(synchronize_session=False)
+                db.query(JudgeCriteria).filter(JudgeCriteria.environment_id.in_(env_ids)).delete(synchronize_session=False)
+                db.query(TestCase).filter(TestCase.environment_id.in_(env_ids)).delete(synchronize_session=False)
+                db.query(Environment).filter(Environment.id.in_(env_ids)).delete(synchronize_session=False)
+        except Exception as e:
+            print(f"  [Delete] Eval cleanup skipped: {e}")
 
-        # 2. Eval cascade
-        env_ids = [e.id for e in db.query(Environment).filter(Environment.workspace_id == agent_id).all()]
-        if env_ids:
-            run_ids = [r.id for r in db.query(EvalRun).filter(EvalRun.environment_id.in_(env_ids)).all()]
-            if run_ids:
-                db.query(EvalResult).filter(EvalResult.eval_run_id.in_(run_ids)).delete(synchronize_session=False)
-            db.query(EvalRun).filter(EvalRun.environment_id.in_(env_ids)).delete(synchronize_session=False)
-            db.query(JudgeCustomRule).filter(JudgeCustomRule.environment_id.in_(env_ids)).delete(synchronize_session=False)
-            db.query(JudgeCriteria).filter(JudgeCriteria.environment_id.in_(env_ids)).delete(synchronize_session=False)
-            db.query(TestCase).filter(TestCase.environment_id.in_(env_ids)).delete(synchronize_session=False)
-            db.query(Environment).filter(Environment.id.in_(env_ids)).delete(synchronize_session=False)
+        # ── 3. Tools (safe — table might not exist) ──
+        _safe_delete(db, "DELETE FROM agent_tools WHERE workspace_id = :wid", {"wid": agent_id})
 
-        # 3. Tools, MCP servers, API keys, search logs
-        db.query(AgentTool).filter(AgentTool.workspace_id == agent_id).delete(synchronize_session=False)
-        db.query(McpServer).filter(McpServer.workspace_id == agent_id).delete(synchronize_session=False)
+        # ── 4. MCP servers (safe) ──
+        _safe_delete(db, "DELETE FROM mcp_servers WHERE workspace_id = :wid", {"wid": agent_id})
+
+        # ── 5. API keys ──
         db.query(ApiKey).filter(ApiKey.workspace_id == agent_id).delete(synchronize_session=False)
+
+        # ── 6. Search logs ──
         db.query(SearchLog).filter(SearchLog.workspace_id == agent_id).delete(synchronize_session=False)
 
-        # 4. Documents + vector chunks
+        # ── 7. Conversation logs / analytics (safe) ──
+        _safe_delete(db, "DELETE FROM conversation_logs WHERE workspace_id = :wid", {"wid": agent_id})
+
+        # ── 8. Documents + vector chunks ──
         docs = db.query(Document).filter(Document.workspace_id == agent_id).all()
         for doc in docs:
             try:
@@ -200,7 +214,7 @@ def delete_agent(agent_id: str, user: User = Depends(get_current_user), db: Sess
                 pass
             db.delete(doc)
 
-        # 5. Delete workspace
+        # ── 9. Delete workspace ──
         db.delete(ws)
         db.commit()
         return {"status": "deleted"}
@@ -208,7 +222,7 @@ def delete_agent(agent_id: str, user: User = Depends(get_current_user), db: Sess
     except Exception as e:
         db.rollback()
         traceback.print_exc()
-        return JSONResponse({"error": f"Delete failed: {str(e)}"}, status_code=500)
+        return JSONResponse({"error": f"Delete failed: {str(e)[:200]}"}, status_code=500)
 
 
 @router.post("/{agent_id}/generate-prompt")
