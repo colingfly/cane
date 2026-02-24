@@ -80,9 +80,13 @@ app.add_middleware(RequestIDMiddleware)
 @app.middleware("http")
 async def add_cache_headers(request, call_next):
     response = await call_next(request)
-    if request.url.path.startswith("/api/"):
+    path = request.url.path
+    content_type = response.headers.get("content-type", "")
+    # Never cache API responses or HTML pages
+    if path.startswith("/api/") or "text/html" in content_type or path == "/":
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
     return response
 
 
