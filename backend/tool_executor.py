@@ -231,28 +231,85 @@ def call_claude_with_tools(
                     is_fire_forget = ref.fire_and_forget
 
                 if is_fire_forget:
-                    # Actually fire and forget — run in background thread
+                    # Extract ALL data from ORM objects NOW, before the session closes
+                    # Background threads can't access detached ORM objects
                     import threading
-                    def _bg_execute(r, name, inp, lookup, db_sess):
+
+                    if isinstance(ref, ToolRef) and ref.webhook_tool:
+                        wt = ref.webhook_tool
+                        tool_snapshot = {
+                            "url": wt.url,
+                            "method": wt.method or "POST",
+                            "headers": wt.headers or "{}",
+                            "auth_type": wt.auth_type,
+                            "auth_value": wt.auth_value,
+                            "payload_template": wt.payload_template or "{}",
+                        }
+                    elif hasattr(ref, 'url'):
+                        tool_snapshot = {
+                            "url": ref.url,
+                            "method": ref.method or "POST",
+                            "headers": ref.headers or "{}",
+                            "auth_type": ref.auth_type,
+                            "auth_value": ref.auth_value,
+                            "payload_template": ref.payload_template or "{}",
+                        }
+                    else:
+                        tool_snapshot = None
+
+                    def _bg_fire(snapshot, name, inp):
+                        """Make HTTP call using plain dict data — no ORM objects."""
                         try:
                             import time
-                            time.sleep(1)  # Brief delay to let request routing settle
-                            if isinstance(r, ToolRef):
-                                res = execute_tool_call(name, inp, lookup, None)
+                            time.sleep(1)
+
+                            if not snapshot:
+                                print(f"  [Tools] BG {name}: no snapshot, skipping")
+                                return
+
+                            url = snapshot["url"]
+                            headers = json.loads(snapshot["headers"])
+                            headers.setdefault("Content-Type", "application/json")
+
+                            if snapshot["auth_type"] == "bearer" and snapshot["auth_value"]:
+                                headers["Authorization"] = f"Bearer {snapshot['auth_value']}"
+                            elif snapshot["auth_type"] == "api_key" and snapshot["auth_value"]:
+                                headers["X-API-Key"] = snapshot["auth_value"]
+
+                            # Build payload — forward raw input if default template
+                            template = json.loads(snapshot["payload_template"])
+                            default_templates = [
+                                {},
+                                {"question": "{{question}}", "answer": "{{answer}}"},
+                            ]
+                            if template in default_templates:
+                                payload = {k: v for k, v in inp.items() if k not in ("reason", "_tool_id")}
                             else:
-                                res = execute_tool(r, inp)
-                            print(f"  [Tools] BG executed {name}: status={res['status']}")
+                                payload = _render_template(template, inp)
+
+                            data = json.dumps(payload).encode() if snapshot["method"] in ("POST", "PUT", "PATCH") else None
+                            print(f"  [Tools] BG {name}: {snapshot['method']} {url} payload={json.dumps(payload)[:200]}")
+
+                            req = urllib.request.Request(url, data=data, headers=headers, method=snapshot["method"])
+                            with urllib.request.urlopen(req, timeout=15) as resp:
+                                body = resp.read().decode("utf-8", errors="replace")[:500]
+                                print(f"  [Tools] BG {name}: {resp.status} — {body[:100]}")
                         except Exception as e:
-                            print(f"  [Tools] BG execute {name} failed: {e}")
-                    t = threading.Thread(target=_bg_execute, args=(ref, tool_name, tool_input, tool_lookup, None))
+                            print(f"  [Tools] BG {name} failed: {e}")
+
+                    t = threading.Thread(target=_bg_fire, args=(tool_snapshot, tool_name, tool_input))
                     t.daemon = True
                     t.start()
 
-                    # Update execution count
-                    if db_session and not isinstance(ref, ToolRef) and hasattr(ref, 'execution_count'):
+                    # Update execution count while session is still open
+                    if db_session:
                         try:
-                            ref.execution_count = (ref.execution_count or 0) + 1
-                            ref.last_executed_at = datetime.utcnow()
+                            if isinstance(ref, ToolRef) and ref.webhook_tool:
+                                ref.webhook_tool.execution_count = (ref.webhook_tool.execution_count or 0) + 1
+                                ref.webhook_tool.last_executed_at = datetime.utcnow()
+                            elif hasattr(ref, 'execution_count'):
+                                ref.execution_count = (ref.execution_count or 0) + 1
+                                ref.last_executed_at = datetime.utcnow()
                             db_session.commit()
                         except Exception:
                             pass

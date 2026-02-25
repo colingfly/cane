@@ -87,7 +87,11 @@ def _send_gmail(to: str, subject: str, body: str, is_html: bool = False) -> dict
     # Build the email
     if is_html:
         msg = MIMEMultipart("alternative")
-        msg.attach(MIMEText(body, "plain"))
+        # Plain text fallback: strip HTML tags
+        import re
+        plain = re.sub(r'<[^>]+>', '', body).strip()
+        plain = re.sub(r'\n{3,}', '\n\n', plain)
+        msg.attach(MIMEText(plain, "plain"))
         msg.attach(MIMEText(body, "html"))
     else:
         msg = MIMEText(body)
@@ -137,6 +141,76 @@ def _send_gmail(to: str, subject: str, body: str, is_html: bool = False) -> dict
         raise HTTPException(502, f"Gmail API error ({e.code}): {error_body[:500]}")
 
 
+# ─── Markdown to HTML converter for emails ───
+
+def _markdown_to_html(text: str) -> str:
+    """Convert markdown-formatted text to styled HTML for emails."""
+    import re
+
+    lines = text.split("\n")
+    html_lines = []
+    in_list = None  # "ul" or "ol"
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Close list if we're no longer in one
+        if in_list and not stripped.startswith("- ") and not re.match(r'^\d+\.\s', stripped):
+            html_lines.append(f"</{in_list}>")
+            in_list = None
+
+        if not stripped:
+            if not in_list:
+                html_lines.append("<br>")
+            continue
+
+        # Unordered list items
+        if stripped.startswith("- "):
+            if in_list != "ul":
+                if in_list:
+                    html_lines.append(f"</{in_list}>")
+                html_lines.append('<ul style="margin:8px 0;padding-left:24px;">')
+                in_list = "ul"
+            content = _inline_markdown(stripped[2:])
+            html_lines.append(f"<li>{content}</li>")
+            continue
+
+        # Ordered list items
+        ol_match = re.match(r'^(\d+)\.\s(.+)', stripped)
+        if ol_match:
+            if in_list != "ol":
+                if in_list:
+                    html_lines.append(f"</{in_list}>")
+                html_lines.append('<ol style="margin:8px 0;padding-left:24px;">')
+                in_list = "ol"
+            content = _inline_markdown(ol_match.group(2))
+            html_lines.append(f"<li>{content}</li>")
+            continue
+
+        # Regular paragraph
+        content = _inline_markdown(stripped)
+        html_lines.append(f"<p style=\"margin:8px 0;line-height:1.5;\">{content}</p>")
+
+    if in_list:
+        html_lines.append(f"</{in_list}>")
+
+    body_html = "\n".join(html_lines)
+
+    return f"""<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 15px; color: #1a1a1a; max-width: 600px;">
+{body_html}
+</div>"""
+
+
+def _inline_markdown(text: str) -> str:
+    """Convert inline markdown (bold, italic) to HTML."""
+    import re
+    # Bold: **text**
+    text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+    # Italic: *text*
+    text = re.sub(r'\*(.+?)\*', r'<em>\1</em>', text)
+    return text
+
+
 # ─── Send email endpoint (called by agent webhook tool) ───
 
 @router.post("/send")
@@ -168,6 +242,11 @@ async def send_email(request: Request):
         subject = "Info from Cane"  # Default subject if none provided
     if not body:
         raise HTTPException(400, "Missing required field: body (or answer)")
+
+    # Auto-convert markdown to styled HTML if body contains markdown patterns
+    if not is_html and ("**" in body or "- " in body or "1. " in body):
+        body = _markdown_to_html(body)
+        is_html = True
 
     result = _send_gmail(to, subject, body, is_html)
     return result
