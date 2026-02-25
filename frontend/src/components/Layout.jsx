@@ -31,7 +31,7 @@ export default function Layout({ children }) {
           <div style={{ height: 1, background: 'var(--rule)', margin: '8px 12px', opacity: 0.4 }} />
 
           <NavLink to="/marketplace">
-            <Store /> Marketplace
+            <Store /> Marketplace <span style={{ fontSize: '0.5rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', padding: '1px 5px', borderRadius: 3, background: 'var(--cane-100)', color: 'var(--cane-700)', marginLeft: 4 }}>Beta</span>
           </NavLink>
           <NavLink to="/guide">
             <HelpCircle /> Docs
