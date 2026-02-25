@@ -10,6 +10,7 @@ Usage:
     → Frontend at http://localhost:5173 (Vite dev server)
 """
 import sys
+import os
 import pathlib
 from pathlib import Path
 
