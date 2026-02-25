@@ -20,7 +20,7 @@ export default function Landing() {
   useEffect(() => {
     const script = document.createElement('script')
     script.src = 'https://cane.fyi/widget.js'
-    script.setAttribute('data-api-key', 'cane_4f631c3255c94322a914c35d5ee9fdc48ea7f7a706baa1a5')
+    script.setAttribute('data-api-key', 'cane_d70eecade5af38fd4caa566a40de0ddf9bc8e1f5e1601f71')
     script.setAttribute('data-agent-name', 'Cane Sales Assistant')
     script.setAttribute('data-color', '#c8963e')
     script.setAttribute('data-position', 'right')
@@ -29,7 +29,7 @@ export default function Landing() {
     script.setAttribute('data-placeholder', 'Ask about agents, pricing, features...')
     script.setAttribute('data-auto-open', '5')
     script.setAttribute('data-border-radius', '16')
-    script.setAttribute('data-workspace-id', 'adf53cd1-b910-497c-91b8-bf8dea1eec0a')
+    script.setAttribute('data-workspace-id', '57f42953-0028-427f-b100-0fe1002776ea')
     document.body.appendChild(script)
 
     return () => {
