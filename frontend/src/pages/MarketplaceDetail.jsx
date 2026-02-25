@@ -470,21 +470,37 @@ export default function MarketplaceDetail() {
               </div>
               {listing.tools.map((t, i) => (
                 <div key={i} style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '8px 0',
+                  padding: '10px 0',
                   borderBottom: i < listing.tools.length - 1 ? '1px solid var(--rule-light)' : 'none',
                 }}>
-                  <Zap size={13} style={{ color: 'var(--cane-600)', flexShrink: 0 }} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text)' }}>{t.name}</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 1 }}>{t.description}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Zap size={13} style={{ color: 'var(--cane-600)', flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text)' }}>{t.name}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 1 }}>{t.description}</div>
+                    </div>
+                    <div style={{
+                      fontSize: '0.62rem', fontFamily: 'var(--font-mono)',
+                      color: 'var(--text-faint)', textTransform: 'uppercase',
+                    }}>
+                      {t.method} · {t.fire_and_forget ? 'Fire & Forget' : 'Wait'}
+                    </div>
                   </div>
-                  <div style={{
-                    fontSize: '0.62rem', fontFamily: 'var(--font-mono)',
-                    color: 'var(--text-faint)', textTransform: 'uppercase',
-                  }}>
-                    {t.method} · {t.fire_and_forget ? 'Fire & Forget' : 'Wait'}
-                  </div>
+                  {t.parameters?.length > 0 && (
+                    <div style={{ marginTop: 6, marginLeft: 23, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {t.parameters.map((p, j) => (
+                        <span key={j} style={{
+                          padding: '2px 8px', borderRadius: 4,
+                          background: 'var(--cane-50)', border: '1px solid var(--cane-100)',
+                          fontSize: '0.62rem', fontFamily: 'var(--font-mono)',
+                          color: 'var(--cane-700)',
+                        }}>
+                          {p.name}{p.required ? '*' : ''}
+                          <span style={{ color: 'var(--text-faint)', marginLeft: 3 }}>{p.type || 'str'}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
               <div style={{
@@ -493,7 +509,7 @@ export default function MarketplaceDetail() {
                 background: 'var(--cane-50)', borderRadius: 'var(--radius-sm)',
                 lineHeight: 1.5,
               }}>
-                Tool schemas are cloned without credentials. You'll configure URLs and auth after cloning.
+                Tool schemas are cloned with parameters and config. Cane platform tools (email, calendar, sheets) work immediately. External webhooks need your own URL and credentials.
               </div>
             </div>
           )}

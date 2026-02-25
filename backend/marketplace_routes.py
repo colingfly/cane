@@ -515,13 +515,16 @@ def clone_listing(
         if tools_data:
             from tool_models import AgentTool
             for t in tools_data:
+                tool_url = t.get("url", "")
+                # Platform tools (cane.fyi) are safe to pre-fill
+                is_platform = tool_url.startswith("https://cane.fyi/api/")
                 new_tool = AgentTool(
                     workspace_id=new_ws.id,
                     tenant_id=user.tenant_id,
                     name=t.get("name", ""),
                     description=t.get("description", ""),
                     tool_type=t.get("tool_type", "webhook"),
-                    url="",  # Empty — needs setup
+                    url=tool_url if is_platform else "",  # Pre-fill platform tools
                     method=t.get("method", "POST"),
                     headers="{}",
                     payload_template="{}",
@@ -529,7 +532,7 @@ def clone_listing(
                     auth_value="",
                     parameters=json.dumps(t.get("parameters", [])),
                     fire_and_forget=t.get("fire_and_forget", True),
-                    is_enabled=False,  # Disabled until configured
+                    is_enabled=is_platform,  # Auto-enable platform tools
                 )
                 db.add(new_tool)
                 tools_cloned += 1

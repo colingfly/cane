@@ -238,6 +238,11 @@ function ListingCard({ listing, onClick }) {
           {PACK_LABELS[listing.pack_type] || listing.pack_type}
         </span>
         <div style={{ flex: 1 }} />
+        {listing.tool_count > 0 && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            <Wrench size={10} /> {listing.tool_count}
+          </span>
+        )}
         {listing.test_case_count > 0 && (
           <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
             <FlaskConical size={10} /> {listing.test_case_count}
@@ -283,10 +288,6 @@ export default function Marketplace() {
     load()
   }
 
-  // Split: featured (score >= 70 or is_featured) shown as hero cards
-  const featured = listings.filter(l => l.is_featured || (l.overall_score && l.overall_score >= 70))
-  const rest = listings.filter(l => !featured.includes(l))
-
   return (
     <div className="fade-in" style={{ maxWidth: 900, margin: '0 auto' }}>
       {/* Header */}
@@ -301,28 +302,6 @@ export default function Marketplace() {
           Clone verified AI agents. Run evals to independently verify performance before you deploy.
         </p>
       </div>
-
-      {/* Featured agents — only on default view */}
-      {featured.length > 0 && !search && category === 'all' && (
-        <div style={{ marginBottom: 32 }}>
-          <div style={{
-            fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase',
-            letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 12,
-            display: 'flex', alignItems: 'center', gap: 6,
-          }}>
-            <Star size={12} /> Top Rated
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {featured.map(l => (
-              <FeaturedCard
-                key={l.id}
-                listing={l}
-                onClick={() => navigate(`/marketplace/${l.id}`)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Search + filters */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -422,30 +401,19 @@ export default function Marketplace() {
           </div>
         </div>
       ) : (
-        <>
-          {/* "All Agents" header when there are also featured */}
-          {featured.length > 0 && rest.length > 0 && !search && category === 'all' && (
-            <div style={{
-              fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase',
-              letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 12,
-            }}>
-              All Agents
-            </div>
-          )}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-            gap: 14,
-          }}>
-            {(search || category !== 'all' ? listings : rest).map(l => (
-              <ListingCard
-                key={l.id}
-                listing={l}
-                onClick={() => navigate(`/marketplace/${l.id}`)}
-              />
-            ))}
-          </div>
-        </>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+          gap: 14,
+        }}>
+          {listings.map(l => (
+            <ListingCard
+              key={l.id}
+              listing={l}
+              onClick={() => navigate(`/marketplace/${l.id}`)}
+            />
+          ))}
+        </div>
       )}
     </div>
   )
