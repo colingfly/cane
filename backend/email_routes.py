@@ -159,11 +159,15 @@ async def send_email(request: Request):
 
     to = data.get("to", "").strip()
     subject = data.get("subject", "").strip()
-    body = data.get("body", "").strip()
+    body = data.get("body", "").strip() or data.get("answer", "").strip()  # Accept 'answer' as fallback for body
     is_html = data.get("html", False)
 
-    if not to or not subject or not body:
-        raise HTTPException(400, "Missing required fields: to, subject, body")
+    if not to:
+        raise HTTPException(400, "Missing required field: to")
+    if not subject:
+        subject = "Info from Cane"  # Default subject if none provided
+    if not body:
+        raise HTTPException(400, "Missing required field: body (or answer)")
 
     result = _send_gmail(to, subject, body, is_html)
     return result
