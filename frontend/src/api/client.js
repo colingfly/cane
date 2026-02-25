@@ -379,6 +379,11 @@ export async function testTool(toolId) {
   return request(`/tools/${toolId}/test`, { method: 'POST' })
 }
 
+export async function copyTools(sourceWorkspaceId, targetWorkspaceId) {
+  const qs = new URLSearchParams({ source_workspace_id: sourceWorkspaceId, target_workspace_id: targetWorkspaceId })
+  return request(`/tools/copy?${qs.toString()}`, { method: 'POST' })
+}
+
 // ─── MCP Servers ───
 
 export async function getMcpCatalog() {

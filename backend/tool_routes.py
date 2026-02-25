@@ -165,6 +165,62 @@ def delete_tool(
     return {"status": "deleted", "id": tool_id}
 
 
+# ─── Copy tools from another agent ───
+
+@router.post("/copy")
+def copy_tools(
+    source_workspace_id: str = Query(..., description="Agent to copy tools FROM"),
+    target_workspace_id: str = Query(..., description="Agent to copy tools TO"),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Copy all tools from one agent to another within the same tenant."""
+    # Verify both workspaces belong to user's tenant
+    for wid, label in [(source_workspace_id, "Source"), (target_workspace_id, "Target")]:
+        ws = db.query(Workspace).filter(
+            Workspace.id == wid,
+            Workspace.tenant_id == user.tenant_id,
+        ).first()
+        if not ws:
+            raise HTTPException(404, f"{label} agent not found")
+
+    if source_workspace_id == target_workspace_id:
+        raise HTTPException(400, "Source and target must be different agents")
+
+    source_tools = db.query(AgentTool).filter(
+        AgentTool.workspace_id == source_workspace_id,
+        AgentTool.tenant_id == user.tenant_id,
+    ).all()
+
+    if not source_tools:
+        return {"copied": 0, "message": "Source agent has no tools"}
+
+    copied = 0
+    for t in source_tools:
+        new_tool = AgentTool(
+            workspace_id=target_workspace_id,
+            tenant_id=user.tenant_id,
+            name=t.name,
+            description=t.description,
+            tool_type=t.tool_type,
+            url=t.url,
+            method=t.method,
+            headers=t.headers,
+            payload_template=t.payload_template,
+            auth_type=t.auth_type,
+            auth_value=t.auth_value,
+            parameters=t.parameters,
+            fire_and_forget=t.fire_and_forget,
+            is_enabled=t.is_enabled,
+        )
+        db.add(new_tool)
+        copied += 1
+
+    db.commit()
+    print(f"  [Tools] Copied {copied} tools from {source_workspace_id} to {target_workspace_id}")
+    return {"copied": copied, "message": f"Copied {copied} tool(s)"}
+
+
 # ─── Test tool (fire a test request) ───
 
 @router.post("/{tool_id}/test")

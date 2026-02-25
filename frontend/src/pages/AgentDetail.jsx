@@ -4,10 +4,10 @@ import { ArrowLeft, Upload, Trash2, FileText, Sparkles, Save, ToggleLeft, Toggle
 import {
   getAgent, updateAgent, generateAgentPrompt, generateReplicaPrompt,
   getDocuments, uploadDocument, deleteDocument, getDocumentStatus,
-  publishToMarketplace, getTools, createTool, updateTool, deleteTool, testTool,
+  publishToMarketplace, getTools, createTool, updateTool, deleteTool, testTool, copyTools,
   getMcpCatalog, getMcpServers, connectMcpServer, updateMcpServer, deleteMcpServer, syncMcpServer,
   getWidgetConfig, updateWidgetConfig,
-  createApiKey, deleteApiKey, getApiKeys,
+  createApiKey, deleteApiKey, getApiKeys, getAgents,
 } from '../api/client'
 import { getEnvironments, getRuns } from '../api/eval'
 
@@ -70,6 +70,9 @@ export default function AgentDetail() {
   const [expandedTool, setExpandedTool] = useState(null)
   const [editingTool, setEditingTool] = useState(null)
   const [editTool, setEditTool] = useState(null)
+  const [showCopyTools, setShowCopyTools] = useState(false)
+  const [otherAgents, setOtherAgents] = useState([])
+  const [copyingFrom, setCopyingFrom] = useState(null)
   const [agentKeys, setAgentKeys] = useState([])
   const [showNewKey, setShowNewKey] = useState(null)
   const [copiedKey, setCopiedKey] = useState(false)
@@ -398,6 +401,30 @@ export default function AgentDetail() {
     } catch (err) {
       alert(err.message || 'Failed to update tool')
     }
+  }
+
+  // ─── Copy tools from another agent ───
+  const handleShowCopyTools = async () => {
+    if (showCopyTools) { setShowCopyTools(false); return }
+    try {
+      const res = await getAgents()
+      const others = (res.agents || []).filter(a => a.id !== agentId)
+      setOtherAgents(others)
+      setShowCopyTools(true)
+    } catch { setOtherAgents([]) }
+  }
+
+  const handleCopyTools = async (sourceId) => {
+    setCopyingFrom(sourceId)
+    try {
+      const res = await copyTools(sourceId, agentId)
+      const toolsRes = await getTools(agentId)
+      setTools(toolsRes.tools || [])
+      setShowCopyTools(false)
+      alert(`Copied ${res.copied} tool(s)`)
+    } catch (err) {
+      alert(err.message || 'Failed to copy tools')
+    } finally { setCopyingFrom(null) }
   }
 
   // ─── API Key handlers ───
@@ -899,10 +926,44 @@ export default function AgentDetail() {
               }}>{tools.length}</span>
             )}
           </h3>
-          <button className="btn btn-ghost" onClick={() => setShowAddTool(!showAddTool)} style={{ fontSize: '0.8rem' }}>
-            <Plus size={14} /> Add Tool
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-ghost" onClick={() => setShowAddTool(!showAddTool)} style={{ fontSize: '0.8rem' }}>
+              <Plus size={14} /> Add Tool
+            </button>
+            <button className="btn btn-ghost" onClick={handleShowCopyTools} style={{ fontSize: '0.8rem' }}>
+              <Copy size={14} /> Copy from Agent
+            </button>
+          </div>
         </div>
+
+        {/* Copy tools from another agent */}
+        {showCopyTools && (
+          <div style={{
+            padding: 16, borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--cane-200)', background: 'var(--cane-50)',
+            marginBottom: 16,
+          }}>
+            <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: 10 }}>Copy tools from:</div>
+            {otherAgents.length === 0 ? (
+              <div style={{ fontSize: '0.82rem', color: '#888' }}>No other agents found</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {otherAgents.map(a => (
+                  <button
+                    key={a.id}
+                    className="btn btn-ghost"
+                    disabled={copyingFrom === a.id}
+                    onClick={() => handleCopyTools(a.id)}
+                    style={{ justifyContent: 'flex-start', fontSize: '0.82rem', padding: '8px 12px' }}
+                  >
+                    {copyingFrom === a.id ? <RefreshCw size={14} className="spin" /> : <Copy size={14} />}
+                    {a.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Add tool form */}
         {showAddTool && (
