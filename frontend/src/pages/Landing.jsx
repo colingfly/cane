@@ -24,7 +24,7 @@ export default function Landing() {
     script.setAttribute('data-agent-name', 'Cane Sales Assistant')
     script.setAttribute('data-color', '#c8963e')
     script.setAttribute('data-position', 'right')
-    script.setAttribute('data-greeting', "Hey! I'm the Cane Sales Assistant — and yes, I was built using Cane. Ask me anything about the platform.")
+    script.setAttribute('data-greeting', "Hey! I'm the Cane Sales Assistant — built using Cane. Ask me anything about the platform, book a meeting, or request a follow-up email.")
     script.setAttribute('data-subtitle', 'Built with Cane')
     script.setAttribute('data-placeholder', 'Ask about agents, pricing, features...')
     script.setAttribute('data-auto-open', '5')
