@@ -78,8 +78,18 @@ def execute_tool(tool, input_data: dict) -> dict:
             headers["X-API-Key"] = tool.auth_value
 
         # Build payload from template, substituting input values
+        # If template is empty/default, just forward Claude's raw input
         template = json.loads(tool.payload_template or "{}")
-        payload = _render_template(template, input_data)
+        default_templates = [
+            {},
+            {"question": "{{question}}", "answer": "{{answer}}"},
+        ]
+        if template in default_templates:
+            # No custom template — forward Claude's input directly
+            # Remove internal fields Claude adds
+            payload = {k: v for k, v in input_data.items() if k not in ("reason", "_tool_id")}
+        else:
+            payload = _render_template(template, input_data)
 
         # Make the request
         data = json.dumps(payload).encode() if tool.method in ("POST", "PUT", "PATCH") else None
