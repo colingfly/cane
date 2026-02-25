@@ -175,7 +175,10 @@ async def send_email(request: Request):
 def debug_env():
     """Temporary: check which GMAIL env vars exist at all."""
     import os
-    gmail_vars = {k: '✓ set' for k, v in os.environ.items() if 'GMAIL' in k.upper()}
+    gmail_vars = {}
+    for k, v in os.environ.items():
+        if 'GMAIL' in k.upper():
+            gmail_vars[k] = f"{v[:8]}..." if len(v) > 8 else v
     return {"gmail_env_vars_found": gmail_vars, "total_env_vars": len(os.environ)}
 
 

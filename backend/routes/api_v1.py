@@ -73,9 +73,6 @@ async def v1_ask(
         except Exception:
             pass
 
-    if not context_chunks:
-        return {"answer": "No relevant documents found for your query.", "sources": [], "chunks_used": 0, "model": CLAUDE_MODEL}
-
     # Build prompt
     agent_prompt = ""
     if workspace_id:
@@ -83,17 +80,23 @@ async def v1_ask(
         if ws and ws.system_prompt:
             agent_prompt = ws.system_prompt
 
-    system = build_system_prompt(agent_prompt)
-    numbered = "\n\n".join(f"[{i+1}] {c}" for i, c in enumerate(context_chunks))
-    user_msg = f"DOCUMENT EXCERPTS:\n{numbered}\n\nQUESTION: {query}"
-
-    # Call Claude (with tools if configured)
+    # Check if agent has tools configured
     from services.tools import get_all_tools
     from tool_executor import call_claude_with_tools
     from services.analytics import log_conversation
 
     t0 = time.time()
     claude_tools, tool_lookup = get_all_tools(workspace_id, api_key.tenant_id, db) if workspace_id else ([], {})
+
+    if not context_chunks and not claude_tools:
+        return {"answer": "No relevant documents found for your query.", "sources": [], "chunks_used": 0, "model": CLAUDE_MODEL}
+
+    system = build_system_prompt(agent_prompt)
+    if context_chunks:
+        numbered = "\n\n".join(f"[{i+1}] {c}" for i, c in enumerate(context_chunks))
+        user_msg = f"DOCUMENT EXCERPTS:\n{numbered}\n\nQUESTION: {query}"
+    else:
+        user_msg = f"QUESTION: {query}"
 
     answer = ""
     if claude_tools:
