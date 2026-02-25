@@ -113,6 +113,17 @@ def _migrate_marketplace_tables():
     else:
         print("  [DB] marketplace_listings table already exists")
 
+    # Add tools columns if missing
+    try:
+        cols = {c["name"] for c in insp.get_columns("marketplace_listings")}
+        if "tools_snapshot" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE marketplace_listings ADD COLUMN tools_snapshot TEXT NULL"))
+                conn.execute(text("ALTER TABLE marketplace_listings ADD COLUMN tool_count INT DEFAULT 0"))
+            print("  [DB] Added tools_snapshot + tool_count to marketplace_listings")
+    except Exception as e:
+        print(f"  [DB] Marketplace tools migration skipped: {e}")
+
     if "marketplace_clones" not in tables:
         with engine.begin() as conn:
             conn.execute(text("""

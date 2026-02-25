@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Download, FlaskConical, FileText, Copy, Check, Shield, RefreshCw, Bot, Trash2 } from 'lucide-react'
+import { ArrowLeft, Download, FlaskConical, FileText, Copy, Check, Shield, RefreshCw, Bot, Trash2, Wrench, Zap } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { getMarketplaceListing, cloneFromMarketplace, delistFromMarketplace } from '../api/client'
 
@@ -422,7 +422,7 @@ export default function MarketplaceDetail() {
           </div>
 
           {/* Items grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: listing.tool_count > 0 ? '1fr 1fr 1fr 1fr' : '1fr 1fr 1fr', gap: 12 }}>
             <div style={{ textAlign: 'center', padding: 12 }}>
               <Bot size={20} style={{ color: 'var(--accent)', marginBottom: 6 }} />
               <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text)' }}>Blueprint</div>
@@ -449,7 +449,54 @@ export default function MarketplaceDetail() {
                 {listing.pack_type === 'byod' ? 'Upload your own' : 'Included'}
               </div>
             </div>
+            {listing.tool_count > 0 && (
+              <div style={{ textAlign: 'center', padding: 12 }}>
+                <Wrench size={20} style={{ color: 'var(--accent)', marginBottom: 6 }} />
+                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text)' }}>
+                  {listing.tool_count} Tools
+                </div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                  Needs setup
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* Tool list */}
+          {listing.tools?.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)', marginBottom: 8 }}>
+                Tool Schemas Included
+              </div>
+              {listing.tools.map((t, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '8px 0',
+                  borderBottom: i < listing.tools.length - 1 ? '1px solid var(--rule-light)' : 'none',
+                }}>
+                  <Zap size={13} style={{ color: 'var(--cane-600)', flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text)' }}>{t.name}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 1 }}>{t.description}</div>
+                  </div>
+                  <div style={{
+                    fontSize: '0.62rem', fontFamily: 'var(--font-mono)',
+                    color: 'var(--text-faint)', textTransform: 'uppercase',
+                  }}>
+                    {t.method} · {t.fire_and_forget ? 'Fire & Forget' : 'Wait'}
+                  </div>
+                </div>
+              ))}
+              <div style={{
+                fontSize: '0.72rem', color: 'var(--text-muted)',
+                marginTop: 10, padding: '8px 12px',
+                background: 'var(--cane-50)', borderRadius: 'var(--radius-sm)',
+                lineHeight: 1.5,
+              }}>
+                Tool schemas are cloned without credentials. You'll configure URLs and auth after cloning.
+              </div>
+            </div>
+          )}
 
           {/* Document list for open/licensed */}
           {listing.pack_type !== 'byod' && listing.included_documents?.length > 0 && (

@@ -931,6 +931,26 @@ export default function AgentDetail() {
           </div>
         </div>
 
+        {/* Setup banner for unconfigured tools */}
+        {tools.filter(t => !t.url).length > 0 && (
+          <div style={{
+            padding: '14px 16px', borderRadius: 'var(--radius-sm)',
+            background: 'rgba(200,150,62,0.08)', border: '1px solid rgba(200,150,62,0.2)',
+            marginBottom: 16, display: 'flex', alignItems: 'flex-start', gap: 12,
+          }}>
+            <Wrench size={18} style={{ color: 'var(--cane-600)', flexShrink: 0, marginTop: 2 }} />
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '0.84rem', marginBottom: 4 }}>
+                {tools.filter(t => !t.url).length} tool{tools.filter(t => !t.url).length > 1 ? 's need' : ' needs'} setup
+              </div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                These tools were cloned without credentials. Click the edit icon on each to configure the webhook URL and auth.
+                {' '}For Cane platform tools (email, calendar, sheets), use <code style={{ fontSize: '0.72rem', background: 'var(--cane-100)', padding: '1px 4px', borderRadius: 3 }}>https://cane.fyi/api/...</code>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Copy tools from another agent */}
         {showCopyTools && (
           <div style={{

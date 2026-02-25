@@ -73,6 +73,10 @@ class MarketplaceListing(Base):
     custom_rules_snapshot = Column(Text, nullable=True)      # JSON: [rule_text, ...]
     test_case_count = Column(Integer, default=0)
 
+    # ─── Tools (schema only, no auth values) ───
+    tools_snapshot = Column(Text, nullable=True)              # JSON: [{name, description, url, method, parameters, fire_and_forget}]
+    tool_count = Column(Integer, default=0)
+
     # ─── Community stats ───
     clone_count = Column(Integer, default=0)
     verify_count = Column(Integer, default=0)

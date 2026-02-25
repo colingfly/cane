@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Download, FlaskConical, FileText, Star, Filter, Zap, Wrench, Globe } from 'lucide-react'
-import { browseMarketplace, getPacks, clonePack } from '../api/client'
+import { Search, Download, FlaskConical, FileText, Star, Zap, Wrench, Globe, ArrowRight, Shield } from 'lucide-react'
+import { browseMarketplace } from '../api/client'
 
 const CATEGORIES = [
   { id: 'all', label: 'All' },
@@ -15,30 +15,147 @@ const CATEGORIES = [
 ]
 
 const PACK_LABELS = {
-  byod: 'BYOD',
+  byod: 'Bring Your Data',
   open: 'Open',
   licensed: 'Licensed',
 }
 
-function ScoreBadge({ score }) {
+function ScoreBadge({ score, size = 'md' }) {
   if (score == null) return null
   const color = score >= 80 ? 'var(--status-pass)' : score >= 60 ? 'var(--status-warn)' : 'var(--status-fail)'
+  const lg = size === 'lg'
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 6,
-      padding: '4px 10px', borderRadius: 6,
+      display: 'flex', alignItems: 'center', gap: lg ? 8 : 6,
+      padding: lg ? '6px 14px' : '4px 10px', borderRadius: 8,
       background: 'var(--cane-900)', minWidth: 52, justifyContent: 'center',
     }}>
-      <div style={{
-        width: 6, height: 6, borderRadius: 99,
-        background: color,
-      }} />
+      <div style={{ width: lg ? 8 : 6, height: lg ? 8 : 6, borderRadius: 99, background: color }} />
       <span style={{
         fontFamily: 'var(--font-display)', fontWeight: 800,
-        fontSize: '0.88rem', color: 'var(--cane-100)',
+        fontSize: lg ? '1.1rem' : '0.88rem', color: 'var(--cane-100)',
       }}>
         {Math.round(score)}
       </span>
+    </div>
+  )
+}
+
+function FeaturedCard({ listing, onClick }) {
+  const [hovered, setHovered] = useState(false)
+  const tags = listing.tags || []
+
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        padding: '28px 30px',
+        background: 'white',
+        border: `1.5px solid ${hovered ? 'var(--cane-500)' : 'var(--cane-200)'}`,
+        borderRadius: 'var(--radius)',
+        cursor: 'pointer',
+        transition: 'all 0.2s',
+        boxShadow: hovered ? '0 4px 20px rgba(0,0,0,0.06)' : '0 1px 4px rgba(0,0,0,0.02)',
+        display: 'flex', flexDirection: 'column', gap: 16,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+        <div style={{
+          width: 52, height: 52, borderRadius: 13,
+          background: 'var(--cane-900)', color: 'var(--accent-light)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: 'var(--font-display)', fontWeight: 700,
+          fontSize: '1rem', flexShrink: 0,
+        }}>
+          {(listing.icon || listing.name?.charAt(0) || '?').slice(0, 2).toUpperCase()}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontWeight: 700, fontSize: '1.15rem', color: 'var(--text)',
+            fontFamily: 'var(--font-display)', letterSpacing: '-0.01em',
+            marginBottom: 2,
+          }}>
+            {listing.name}
+          </div>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+            by {listing.publisher_name}
+          </div>
+        </div>
+        <ScoreBadge score={listing.overall_score} size="lg" />
+      </div>
+
+      <div style={{
+        fontSize: '0.84rem', color: 'var(--text-secondary)',
+        lineHeight: 1.65, flex: 1,
+      }}>
+        {listing.description || 'No description'}
+      </div>
+
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 16,
+        fontSize: '0.72rem', color: 'var(--text-muted)',
+        fontFamily: 'var(--font-mono)',
+      }}>
+        {listing.test_case_count > 0 && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <FlaskConical size={12} /> {listing.test_case_count} tests
+          </span>
+        )}
+        {listing.document_count > 0 && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <FileText size={12} /> {listing.document_count} docs
+          </span>
+        )}
+        {listing.verify_count > 0 && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Shield size={12} /> {listing.verify_count} verified
+          </span>
+        )}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Download size={12} /> {listing.clone_count || 0} clones
+        </span>
+      </div>
+
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        borderTop: '1px solid var(--rule-light)', paddingTop: 14,
+      }}>
+        <span style={{
+          padding: '3px 10px', borderRadius: 5,
+          background: listing.pack_type === 'open' ? 'rgba(59,120,66,0.08)' : 'var(--cane-50)',
+          color: listing.pack_type === 'open' ? 'var(--status-pass)' : 'var(--text-muted)',
+          fontWeight: 600, fontSize: '0.65rem', textTransform: 'uppercase',
+          letterSpacing: '0.04em', fontFamily: 'var(--font-mono)',
+        }}>
+          {PACK_LABELS[listing.pack_type] || listing.pack_type}
+        </span>
+        <span style={{
+          padding: '3px 10px', borderRadius: 5,
+          background: 'var(--accent-muted)', color: 'var(--accent)',
+          fontWeight: 600, fontSize: '0.65rem', textTransform: 'uppercase',
+          letterSpacing: '0.04em', fontFamily: 'var(--font-mono)',
+        }}>
+          {listing.category}
+        </span>
+        {tags.slice(0, 3).map(t => (
+          <span key={t} style={{
+            padding: '3px 8px', borderRadius: 5,
+            background: 'var(--cane-100)', color: 'var(--cane-600)',
+            fontSize: '0.62rem', fontWeight: 600, fontFamily: 'var(--font-mono)',
+          }}>{t}</span>
+        ))}
+        <div style={{ flex: 1 }} />
+        <span style={{
+          display: 'flex', alignItems: 'center', gap: 4,
+          fontSize: '0.78rem', fontWeight: 600,
+          color: hovered ? 'var(--cane-700)' : 'var(--text-muted)',
+          transition: 'color 0.15s',
+        }}>
+          View <ArrowRight size={14} />
+        </span>
+      </div>
     </div>
   )
 }
@@ -62,10 +179,9 @@ function ListingCard({ listing, onClick }) {
         display: 'flex', flexDirection: 'column', gap: 12,
       }}
     >
-      {/* Top row: icon + name + score */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
         <div style={{
-          width: 40, height: 40, borderRadius: 10,
+          width: 42, height: 42, borderRadius: 10,
           background: 'var(--cane-900)', color: 'var(--cane-400)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontFamily: 'var(--font-display)', fontWeight: 700,
@@ -81,46 +197,37 @@ function ListingCard({ listing, onClick }) {
           }}>
             {listing.name}
           </div>
-          <div style={{
-            fontSize: '0.75rem', color: 'var(--text-muted)',
-            marginTop: 2,
-          }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
             by {listing.publisher_name}
           </div>
         </div>
         <ScoreBadge score={listing.overall_score} />
       </div>
 
-      {/* Description */}
       <div style={{
         fontSize: '0.8rem', color: 'var(--text-secondary)',
         lineHeight: 1.6, flex: 1,
-        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+        display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
         overflow: 'hidden',
       }}>
         {listing.description || 'No description'}
       </div>
 
-      {/* Meta row */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 14,
+        display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
         fontSize: '0.7rem', color: 'var(--text-muted)',
         fontFamily: 'var(--font-mono)',
         borderTop: '1px solid var(--rule-light)',
         paddingTop: 10,
       }}>
-        {/* Category */}
         <span style={{
           padding: '2px 8px', borderRadius: 4,
-          background: 'var(--accent-muted)',
-          color: 'var(--accent)', fontWeight: 600,
-          fontSize: '0.6rem', textTransform: 'uppercase',
+          background: 'var(--accent-muted)', color: 'var(--accent)',
+          fontWeight: 600, fontSize: '0.6rem', textTransform: 'uppercase',
           letterSpacing: '0.04em',
         }}>
           {listing.category}
         </span>
-
-        {/* Pack type */}
         <span style={{
           padding: '2px 8px', borderRadius: 4,
           background: listing.pack_type === 'open' ? 'rgba(59,120,66,0.08)' : 'rgba(0,0,0,0.04)',
@@ -130,18 +237,15 @@ function ListingCard({ listing, onClick }) {
         }}>
           {PACK_LABELS[listing.pack_type] || listing.pack_type}
         </span>
-
         <div style={{ flex: 1 }} />
-
-        {/* Stats */}
         {listing.test_case_count > 0 && (
           <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-            <FlaskConical size={10} /> {listing.test_case_count} tests
+            <FlaskConical size={10} /> {listing.test_case_count}
           </span>
         )}
         {listing.document_count > 0 && (
           <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-            <FileText size={10} /> {listing.document_count} docs
+            <FileText size={10} /> {listing.document_count}
           </span>
         )}
         <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
@@ -159,34 +263,16 @@ export default function Marketplace() {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('all')
   const [sort, setSort] = useState('score')
-  const [packs, setPacks] = useState([])
-  const [cloningPack, setCloningPack] = useState(null)
 
   const load = async () => {
     setLoading(true)
     try {
-      const [mktRes, packRes] = await Promise.all([
-        browseMarketplace({ category, search, sort }),
-        packs.length ? Promise.resolve(null) : getPacks().catch(() => null),
-      ])
-      setListings(mktRes.listings || [])
-      if (packRes) setPacks(packRes.packs || [])
+      const res = await browseMarketplace({ category, search, sort })
+      setListings(res.listings || [])
     } catch (e) {
       console.error('Failed to load marketplace:', e)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleClonePack = async (packId) => {
-    setCloningPack(packId)
-    try {
-      const res = await clonePack(packId)
-      navigate(`/agents/${res.agent_id}`)
-    } catch (err) {
-      alert(err.message || 'Failed to clone pack')
-    } finally {
-      setCloningPack(null)
     }
   }
 
@@ -197,96 +283,42 @@ export default function Marketplace() {
     load()
   }
 
+  // Split: featured (score >= 70 or is_featured) shown as hero cards
+  const featured = listings.filter(l => l.is_featured || (l.overall_score && l.overall_score >= 70))
+  const rest = listings.filter(l => !featured.includes(l))
+
   return (
-    <div className="fade-in" style={{ maxWidth: 880, margin: '0 auto' }}>
+    <div className="fade-in" style={{ maxWidth: 900, margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 28 }}>
         <h2 style={{
-          fontSize: '1.5rem', fontWeight: 700, marginBottom: 4,
+          fontSize: '1.6rem', fontWeight: 700, marginBottom: 6,
           fontFamily: 'var(--font-display)',
         }}>
-          Marketplace
+          Agent Marketplace
         </h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-          Discover, clone, and verify community-built AI agents.
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.5 }}>
+          Clone verified AI agents. Run evals to independently verify performance before you deploy.
         </p>
       </div>
 
-      {/* Featured Packs */}
-      {packs.length > 0 && (
-        <div style={{ marginBottom: 28 }}>
+      {/* Featured agents — only on default view */}
+      {featured.length > 0 && !search && category === 'all' && (
+        <div style={{ marginBottom: 32 }}>
           <div style={{
             fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase',
             letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 12,
+            display: 'flex', alignItems: 'center', gap: 6,
           }}>
-            Ready-to-Deploy Packs
+            <Star size={12} /> Top Rated
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 14 }}>
-            {packs.map(p => (
-              <div key={p.id} style={{
-                padding: '20px 22px', background: 'white',
-                border: '1px solid var(--cane-200)', borderRadius: 'var(--radius)',
-                display: 'flex', flexDirection: 'column', gap: 12,
-              }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                  <div style={{
-                    width: 44, height: 44, borderRadius: 11,
-                    background: 'var(--cane-900)', color: 'var(--accent-light)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontFamily: 'var(--font-display)', fontWeight: 700,
-                    fontSize: '0.9rem', flexShrink: 0,
-                  }}>
-                    {(p.icon || p.name?.charAt(0) || '?').slice(0, 2).toUpperCase()}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{
-                      fontWeight: 700, fontSize: '1rem', fontFamily: 'var(--font-display)',
-                      letterSpacing: '-0.01em', marginBottom: 4,
-                    }}>
-                      {p.name}
-                    </div>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                      {p.description}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-                  fontSize: '0.68rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)',
-                }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                    <Wrench size={10} /> {p.tool_count} tools
-                  </span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                    <FlaskConical size={10} /> {p.test_case_count} tests
-                  </span>
-                  {p.suggested_mcp?.length > 0 && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                      <Globe size={10} /> {p.suggested_mcp.length} integrations
-                    </span>
-                  )}
-                  <div style={{ flex: 1 }} />
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    {(p.tags || []).slice(0, 3).map(t => (
-                      <span key={t} style={{
-                        padding: '2px 7px', borderRadius: 4,
-                        background: 'var(--cane-100)', color: 'var(--cane-600)',
-                        fontSize: '0.6rem', fontWeight: 600,
-                      }}>{t}</span>
-                    ))}
-                  </div>
-                </div>
-
-                <button
-                  className="btn btn-primary"
-                  onClick={() => handleClonePack(p.id)}
-                  disabled={cloningPack === p.id}
-                  style={{ width: '100%', justifyContent: 'center', fontSize: '0.84rem', marginTop: 2 }}
-                >
-                  <Zap size={14} /> {cloningPack === p.id ? 'Setting up...' : 'Use This Pack'}
-                </button>
-              </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {featured.map(l => (
+              <FeaturedCard
+                key={l.id}
+                listing={l}
+                onClick={() => navigate(`/marketplace/${l.id}`)}
+              />
             ))}
           </div>
         </div>
@@ -305,13 +337,13 @@ export default function Marketplace() {
             onChange={e => setSearch(e.target.value)}
             placeholder="Search agents..."
             style={{
-              flex: 1, padding: '9px 14px', border: 'none',
+              flex: 1, padding: '10px 14px', border: 'none',
               fontSize: '0.84rem', outline: 'none',
               fontFamily: 'var(--font-body)', background: 'transparent',
             }}
           />
           <button type="submit" style={{
-            padding: '9px 14px', background: 'none', border: 'none',
+            padding: '10px 14px', background: 'none', border: 'none',
             cursor: 'pointer', color: 'var(--text-muted)',
           }}>
             <Search size={15} />
@@ -322,7 +354,7 @@ export default function Marketplace() {
           value={sort}
           onChange={e => setSort(e.target.value)}
           style={{
-            padding: '9px 14px', borderRadius: 'var(--radius-sm)',
+            padding: '10px 14px', borderRadius: 'var(--radius-sm)',
             border: '1px solid var(--rule)', fontSize: '0.8rem',
             fontFamily: 'var(--font-body)', background: 'white',
             color: 'var(--text)', cursor: 'pointer', outline: 'none',
@@ -369,38 +401,51 @@ export default function Marketplace() {
         <div className="loading-center"><div className="spinner" /></div>
       ) : listings.length === 0 ? (
         <div style={{
-          textAlign: 'center', padding: '48px 20px',
+          textAlign: 'center', padding: '56px 20px',
           color: 'var(--text-muted)', fontSize: '0.88rem',
         }}>
           <div style={{
-            width: 56, height: 56, borderRadius: 14,
+            width: 60, height: 60, borderRadius: 15,
             background: 'var(--paper)', border: '1px solid var(--rule)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             margin: '0 auto 16px',
           }}>
-            <Star size={24} style={{ color: 'var(--text-faint)' }} />
+            <Star size={26} style={{ color: 'var(--text-faint)' }} />
           </div>
-          <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' }}>
-            No agents published yet
+          <div style={{ fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)', fontSize: '1rem' }}>
+            No agents found
           </div>
-          <div>
-            Be the first — publish an agent from Agent Builder.
+          <div style={{ maxWidth: 320, margin: '0 auto' }}>
+            {search || category !== 'all'
+              ? 'Try a different search or category.'
+              : 'Publish your first agent from the Agent Builder to see it here.'}
           </div>
         </div>
       ) : (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-          gap: 14,
-        }}>
-          {listings.map(l => (
-            <ListingCard
-              key={l.id}
-              listing={l}
-              onClick={() => navigate(`/marketplace/${l.id}`)}
-            />
-          ))}
-        </div>
+        <>
+          {/* "All Agents" header when there are also featured */}
+          {featured.length > 0 && rest.length > 0 && !search && category === 'all' && (
+            <div style={{
+              fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase',
+              letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 12,
+            }}>
+              All Agents
+            </div>
+          )}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+            gap: 14,
+          }}>
+            {(search || category !== 'all' ? listings : rest).map(l => (
+              <ListingCard
+                key={l.id}
+                listing={l}
+                onClick={() => navigate(`/marketplace/${l.id}`)}
+              />
+            ))}
+          </div>
+        </>
       )}
     </div>
   )

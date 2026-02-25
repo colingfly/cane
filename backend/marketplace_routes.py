@@ -47,6 +47,7 @@ def _listing_to_dict(l: MarketplaceListing, detail=False) -> dict:
         "avg_verify_score": l.avg_verify_score,
         "publisher_name": l.publisher_name,
         "is_featured": l.is_featured,
+        "tool_count": l.tool_count or 0,
         "created_at": l.created_at.isoformat() if l.created_at else None,
     }
 
@@ -58,6 +59,7 @@ def _listing_to_dict(l: MarketplaceListing, detail=False) -> dict:
         d["custom_rules"] = json.loads(l.custom_rules_snapshot or "[]")
         d["included_documents"] = json.loads(l.included_documents or "[]")
         d["publisher_tenant_id"] = l.publisher_tenant_id
+        d["tools"] = json.loads(l.tools_snapshot or "[]")
 
     return d
 
@@ -250,6 +252,26 @@ def publish_agent(
             custom_rules_snapshot = json.dumps([r.rule_text for r in rules])
 
     # Create listing
+    # Snapshot tools (schema only — strip auth values)
+    from tool_models import AgentTool
+    agent_tools = db.query(AgentTool).filter(
+        AgentTool.workspace_id == workspace_id,
+        AgentTool.tenant_id == user.tenant_id,
+        AgentTool.is_enabled == True,
+    ).all()
+    tools_snapshot = json.dumps([
+        {
+            "name": t.name,
+            "description": t.description,
+            "tool_type": t.tool_type,
+            "url": t.url,
+            "method": t.method,
+            "parameters": json.loads(t.parameters or "[]"),
+            "fire_and_forget": t.fire_and_forget,
+        }
+        for t in agent_tools
+    ])
+
     listing = MarketplaceListing(
         publisher_tenant_id=user.tenant_id,
         publisher_user_id=user.id,
@@ -272,6 +294,8 @@ def publish_agent(
         criteria_snapshot=criteria_snapshot,
         custom_rules_snapshot=custom_rules_snapshot,
         test_case_count=test_case_count,
+        tools_snapshot=tools_snapshot,
+        tool_count=len(agent_tools),
     )
 
     db.add(listing)
@@ -485,6 +509,31 @@ def clone_listing(
                     sort_order=i,
                 ))
 
+        # ─── Clone tool schemas (disabled, no auth) ───
+        tools_cloned = 0
+        tools_data = json.loads(listing.tools_snapshot or "[]")
+        if tools_data:
+            from tool_models import AgentTool
+            for t in tools_data:
+                new_tool = AgentTool(
+                    workspace_id=new_ws.id,
+                    tenant_id=user.tenant_id,
+                    name=t.get("name", ""),
+                    description=t.get("description", ""),
+                    tool_type=t.get("tool_type", "webhook"),
+                    url="",  # Empty — needs setup
+                    method=t.get("method", "POST"),
+                    headers="{}",
+                    payload_template="{}",
+                    auth_type="none",
+                    auth_value="",
+                    parameters=json.dumps(t.get("parameters", [])),
+                    fire_and_forget=t.get("fire_and_forget", True),
+                    is_enabled=False,  # Disabled until configured
+                )
+                db.add(new_tool)
+                tools_cloned += 1
+
         # ─── Record the clone ───
         clone = MarketplaceClone(
             listing_id=listing_id,
@@ -500,7 +549,7 @@ def clone_listing(
 
         db.commit()
 
-        print(f"  [Marketplace] Cloned: {listing.name} → tenant={user.tenant_id}, agent={new_ws.id}, env={new_env_id}, docs={docs_transferred}")
+        print(f"  [Marketplace] Cloned: {listing.name} → tenant={user.tenant_id}, agent={new_ws.id}, env={new_env_id}, docs={docs_transferred}, tools={tools_cloned}")
 
         return {
             "status": "cloned",
@@ -508,6 +557,7 @@ def clone_listing(
             "environment_id": new_env_id,
             "listing_name": listing.name,
             "documents_transferred": docs_transferred,
+            "tools_cloned": tools_cloned,
         }
 
     except Exception as e:
