@@ -80,11 +80,8 @@ export default function AgentDetail() {
     name: '', description: '', url: '', method: 'POST',
     tool_type: 'webhook', fire_and_forget: true,
     auth_type: 'none', auth_value: '',
-    parameters: [
-      { name: 'question', type: 'string', description: "The user's question", required: true },
-      { name: 'answer', type: 'string', description: "The agent's answer", required: true },
-    ],
-    payload_template: { question: '{{question}}', answer: '{{answer}}' },
+    parameters: [],
+    payload_template: {},
   })
 
   // MCP
@@ -330,11 +327,8 @@ export default function AgentDetail() {
         name: '', description: '', url: '', method: 'POST',
         tool_type: 'webhook', fire_and_forget: true,
         auth_type: 'none', auth_value: '',
-        parameters: [
-          { name: 'question', type: 'string', description: "The user's question", required: true },
-          { name: 'answer', type: 'string', description: "The agent's answer", required: true },
-        ],
-        payload_template: { question: '{{question}}', answer: '{{answer}}' },
+        parameters: [],
+        payload_template: {},
       })
       const toolsRes = await getTools(agentId)
       setTools(toolsRes.tools || [])
@@ -382,6 +376,7 @@ export default function AgentDetail() {
       name: tool.name, description: tool.description, url: tool.url,
       method: tool.method || 'POST', fire_and_forget: tool.fire_and_forget,
       auth_type: tool.auth_type || 'none', auth_value: '',
+      parameters: tool.parameters || [],
     })
   }
 
@@ -1076,6 +1071,84 @@ export default function AgentDetail() {
               )}
             </div>
 
+            {/* Parameters */}
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Parameters <span style={{ fontWeight: 400, textTransform: 'none' }}>— fields the AI will send</span>
+                </label>
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => setNewTool({ ...newTool, parameters: [...newTool.parameters, { name: '', type: 'string', description: '', required: false }] })}
+                  style={{ fontSize: '0.75rem', padding: '2px 8px' }}
+                >
+                  <Plus size={12} /> Add Param
+                </button>
+              </div>
+              {newTool.parameters.length === 0 && (
+                <div style={{ fontSize: '0.78rem', color: '#999', padding: '8px 0' }}>No parameters — the AI will send raw question/answer fields</div>
+              )}
+              {newTool.parameters.map((p, i) => (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: '140px 80px 1fr 60px 30px', gap: 8, marginBottom: 6, alignItems: 'center' }}>
+                  <input
+                    className="form-input"
+                    value={p.name}
+                    onChange={e => {
+                      const params = [...newTool.parameters]
+                      params[i] = { ...params[i], name: e.target.value }
+                      setNewTool({ ...newTool, parameters: params })
+                    }}
+                    placeholder="name"
+                    style={{ fontSize: '0.78rem' }}
+                  />
+                  <select
+                    className="form-input"
+                    value={p.type}
+                    onChange={e => {
+                      const params = [...newTool.parameters]
+                      params[i] = { ...params[i], type: e.target.value }
+                      setNewTool({ ...newTool, parameters: params })
+                    }}
+                    style={{ fontSize: '0.78rem' }}
+                  >
+                    <option value="string">string</option>
+                    <option value="number">number</option>
+                    <option value="boolean">bool</option>
+                  </select>
+                  <input
+                    className="form-input"
+                    value={p.description}
+                    onChange={e => {
+                      const params = [...newTool.parameters]
+                      params[i] = { ...params[i], description: e.target.value }
+                      setNewTool({ ...newTool, parameters: params })
+                    }}
+                    placeholder="Description"
+                    style={{ fontSize: '0.78rem' }}
+                  />
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={p.required || false}
+                      onChange={e => {
+                        const params = [...newTool.parameters]
+                        params[i] = { ...params[i], required: e.target.checked }
+                        setNewTool({ ...newTool, parameters: params })
+                      }}
+                    />
+                    Req
+                  </label>
+                  <button
+                    className="btn btn-ghost"
+                    onClick={() => setNewTool({ ...newTool, parameters: newTool.parameters.filter((_, j) => j !== i) })}
+                    style={{ padding: 2, color: '#999' }}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-primary" onClick={handleAddTool} style={{ fontSize: '0.82rem' }}>
                 <Zap size={14} /> Create Tool
@@ -1142,6 +1215,37 @@ export default function AgentDetail() {
                         <input className="form-input" type="password" value={editTool.auth_value} onChange={e => setEditTool({ ...editTool, auth_value: e.target.value })} style={{ fontSize: '0.84rem' }} />
                       </div>
                     )}
+                    {/* Parameters */}
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          Parameters
+                        </label>
+                        <button
+                          className="btn btn-ghost"
+                          onClick={() => setEditTool({ ...editTool, parameters: [...(editTool.parameters || []), { name: '', type: 'string', description: '', required: false }] })}
+                          style={{ fontSize: '0.75rem', padding: '2px 8px' }}
+                        >
+                          <Plus size={12} /> Add
+                        </button>
+                      </div>
+                      {(editTool.parameters || []).map((p, i) => (
+                        <div key={i} style={{ display: 'grid', gridTemplateColumns: '120px 70px 1fr 50px 24px', gap: 6, marginBottom: 5, alignItems: 'center' }}>
+                          <input className="form-input" value={p.name} onChange={e => { const params = [...editTool.parameters]; params[i] = { ...params[i], name: e.target.value }; setEditTool({ ...editTool, parameters: params }) }} placeholder="name" style={{ fontSize: '0.76rem' }} />
+                          <select className="form-input" value={p.type || 'string'} onChange={e => { const params = [...editTool.parameters]; params[i] = { ...params[i], type: e.target.value }; setEditTool({ ...editTool, parameters: params }) }} style={{ fontSize: '0.76rem' }}>
+                            <option value="string">str</option><option value="number">num</option><option value="boolean">bool</option>
+                          </select>
+                          <input className="form-input" value={p.description} onChange={e => { const params = [...editTool.parameters]; params[i] = { ...params[i], description: e.target.value }; setEditTool({ ...editTool, parameters: params }) }} placeholder="Description" style={{ fontSize: '0.76rem' }} />
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: '0.7rem', cursor: 'pointer' }}>
+                            <input type="checkbox" checked={p.required || false} onChange={e => { const params = [...editTool.parameters]; params[i] = { ...params[i], required: e.target.checked }; setEditTool({ ...editTool, parameters: params }) }} />
+                            Req
+                          </label>
+                          <button className="btn btn-ghost" onClick={() => setEditTool({ ...editTool, parameters: editTool.parameters.filter((_, j) => j !== i) })} style={{ padding: 1, color: '#999' }}>
+                            <X size={13} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button className="btn btn-primary" onClick={handleSaveEditTool} style={{ fontSize: '0.82rem' }}><Save size={14} /> Save</button>
                       <button className="btn btn-ghost" onClick={() => { setEditingTool(null); setEditTool(null) }} style={{ fontSize: '0.82rem' }}>Cancel</button>
