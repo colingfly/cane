@@ -37,6 +37,7 @@ async def v1_ask(
 
     workspace_id = body.get("workspace_id") or api_key.workspace_id or ""
     max_chunks = min(body.get("max_chunks", 5), 20)
+    history = body.get("history") or []  # [{role, content}, ...]
     query = sanitize_query(query)
 
     if not ANTHROPIC_API_KEY:
@@ -98,11 +99,20 @@ async def v1_ask(
     else:
         user_msg = f"QUESTION: {query}"
 
+    # Build messages with conversation history
+    messages = []
+    for h in history[-10:]:  # Keep last 10 turns to avoid token overflow
+        role = h.get("role", "")
+        content = h.get("content", "")
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": user_msg})
+
     answer = ""
     if claude_tools:
         try:
             answer = call_claude_with_tools(
-                messages=[{"role": "user", "content": user_msg}],
+                messages=messages,
                 system=system, tools=claude_tools, tool_lookup=tool_lookup, db_session=db,
             )
         except Exception:
@@ -110,7 +120,7 @@ async def v1_ask(
 
     # Fallback or standard call
     if not answer or not answer.strip():
-        answer = _plain_claude_call(system, user_msg)
+        answer = _plain_claude_call(system, messages=messages)
     elapsed_ms = int((time.time() - t0) * 1000)
 
     # Log
@@ -201,10 +211,10 @@ def v1_health():
     return {"status": "ok", "service": "cane", "api_version": "v1"}
 
 
-def _plain_claude_call(system: str, user_msg: str) -> str:
+def _plain_claude_call(system: str, user_msg: str = "", messages: list = None) -> str:
     """Plain Claude API call without tools."""
     try:
         from services.claude import call
-        return call(user_msg, system=system)
+        return call(user_msg, system=system, messages=messages)
     except Exception as e:
         raise HTTPException(502, f"AI service error: {str(e)}")

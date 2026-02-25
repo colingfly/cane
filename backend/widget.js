@@ -285,6 +285,7 @@
   var sendBtn = document.getElementById('cw-send');
   var isOpen = false;
   var isLoading = false;
+  var conversationHistory = [];
 
   // ── Toggle ──
   function toggle() {
@@ -362,11 +363,12 @@
 
     input.value = '';
     addMessage(query, 'user');
+    conversationHistory.push({ role: 'user', content: query });
     isLoading = true;
     sendBtn.disabled = true;
     showTyping();
 
-    var body = { query: query };
+    var body = { query: query, history: conversationHistory.slice(0, -1) };
     if (WORKSPACE_ID) body.workspace_id = WORKSPACE_ID;
 
     fetch(API_BASE + '/v1/ask', {
@@ -387,7 +389,9 @@
     })
     .then(function(data) {
       removeTyping();
-      addMessage(data.answer || 'No response.', 'bot', data.sources);
+      var answer = data.answer || 'No response.';
+      addMessage(answer, 'bot', data.sources);
+      conversationHistory.push({ role: 'assistant', content: answer });
     })
     .catch(function(err) {
       removeTyping();
