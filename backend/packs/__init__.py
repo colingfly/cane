@@ -7,10 +7,12 @@ custom rules.
 """
 from packs.ai_sales_rep import PACK as AI_SALES_REP
 from packs.ai_receptionist import PACK as AI_RECEPTIONIST
+from packs.outbound_sales import PACK as OUTBOUND_SALES
 
 ALL_PACKS = {
     "ai_sales_rep": AI_SALES_REP,
     "ai_receptionist": AI_RECEPTIONIST,
+    "outbound_sales": OUTBOUND_SALES,
 }
 
 
