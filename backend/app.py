@@ -122,6 +122,7 @@ from analytics_routes import router as analytics_router
 from email_routes import router as email_router
 from calendar_routes import router as calendar_router
 from sheets_routes import router as sheets_router
+from prospect_routes import router as prospect_router
 
 app.include_router(auth_router)
 app.include_router(documents_router)
@@ -141,6 +142,7 @@ app.include_router(analytics_router)
 app.include_router(email_router)
 app.include_router(calendar_router)
 app.include_router(sheets_router)
+app.include_router(prospect_router)
 
 
 # ── Health check ──
