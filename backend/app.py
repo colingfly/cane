@@ -10,6 +10,7 @@ Usage:
     → Frontend at http://localhost:5173 (Vite dev server)
 """
 import sys
+import os
 import pathlib
 from pathlib import Path
 
@@ -56,6 +57,10 @@ print(f"""
   BASE:      {BASE_DIR}
   DB:        {DB_PATH}
   EXTRACTED: {EXTRACTED_DIR}
+  [Email] GMAIL_CLIENT_ID={'SET' if os.getenv('GMAIL_CLIENT_ID') else 'MISSING'}
+  [Email] GMAIL_CLIENT_SECRET={'SET' if os.getenv('GMAIL_CLIENT_SECRET') else 'MISSING'}
+  [Email] GMAIL_REFRESH_TOKEN={'SET' if os.getenv('GMAIL_REFRESH_TOKEN') else 'MISSING'}
+  [Email] GMAIL_FROM_EMAIL={os.getenv('GMAIL_FROM_EMAIL', '(not set)')}
 """)
 
 # Initialize ChromaDB (must happen after dirs/db are ready)
@@ -114,6 +119,9 @@ from tool_routes import router as tool_router
 from mcp_routes import router as mcp_router
 from pack_routes import router as pack_router
 from analytics_routes import router as analytics_router
+from email_routes import router as email_router
+from calendar_routes import router as calendar_router
+from sheets_routes import router as sheets_router
 
 app.include_router(auth_router)
 app.include_router(documents_router)
@@ -130,6 +138,9 @@ app.include_router(tool_router)
 app.include_router(mcp_router)
 app.include_router(pack_router)
 app.include_router(analytics_router)
+app.include_router(email_router)
+app.include_router(calendar_router)
+app.include_router(sheets_router)
 
 
 # ── Health check ──
