@@ -12,6 +12,7 @@ import Admin from './pages/Admin'
 import AgentBuilder from './pages/AgentBuilder'
 import AgentDetail from './pages/AgentDetail'
 import Guide from './pages/Guide'
+import Demo from './pages/Demo'
 import Marketplace from './pages/Marketplace'
 import MarketplaceDetail from './pages/MarketplaceDetail'
 import Environments from './pages/Environments'
@@ -98,6 +99,8 @@ export default function App() {
           <Layout><EnvironmentDetail /></Layout>
         </ProtectedRoute>
       } />
+
+      <Route path="/demo" element={<Demo />} />
 
       <Route path="/guide" element={
         user ? (

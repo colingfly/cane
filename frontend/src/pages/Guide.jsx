@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Copy, Check, Search, Bot, FlaskConical, FileText, Upload, Zap, Shield, Globe, Store, Wrench, Code, MessageSquare, BarChart3, Palette, Plug } from 'lucide-react'
+import { Copy, Check, Search, Bot, FlaskConical, FileText, Upload, Zap, Shield, Globe, Store, Wrench, Code, MessageSquare, BarChart3, Palette, Plug, Cloud } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 function CodeBlock({ code }) {
@@ -133,7 +133,7 @@ function GettingStarted() {
           Build AI agents that know things, do things, and prove they work.
         </div>
         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.7, maxWidth: 560 }}>
-          Cane turns your documents into deployable AI agents. Upload files, build a specialized agent,
+          Cane turns your documents into deployable AI agents. Upload files or sync Google Drive folders, build a specialized agent,
           connect it to your tools via webhooks and MCP, verify it with evaluations, and deploy it on any
           website — or publish it to the marketplace for others to use.
         </div>
@@ -146,6 +146,12 @@ function GettingStarted() {
           title="Custom AI Agents"
           description="Build agents scoped to specific files with custom behavior. A support agent, a compliance agent, a product expert — each with its own knowledge base and instructions."
           detail="Auto-generated system prompts from corpus analysis"
+        />
+        <FeatureCard
+          icon={Cloud}
+          title="Live Connectors"
+          description="Connect Google Drive and sync entire folders into your agent's knowledge base. Files are automatically kept in sync — no re-uploading needed."
+          detail="Google Drive OAuth · Folder picker · Incremental sync"
         />
         <FeatureCard
           icon={Wrench}
@@ -174,8 +180,8 @@ function GettingStarted() {
             {
               step: '1',
               icon: Upload,
-              title: 'Upload your documents',
-              description: 'Drop PDFs, Word docs, spreadsheets, images, audio, or video. Cane extracts text, runs OCR on images, transcribes media, and chunks everything into searchable embeddings.',
+              title: 'Upload or sync your documents',
+              description: 'Drop files directly or connect Google Drive to sync entire folders. Cane extracts text, runs OCR on images, transcribes media, and chunks everything into searchable embeddings. Drive folders stay in sync automatically.',
             },
             {
               step: '2',
@@ -376,6 +382,61 @@ function ToolsTab() {
         <QA
           q="Live data lookups"
           a='Set a tool to "Wait for Response" and point it at an API that returns real-time data — inventory levels, order status, exchange rates. The agent will call the API, read the response, and weave that live data into its answer alongside document context.'
+        />
+      </SectionBlock>
+    </div>
+  )
+}
+
+function LiveConnectorsTab() {
+  return (
+    <div>
+      <SectionBlock title="What Are Live Connectors">
+        <QA
+          q="What are live connectors?"
+          a="Live connectors let you sync external data sources directly into your agent's knowledge base. Instead of manually uploading files, you connect a source like Google Drive and pick a folder — Cane automatically downloads, processes, and indexes every file in that folder. When files are added, changed, or deleted in the source, your agent's knowledge base updates automatically."
+        />
+        <QA
+          q="Which connectors are available?"
+          a="Google Drive is the first live connector. Connect with one click via OAuth, pick any folder, and Cane syncs it into your agent. More connectors are coming soon."
+        />
+      </SectionBlock>
+
+      <SectionBlock title="Connecting Google Drive">
+        <QA
+          q="How do I connect Google Drive?"
+          a='Go to your agent detail page and find the "Live Connectors" section. Click "Connect Google Drive." A popup window opens for Google sign-in. Authorize Cane to read your Drive files (read-only access). Once connected, you\'ll see your Google account email and can start picking folders to sync.'
+        />
+        <QA
+          q="What permissions does Cane need?"
+          a="Cane requests read-only access to your Google Drive. It can list and download files but cannot modify, delete, or create anything in your Drive. Your OAuth credentials are encrypted at rest."
+        />
+        <QA
+          q="Can I disconnect later?"
+          a='Yes. Click "Disconnect" in the Live Connectors section. This removes your Google credentials and stops all syncs. Synced documents remain in your agent until you manually remove them or delete the sync.'
+        />
+      </SectionBlock>
+
+      <SectionBlock title="Syncing Folders">
+        <QA
+          q="How do I sync a folder?"
+          a='After connecting Google Drive, use the folder search to find the folder you want. Select it and click "Start Sync." Cane downloads every supported file in that folder, processes it through the ingestion pipeline, and adds it to your agent\'s knowledge base.'
+        />
+        <QA
+          q="What file types are synced?"
+          a="All supported file types: PDFs, Word docs, spreadsheets, images, and more. Google-native formats are automatically converted — Google Docs and Slides export as PDF, Google Sheets export as XLSX."
+        />
+        <QA
+          q="How does incremental sync work?"
+          a="After the initial sync, Cane uses the Google Drive Changes API to detect new, modified, and deleted files. New files are downloaded and ingested. Modified files are re-processed with updated content. Deleted files are removed from the knowledge base. Syncs run automatically on a schedule (default: every 60 minutes)."
+        />
+        <QA
+          q="Can I trigger a sync manually?"
+          a='Yes. Click "Sync Now" on any active sync to run an incremental sync immediately, without waiting for the next scheduled run.'
+        />
+        <QA
+          q="Can I pause or remove a sync?"
+          a='Yes. Each sync has Pause and Remove buttons. Pausing stops automatic syncing but keeps the documents. Removing a sync deletes all synced documents and their indexed content from the agent.'
         />
       </SectionBlock>
     </div>
@@ -621,7 +682,7 @@ function FAQTab() {
       <SectionBlock title="Files & Processing">
         <QA
           q="What file types can I upload?"
-          a="PDFs, Word docs (DOCX), spreadsheets (XLSX, CSV), images (PNG, JPG, GIF, TIFF, WEBP), audio (MP3, WAV, M4A, FLAC), and video (MP4, MKV, AVI, MOV, WEBM)."
+          a="PDFs, Word docs (DOCX), spreadsheets (XLSX, CSV), images (PNG, JPG, GIF, TIFF, WEBP), audio (MP3, WAV, M4A, FLAC), and video (MP4, MKV, AVI, MOV, WEBM). You can also sync files directly from Google Drive using Live Connectors."
         />
         <QA
           q="How long does processing take?"
@@ -693,6 +754,8 @@ function UserGuideTab() {
       <AgentsTab />
       <SectionBlock title="Tools & Connections" />
       <ToolsTab />
+      <SectionBlock title="Live Connectors" />
+      <LiveConnectorsTab />
       <SectionBlock title="Evaluations" />
       <EvaluationsTab />
       <SectionBlock title="Widget & Embed" />
