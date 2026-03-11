@@ -20,8 +20,14 @@ export default function Demo() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [msgCount, setMsgCount] = useState(0)
+  const [uploadedFiles, setUploadedFiles] = useState([])
+  const [uploading, setUploading] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+  const fileInputRef = useRef(null)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
+  const MAX_FILES = 3
+  const MAX_SIZE = 5 * 1024 * 1024
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -30,6 +36,50 @@ export default function Demo() {
   useEffect(() => { inputRef.current?.focus() }, [])
 
   const rateLimited = msgCount >= MAX_MESSAGES
+
+  const handleFiles = async (files) => {
+    if (uploading) return
+    const allowed = ['application/pdf', 'text/plain', 'text/csv',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+    const valid = Array.from(files).filter(f => {
+      if (uploadedFiles.length + 1 > MAX_FILES) return false
+      if (f.size > MAX_SIZE) return false
+      if (!allowed.includes(f.type) && !f.name.match(/\.(pdf|txt|csv|docx)$/i)) return false
+      return true
+    }).slice(0, MAX_FILES - uploadedFiles.length)
+
+    if (valid.length === 0) return
+
+    setUploading(true)
+    const newFiles = []
+    for (const f of valid) {
+      try {
+        const form = new FormData()
+        form.append('file', f)
+        form.append('workspace_id', WORKSPACE_ID)
+        const res = await fetch(`${API_BASE}/documents/upload`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${API_KEY}` },
+          body: form,
+        })
+        if (res.ok) {
+          newFiles.push({ name: f.name, status: 'uploaded' })
+        } else {
+          newFiles.push({ name: f.name, status: 'error' })
+        }
+      } catch {
+        newFiles.push({ name: f.name, status: 'error' })
+      }
+    }
+    setUploadedFiles(prev => [...prev, ...newFiles])
+    setUploading(false)
+  }
+
+  const onDrop = (e) => {
+    e.preventDefault()
+    setDragOver(false)
+    handleFiles(e.dataTransfer.files)
+  }
 
   const send = async (text) => {
     if (rateLimited) return
@@ -77,7 +127,22 @@ export default function Demo() {
       {/* Connector tiles */}
       <div className="demo-tiles">
         <div className="demo-tiles-inner">
-          <Link to="/register" className="demo-tile">
+          <div
+            className={`demo-tile demo-tile-upload${dragOver ? ' drag-over' : ''}`}
+            onClick={() => uploadedFiles.length < MAX_FILES && fileInputRef.current?.click()}
+            onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={onDrop}
+            style={{ cursor: uploadedFiles.length >= MAX_FILES ? 'default' : 'pointer' }}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.docx,.txt,.csv"
+              multiple
+              style={{ display: 'none' }}
+              onChange={e => { handleFiles(e.target.files); e.target.value = '' }}
+            />
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
               <polyline points="14 2 14 8 20 8" />
@@ -86,10 +151,22 @@ export default function Demo() {
             </svg>
             <div className="demo-tile-text">
               <span className="demo-tile-title">Upload Files</span>
-              <span className="demo-tile-sub">PDF, DOCX, CSV, TXT</span>
+              {uploadedFiles.length === 0 ? (
+                <span className="demo-tile-sub">{uploading ? 'Uploading...' : 'PDF, DOCX, CSV, TXT'}</span>
+              ) : (
+                <span className="demo-tile-sub">
+                  {uploadedFiles.map(f => f.name).join(', ')}
+                </span>
+              )}
             </div>
-            <span className="demo-tile-badge">Create account</span>
-          </Link>
+            {uploadedFiles.length > 0 ? (
+              <span className="demo-tile-badge" style={{ color: 'rgba(74,222,128,0.7)', borderColor: 'rgba(74,222,128,0.15)' }}>
+                {uploadedFiles.length}/{MAX_FILES}
+              </span>
+            ) : (
+              <span className="demo-tile-badge">{uploading ? '...' : `Up to ${MAX_FILES} files`}</span>
+            )}
+          </div>
 
           <Link to="/register" className="demo-tile">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -237,6 +314,11 @@ const demoStyles = `
 .demo-tile:hover {
   border-color: rgba(255,255,255,0.15);
   color: rgba(255,255,255,0.6);
+}
+
+.demo-tile-upload.drag-over {
+  border-color: rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.04);
 }
 
 .demo-tile svg {
