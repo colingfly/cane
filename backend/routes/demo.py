@@ -6,18 +6,22 @@ Uploads and queries are scoped to that workspace only.
 Old demo workspaces are cleaned up automatically.
 """
 import uuid
+import time
+import secrets
 import traceback
 from pathlib import Path
 from datetime import datetime, timedelta
+from typing import Dict, List
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 
 from config import UPLOAD_DIR, EXT_MAP
-from database import get_db, SessionLocal
-from db_models import Tenant, Workspace, Document
+from database import SessionLocal
+from db_models import Tenant, Workspace, Document, ApiKey
 from security import validate_file_content, MAX_FILE_SIZE
 from services.chroma import text_col, image_col
+from auth import hash_password
 
 router = APIRouter(prefix="/api/demo", tags=["demo"])
 
@@ -29,8 +33,11 @@ DEMO_WORKSPACE_TTL_HOURS = 24
 DEMO_ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt", ".csv"}
 
 # Simple in-memory rate limit: max 20 sessions per IP per hour
-_session_log: dict[str, list[float]] = {}
+_session_log: Dict[str, List[float]] = {}
 DEMO_SESSION_RATE_LIMIT = 20
+
+# Cache the demo API key so we don't regenerate it every request
+_demo_api_key_cache: Dict[str, str] = {}  # tenant_id -> raw_key
 
 
 def _get_or_create_demo_tenant(db: Session) -> Tenant:
@@ -48,6 +55,37 @@ def _get_or_create_demo_tenant(db: Session) -> Tenant:
         db.refresh(tenant)
         print(f"[Demo] Created demo tenant: {tenant.id}")
     return tenant
+
+
+def _get_or_create_demo_api_key(db: Session, tenant_id: str) -> str:
+    """Get or create an API key for the demo tenant. Returns raw key."""
+    # Check cache first
+    if tenant_id in _demo_api_key_cache:
+        return _demo_api_key_cache[tenant_id]
+
+    # No cached key — create/replace the demo API key
+    # Delete any existing demo keys first
+    db.query(ApiKey).filter(
+        ApiKey.tenant_id == tenant_id,
+        ApiKey.name == "Demo API Key",
+    ).delete()
+
+    raw_key = f"cane_{secrets.token_hex(24)}"
+    api_key_record = ApiKey(
+        tenant_id=tenant_id,
+        name="Demo API Key",
+        key_hash=hash_password(raw_key),
+        key_prefix=raw_key[:12],
+        workspace_id=None,  # Not scoped — workspace comes from request body
+        is_active=True,
+        rate_limit=1000,
+    )
+    db.add(api_key_record)
+    db.commit()
+
+    _demo_api_key_cache[tenant_id] = raw_key
+    print(f"[Demo] Created demo API key: {raw_key[:12]}...")
+    return raw_key
 
 
 def _cleanup_old_workspaces(db: Session, tenant_id: str):
@@ -91,7 +129,6 @@ def _cleanup_old_workspaces(db: Session, tenant_id: str):
 
 def _check_rate_limit(ip: str) -> bool:
     """Return True if rate-limited."""
-    import time
     now = time.time()
     hour_ago = now - 3600
 
@@ -109,7 +146,7 @@ def _check_rate_limit(ip: str) -> bool:
 
 
 @router.post("/session")
-def create_demo_session(request: Request, db: Session = next(get_db())):
+def create_demo_session(request: Request):
     """Create an ephemeral demo workspace. Returns workspace_id and api_key."""
     db = SessionLocal()
     try:
@@ -120,7 +157,10 @@ def create_demo_session(request: Request, db: Session = next(get_db())):
         tenant = _get_or_create_demo_tenant(db)
 
         # Cleanup old workspaces opportunistically
-        _cleanup_old_workspaces(db, tenant.id)
+        try:
+            _cleanup_old_workspaces(db, tenant.id)
+        except Exception as e:
+            print(f"[Demo] Cleanup error (non-fatal): {e}")
 
         # Create a fresh workspace for this session
         session_id = str(uuid.uuid4())[:8]
@@ -134,55 +174,8 @@ def create_demo_session(request: Request, db: Session = next(get_db())):
         db.commit()
         db.refresh(ws)
 
-        # Find or create an API key for the demo tenant
-        from db_models import ApiKey
-        from auth import hash_password
-        import secrets
-
-        # Use a non-scoped API key for the demo tenant (queries need workspace_id param)
-        api_key_record = db.query(ApiKey).filter(
-            ApiKey.tenant_id == tenant.id,
-            ApiKey.is_active == True,
-            ApiKey.workspace_id == None,
-        ).first()
-
-        if api_key_record:
-            # We can't retrieve the raw key from the hash, so check if we have one stored
-            # For demo, we'll create a new key each time the tenant is fresh
-            raw_key = None
-        else:
-            raw_key = None
-
-        # Always provide the key — generate a fresh one if needed
-        if not api_key_record:
-            raw_key = f"cane_{secrets.token_hex(24)}"
-            api_key_record = ApiKey(
-                tenant_id=tenant.id,
-                name="Demo API Key",
-                key_hash=hash_password(raw_key),
-                key_prefix=raw_key[:12],
-                workspace_id=None,  # Not scoped — workspace comes from request body
-                is_active=True,
-                rate_limit=100,
-            )
-            db.add(api_key_record)
-            db.commit()
-            db.refresh(api_key_record)
-
-            # Store the raw key in an env-like way for this session
-            # We'll store it on the tenant description (hacky but works for demo)
-            tenant.name = "Cane Demo"  # ensure name stays clean
-            db.commit()
-
-        # For returning the key: if we just created it, return raw_key
-        # Otherwise we need a mechanism to retrieve it — store it as a known demo key
-        # Simplest: use a fixed demo key prefix that we can always verify
-        if not raw_key:
-            # Generate a new one and replace the old
-            raw_key = f"cane_{secrets.token_hex(24)}"
-            api_key_record.key_hash = hash_password(raw_key)
-            api_key_record.key_prefix = raw_key[:12]
-            db.commit()
+        # Get or create the demo API key
+        raw_key = _get_or_create_demo_api_key(db, tenant.id)
 
         return {
             "workspace_id": ws.id,
@@ -190,6 +183,12 @@ def create_demo_session(request: Request, db: Session = next(get_db())):
             "tenant_id": tenant.id,
             "expires_in_hours": DEMO_WORKSPACE_TTL_HOURS,
         }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Demo] Session creation error: {e}")
+        traceback.print_exc()
+        raise HTTPException(500, "Failed to create demo session")
     finally:
         db.close()
 
@@ -198,7 +197,7 @@ def create_demo_session(request: Request, db: Session = next(get_db())):
 async def demo_upload(
     file: UploadFile = File(...),
     workspace_id: str = Form(...),
-    background_tasks: BackgroundTasks = None,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     """Upload a file to a demo workspace. No auth required."""
     db = SessionLocal()
@@ -279,6 +278,12 @@ async def demo_upload(
             "filename": doc.filename,
             "message": "Upload received. Processing...",
         }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Demo] Upload error: {e}")
+        traceback.print_exc()
+        raise HTTPException(500, "Upload failed")
     finally:
         db.close()
 
@@ -315,6 +320,9 @@ def demo_documents(workspace_id: str):
                 for d in docs
             ]
         }
+    except Exception as e:
+        print(f"[Demo] Documents list error: {e}")
+        return {"documents": []}
     finally:
         db.close()
 
