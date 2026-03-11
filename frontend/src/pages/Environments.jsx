@@ -227,8 +227,8 @@ export default function Environments() {
       {environments.length <= 2 && (
         <div style={{
           marginTop: 40, padding: '28px 32px',
-          background: 'linear-gradient(135deg, var(--accent-muted), rgba(200,150,62,0.04))',
-          border: '1px solid rgba(200,150,62,0.2)',
+          background: 'rgba(255,255,255,0.04)',
+          border: '1px solid rgba(255,255,255,0.08)',
           borderRadius: 'var(--radius-lg)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
@@ -245,7 +245,7 @@ export default function Environments() {
               <div key={i}>
                 <div style={{
                   width: 24, height: 24, borderRadius: '50%',
-                  background: 'var(--accent)', color: 'white',
+                  background: '#fff', color: '#000',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: '0.7rem', fontWeight: 700, marginBottom: 8,
                 }}>{s.step}</div>

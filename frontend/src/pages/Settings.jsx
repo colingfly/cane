@@ -466,7 +466,7 @@ function ApiKeysSection({ workspaces }) {
       {/* Revealed key banner */}
       {revealedKey && (
         <div style={{
-          padding: 12, background: 'rgba(61, 140, 92, 0.08)', border: '1px solid var(--success)',
+          padding: 12, background: 'rgba(74, 222, 128, 0.08)', border: '1px solid var(--success)',
           borderRadius: 'var(--radius-sm)', marginBottom: 16,
         }}>
           <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--success)', marginBottom: 6 }}>

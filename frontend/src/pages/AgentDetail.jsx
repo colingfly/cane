@@ -14,11 +14,11 @@ import {
 import { getEnvironments, getRuns } from '../api/eval'
 
 const ICON_COLORS = {
-  OG: { bg: '#c8963e' },
-  AT: { bg: '#5b7bb4' },
-  KB: { bg: '#3d8c5c' },
+  OG: { bg: 'rgba(255,255,255,0.15)' },
+  AT: { bg: 'rgba(255,255,255,0.12)' },
+  KB: { bg: 'rgba(255,255,255,0.10)' },
 }
-const DEFAULT_COLOR = { bg: '#8a7a62' }
+const DEFAULT_COLOR = { bg: 'rgba(255,255,255,0.08)' }
 
 function AgentIcon({ icon, size = 40 }) {
   const label = (icon || '??').slice(0, 2).toUpperCase()
@@ -115,7 +115,7 @@ export default function AgentDetail() {
 
   // Widget config
   const [widgetConfig, setWidgetConfig] = useState({
-    color: '#8B7355', greeting: 'Hi! Ask me anything.', position: 'right',
+    color: '#ffffff', greeting: 'Hi! Ask me anything.', position: 'right',
     subtitle: 'Powered by Cane', placeholder: 'Type a message...',
     border_radius: '16', logo_url: '', auto_open: '0',
   })
@@ -825,7 +825,7 @@ export default function AgentDetail() {
             marginBottom: 16,
             cursor: 'pointer',
             transition: 'all 0.15s',
-            background: dragover ? 'rgba(196, 164, 105, 0.05)' : 'transparent',
+            background: dragover ? 'rgba(255,255,255,0.04)' : 'transparent',
           }}
           onClick={() => fileRef.current?.click()}
           onDragOver={e => { e.preventDefault(); setDragover(true) }}
@@ -896,7 +896,7 @@ export default function AgentDetail() {
 
       {/* Replica Personality Profile */}
       {agent.agent_type === 'digital_replica' && (
-        <div className="card" style={{ marginBottom: 24, borderColor: 'rgba(200,150,62,0.25)' }}>
+        <div className="card" style={{ marginBottom: 24, borderColor: 'rgba(255,255,255,0.12)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               Personality Profile
@@ -1089,7 +1089,7 @@ export default function AgentDetail() {
         {tools.filter(t => !t.url).length > 0 && (
           <div style={{
             padding: '14px 16px', borderRadius: 'var(--radius-sm)',
-            background: 'rgba(200,150,62,0.08)', border: '1px solid rgba(200,150,62,0.2)',
+            background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
             marginBottom: 16, display: 'flex', alignItems: 'flex-start', gap: 12,
           }}>
             <Wrench size={18} style={{ color: 'var(--cane-600)', flexShrink: 0, marginTop: 2 }} />
@@ -1114,7 +1114,7 @@ export default function AgentDetail() {
           }}>
             <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: 10 }}>Copy tools from:</div>
             {otherAgents.length === 0 ? (
-              <div style={{ fontSize: '0.82rem', color: '#888' }}>No other agents found</div>
+              <div style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.4)' }}>No other agents found</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {otherAgents.map(a => (
@@ -1260,7 +1260,7 @@ export default function AgentDetail() {
                 </button>
               </div>
               {newTool.parameters.length === 0 && (
-                <div style={{ fontSize: '0.78rem', color: '#999', padding: '8px 0' }}>No parameters — the AI will send raw question/answer fields</div>
+                <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.35)', padding: '8px 0' }}>No parameters — the AI will send raw question/answer fields</div>
               )}
               {newTool.parameters.map((p, i) => (
                 <div key={i} style={{ display: 'grid', gridTemplateColumns: '140px 80px 1fr 60px 30px', gap: 8, marginBottom: 6, alignItems: 'center' }}>
@@ -1315,7 +1315,7 @@ export default function AgentDetail() {
                   <button
                     className="btn btn-ghost"
                     onClick={() => setNewTool({ ...newTool, parameters: newTool.parameters.filter((_, j) => j !== i) })}
-                    style={{ padding: 2, color: '#999' }}
+                    style={{ padding: 2, color: 'rgba(255,255,255,0.35)' }}
                   >
                     <X size={14} />
                   </button>
@@ -1341,7 +1341,7 @@ export default function AgentDetail() {
               <div key={tool.id} style={{
                 padding: '12px 16px', borderRadius: 'var(--radius-sm)',
                 border: `1px solid ${editingTool === tool.id ? 'var(--cane-400)' : tool.is_enabled ? 'var(--cane-200)' : 'var(--border)'}`,
-                background: editingTool === tool.id ? 'var(--cane-50, #fdf8f0)' : tool.is_enabled ? 'white' : 'var(--bg)',
+                background: editingTool === tool.id ? 'var(--cane-50, #fdf8f0)' : tool.is_enabled ? 'var(--bg-card)' : 'var(--bg)',
                 opacity: tool.is_enabled ? 1 : 0.6,
               }}>
                 {editingTool === tool.id && editTool ? (
@@ -1414,7 +1414,7 @@ export default function AgentDetail() {
                             <input type="checkbox" checked={p.required || false} onChange={e => { const params = [...editTool.parameters]; params[i] = { ...params[i], required: e.target.checked }; setEditTool({ ...editTool, parameters: params }) }} />
                             Req
                           </label>
-                          <button className="btn btn-ghost" onClick={() => setEditTool({ ...editTool, parameters: editTool.parameters.filter((_, j) => j !== i) })} style={{ padding: 1, color: '#999' }}>
+                          <button className="btn btn-ghost" onClick={() => setEditTool({ ...editTool, parameters: editTool.parameters.filter((_, j) => j !== i) })} style={{ padding: 1, color: 'rgba(255,255,255,0.35)' }}>
                             <X size={13} />
                           </button>
                         </div>
@@ -1465,9 +1465,9 @@ export default function AgentDetail() {
                       <div style={{
                         marginTop: 10, padding: '8px 12px', borderRadius: 6,
                         fontSize: '0.78rem', fontFamily: 'monospace',
-                        background: toolTestResult.status === 'ok' ? '#f0fdf4' : '#fef2f2',
-                        border: `1px solid ${toolTestResult.status === 'ok' ? '#bbf7d0' : '#fecaca'}`,
-                        color: toolTestResult.status === 'ok' ? '#166534' : '#991b1b',
+                        background: toolTestResult.status === 'ok' ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.08)',
+                        border: `1px solid ${toolTestResult.status === 'ok' ? 'rgba(74,222,128,0.3)' : 'rgba(248,113,113,0.3)'}`,
+                        color: toolTestResult.status === 'ok' ? '#4ade80' : '#f87171',
                       }}>
                         {toolTestResult.status === 'ok'
                           ? `✓ Success (${toolTestResult.result?.status_code || 200})`
@@ -1549,7 +1549,7 @@ export default function AgentDetail() {
             {/* Connected status */}
             <div style={{
               display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16,
-              padding: '8px 12px', background: 'rgba(61, 140, 92, 0.08)', borderRadius: 'var(--radius-sm)',
+              padding: '8px 12px', background: 'rgba(74,222,128,0.08)', borderRadius: 'var(--radius-sm)',
               fontSize: '0.8rem', color: 'var(--success)',
             }}>
               <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--success)', flexShrink: 0 }} />
@@ -1661,8 +1661,8 @@ export default function AgentDetail() {
                     return (
                       <div key={sync.id} style={{
                         padding: '12px 16px', borderRadius: 'var(--radius-sm)',
-                        border: `1px solid ${hasError ? 'rgba(196, 78, 63, 0.3)' : 'var(--border)'}`,
-                        background: isPaused ? 'var(--bg)' : 'white',
+                        border: `1px solid ${hasError ? 'rgba(248,113,113,0.3)' : 'var(--border)'}`,
+                        background: isPaused ? 'var(--bg)' : 'var(--bg-card)',
                         opacity: isPaused ? 0.7 : 1,
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1714,7 +1714,7 @@ export default function AgentDetail() {
                                   <div key={file.id} style={{
                                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                                     padding: '6px 8px', fontSize: '0.78rem', borderRadius: 4,
-                                    background: file.status === 'error' ? 'rgba(196, 78, 63, 0.06)' : 'transparent',
+                                    background: file.status === 'error' ? 'rgba(248,113,113,0.06)' : 'transparent',
                                   }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                       <FileText size={12} style={{ color: 'var(--text-muted)' }} />
@@ -1787,7 +1787,7 @@ export default function AgentDetail() {
             {mcpConnectForm && (
               <div style={{
                 padding: 16, borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--cane-200)', background: 'white',
+                border: '1px solid var(--cane-200)', background: 'var(--bg-card)',
                 marginBottom: 14,
               }}>
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 14, lineHeight: 1.5 }}>
@@ -1848,7 +1848,7 @@ export default function AgentDetail() {
                   return (
                     <div key={c.id} style={{
                       padding: '12px 14px', borderRadius: 'var(--radius-sm)',
-                      border: '1px solid var(--border)', background: 'white',
+                      border: '1px solid var(--border)', background: 'var(--bg-card)',
                       opacity: alreadyConnected ? 0.5 : 1,
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -1986,8 +1986,8 @@ export default function AgentDetail() {
             {mcpServers.map(server => (
               <div key={server.id} style={{
                 padding: '12px 16px', borderRadius: 'var(--radius-sm)',
-                border: `1px solid ${server.status === 'connected' ? 'var(--cane-200)' : server.status === 'error' ? '#fecaca' : 'var(--border)'}`,
-                background: server.is_enabled ? 'white' : 'var(--bg)',
+                border: `1px solid ${server.status === 'connected' ? 'var(--cane-200)' : server.status === 'error' ? 'rgba(248,113,113,0.3)' : 'var(--border)'}`,
+                background: server.is_enabled ? 'var(--bg-card)' : 'var(--bg)',
                 opacity: server.is_enabled ? 1 : 0.6,
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2002,14 +2002,14 @@ export default function AgentDetail() {
                         <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{server.name}</span>
                         <span style={{
                           fontSize: '0.6rem', fontWeight: 700, padding: '1px 6px', borderRadius: 8,
-                          background: server.status === 'connected' ? '#f0fdf4' : server.status === 'error' ? '#fef2f2' : 'var(--cane-100)',
-                          color: server.status === 'connected' ? '#166534' : server.status === 'error' ? '#991b1b' : 'var(--cane-700)',
+                          background: server.status === 'connected' ? 'rgba(74,222,128,0.08)' : server.status === 'error' ? 'rgba(248,113,113,0.08)' : 'var(--cane-100)',
+                          color: server.status === 'connected' ? '#4ade80' : server.status === 'error' ? '#f87171' : 'var(--cane-700)',
                         }}>
                           {server.status === 'connected' ? `${server.tool_count} tools` : server.status}
                         </span>
                       </div>
                       {server.status === 'error' && server.status_message && (
-                        <div style={{ fontSize: '0.72rem', color: '#991b1b', marginTop: 3 }}>
+                        <div style={{ fontSize: '0.72rem', color: '#f87171', marginTop: 3 }}>
                           {server.status_message.length > 120 ? server.status_message.slice(0, 120) + '...' : server.status_message}
                         </div>
                       )}
@@ -2121,15 +2121,15 @@ export default function AgentDetail() {
         {showNewKey && (
           <div style={{
             marginBottom: 14, padding: '12px 16px', borderRadius: 'var(--radius-sm)',
-            background: '#f0fdf4', border: '1px solid #bbf7d0',
+            background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.3)',
           }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#166534', marginBottom: 6 }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#4ade80', marginBottom: 6 }}>
               New API key created — copy it now, it won't be shown again
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <code style={{
-                flex: 1, fontSize: '0.78rem', padding: '6px 10px', background: 'white',
-                borderRadius: 4, border: '1px solid #d1d5db', fontFamily: 'monospace',
+                flex: 1, fontSize: '0.78rem', padding: '6px 10px', background: 'var(--bg-card)',
+                borderRadius: 4, border: '1px solid rgba(255,255,255,0.2)', fontFamily: 'monospace',
                 wordBreak: 'break-all',
               }}>{showNewKey}</code>
               <button className="btn btn-ghost" onClick={() => {
@@ -2137,7 +2137,7 @@ export default function AgentDetail() {
                 setCopiedKey(true)
                 setTimeout(() => setCopiedKey(false), 2000)
               }} style={{ padding: '6px 10px', flexShrink: 0 }}>
-                {copiedKey ? <Check size={14} style={{ color: '#16a34a' }} /> : <Copy size={14} />}
+                {copiedKey ? <Check size={14} style={{ color: '#4ade80' }} /> : <Copy size={14} />}
               </button>
             </div>
             <button className="btn btn-ghost" onClick={() => setShowNewKey(null)} style={{ fontSize: '0.72rem', marginTop: 8 }}>Dismiss</button>
@@ -2150,7 +2150,7 @@ export default function AgentDetail() {
               <div key={k.id} style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 padding: '8px 12px', borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--border)', background: 'white',
+                border: '1px solid var(--border)', background: 'var(--bg-card)',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <Key size={13} style={{ color: 'var(--text-muted)' }} />
@@ -2262,7 +2262,7 @@ export default function AgentDetail() {
               </div>
               <div style={{
                 padding: '10px 16px', borderRadius: widgetConfig.border_radius + 'px',
-                background: 'white', border: '1px solid var(--border)',
+                background: 'var(--bg-card)', border: '1px solid var(--border)',
                 maxWidth: 280, boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
               }}>
                 <div style={{ fontWeight: 700, fontSize: '0.82rem', marginBottom: 2 }}>{agent.name}</div>
@@ -2371,7 +2371,7 @@ export default function AgentDetail() {
                   style={{
                     width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-sm)',
                     border: '1px solid var(--rule)', fontSize: '0.84rem',
-                    fontFamily: 'var(--font-body)', background: 'white',
+                    fontFamily: 'var(--font-body)', background: 'var(--bg-card)',
                     color: 'var(--text)', outline: 'none',
                   }}
                 >
@@ -2399,7 +2399,7 @@ export default function AgentDetail() {
                       display: 'flex', alignItems: 'flex-start', gap: 10,
                       padding: '10px 14px', borderRadius: 'var(--radius-sm)',
                       border: `1px solid ${pubPackType === p.id ? 'var(--cane-500)' : 'var(--rule)'}`,
-                      cursor: 'pointer', background: pubPackType === p.id ? 'var(--paper)' : 'white',
+                      cursor: 'pointer', background: pubPackType === p.id ? 'var(--paper)' : 'var(--bg-card)',
                       transition: 'border-color 0.15s',
                     }}>
                       <input
@@ -2430,7 +2430,7 @@ export default function AgentDetail() {
                     style={{
                       width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-sm)',
                       border: '1px solid var(--rule)', fontSize: '0.84rem',
-                      fontFamily: 'var(--font-body)', background: 'white',
+                      fontFamily: 'var(--font-body)', background: 'var(--bg-card)',
                       color: 'var(--text)', outline: 'none',
                     }}
                   >
@@ -2462,7 +2462,7 @@ export default function AgentDetail() {
                     style={{
                       width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-sm)',
                       border: '1px solid var(--rule)', fontSize: '0.84rem',
-                      fontFamily: 'var(--font-body)', background: 'white',
+                      fontFamily: 'var(--font-body)', background: 'var(--bg-card)',
                       color: 'var(--text)', outline: 'none',
                     }}
                   >

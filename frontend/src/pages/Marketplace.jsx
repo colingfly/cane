@@ -28,7 +28,7 @@ function ScoreBadge({ score, size = 'md' }) {
     <div style={{
       display: 'flex', alignItems: 'center', gap: lg ? 8 : 6,
       padding: lg ? '6px 14px' : '4px 10px', borderRadius: 8,
-      background: 'var(--cane-900)', minWidth: 52, justifyContent: 'center',
+      background: 'rgba(255,255,255,0.1)', minWidth: 52, justifyContent: 'center',
     }}>
       <div style={{ width: lg ? 8 : 6, height: lg ? 8 : 6, borderRadius: 99, background: color }} />
       <span style={{
@@ -52,7 +52,7 @@ function FeaturedCard({ listing, onClick }) {
       onMouseLeave={() => setHovered(false)}
       style={{
         padding: '28px 30px',
-        background: 'white',
+        background: 'var(--bg-card)',
         border: `1.5px solid ${hovered ? 'var(--cane-500)' : 'var(--cane-200)'}`,
         borderRadius: 'var(--radius)',
         cursor: 'pointer',
@@ -64,7 +64,7 @@ function FeaturedCard({ listing, onClick }) {
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
         <div style={{
           width: 52, height: 52, borderRadius: 13,
-          background: 'var(--cane-900)', color: 'var(--accent-light)',
+          background: 'rgba(255,255,255,0.1)', color: 'var(--accent-light)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontFamily: 'var(--font-display)', fontWeight: 700,
           fontSize: '1rem', flexShrink: 0,
@@ -124,7 +124,7 @@ function FeaturedCard({ listing, onClick }) {
       }}>
         <span style={{
           padding: '3px 10px', borderRadius: 5,
-          background: listing.pack_type === 'open' ? 'rgba(59,120,66,0.08)' : 'var(--cane-50)',
+          background: listing.pack_type === 'open' ? 'rgba(74,222,128,0.08)' : 'var(--cane-50)',
           color: listing.pack_type === 'open' ? 'var(--status-pass)' : 'var(--text-muted)',
           fontWeight: 600, fontSize: '0.65rem', textTransform: 'uppercase',
           letterSpacing: '0.04em', fontFamily: 'var(--font-mono)',
@@ -170,19 +170,19 @@ function ListingCard({ listing, onClick }) {
       onMouseLeave={() => setHovered(false)}
       style={{
         padding: '20px 22px',
-        background: 'white',
+        background: 'var(--bg-card)',
         border: `1px solid ${hovered ? 'var(--cane-500)' : 'var(--rule)'}`,
         borderRadius: 'var(--radius)',
         cursor: 'pointer',
         transition: 'border-color 0.15s, box-shadow 0.15s',
-        boxShadow: hovered ? '0 2px 12px rgba(0,0,0,0.04)' : 'none',
+        boxShadow: hovered ? '0 2px 12px rgba(255,255,255,0.04)' : 'none',
         display: 'flex', flexDirection: 'column', gap: 12,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
         <div style={{
           width: 42, height: 42, borderRadius: 10,
-          background: 'var(--cane-900)', color: 'var(--cane-400)',
+          background: 'rgba(255,255,255,0.1)', color: 'var(--cane-400)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontFamily: 'var(--font-display)', fontWeight: 700,
           fontSize: '0.85rem', flexShrink: 0,
@@ -230,7 +230,7 @@ function ListingCard({ listing, onClick }) {
         </span>
         <span style={{
           padding: '2px 8px', borderRadius: 4,
-          background: listing.pack_type === 'open' ? 'rgba(59,120,66,0.08)' : 'rgba(0,0,0,0.04)',
+          background: listing.pack_type === 'open' ? 'rgba(74,222,128,0.08)' : 'rgba(255,255,255,0.04)',
           color: listing.pack_type === 'open' ? 'var(--status-pass)' : 'var(--text-muted)',
           fontWeight: 600, fontSize: '0.6rem', textTransform: 'uppercase',
           letterSpacing: '0.04em',
@@ -308,7 +308,7 @@ export default function Marketplace() {
         <form onSubmit={handleSearch} style={{
           display: 'flex', flex: 1, minWidth: 240,
           border: '1px solid var(--rule)', borderRadius: 'var(--radius-sm)',
-          overflow: 'hidden', background: 'white',
+          overflow: 'hidden', background: 'var(--bg-card)',
         }}>
           <input
             type="text"
@@ -335,7 +335,7 @@ export default function Marketplace() {
           style={{
             padding: '10px 14px', borderRadius: 'var(--radius-sm)',
             border: '1px solid var(--rule)', fontSize: '0.8rem',
-            fontFamily: 'var(--font-body)', background: 'white',
+            fontFamily: 'var(--font-body)', background: 'var(--bg-card)',
             color: 'var(--text)', cursor: 'pointer', outline: 'none',
           }}
         >

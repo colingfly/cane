@@ -550,7 +550,7 @@ export default function EnvironmentDetail() {
             <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>Judge Criteria</h3>
             <div style={{
               padding: '6px 14px', borderRadius: 8,
-              background: totalWeight === 100 ? 'rgba(61,140,92,0.1)' : 'rgba(196,78,63,0.1)',
+              background: totalWeight === 100 ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)',
               color: totalWeight === 100 ? 'var(--success)' : 'var(--error)',
               fontSize: '0.8rem', fontWeight: 600,
             }}>
@@ -573,7 +573,7 @@ export default function EnvironmentDetail() {
                         border: `2px solid ${c.is_enabled ? 'var(--accent)' : 'var(--border)'}`,
                         background: c.is_enabled ? 'var(--accent)' : 'transparent',
                         cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: 'white', flexShrink: 0, padding: 0,
+                        color: '#000', flexShrink: 0, padding: 0,
                       }}
                     >
                       {c.is_enabled && <Check size={12} />}
@@ -605,8 +605,8 @@ export default function EnvironmentDetail() {
           <div style={{ marginTop: 32 }}>
             <div style={{
               padding: '20px 24px',
-              background: 'linear-gradient(135deg, var(--accent-muted), rgba(200,150,62,0.04))',
-              border: '1px solid rgba(200,150,62,0.2)',
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.08)',
               borderRadius: 'var(--radius)',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -620,7 +620,7 @@ export default function EnvironmentDetail() {
               {env.custom_rules?.map(r => (
                 <div key={r.id} style={{
                   display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '8px 12px', background: 'white', borderRadius: 6,
+                  padding: '8px 12px', background: 'var(--bg-card)', borderRadius: 6,
                   border: '1px solid var(--border)', marginBottom: 8,
                 }}>
                   <span style={{ flex: 1, fontSize: '0.85rem' }}>{r.rule_text}</span>
@@ -902,7 +902,7 @@ export default function EnvironmentDetail() {
                             <span style={{
                               padding: '2px 8px', borderRadius: 12,
                               fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase',
-                              background: r.status === 'completed' ? 'rgba(61,140,92,0.1)' : r.status === 'failed' ? 'rgba(196,78,63,0.1)' : 'var(--accent-muted)',
+                              background: r.status === 'completed' ? 'rgba(74,222,128,0.1)' : r.status === 'failed' ? 'rgba(248,113,113,0.1)' : 'var(--accent-muted)',
                               color: r.status === 'completed' ? 'var(--success)' : r.status === 'failed' ? 'var(--error)' : 'var(--warning)',
                             }}>{r.status}</span>
                             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 const API_KEY = 'cane_d26764c44d6887c7b0820033388c6810b6c9fed3bdf91989'
 const WORKSPACE_ID = '826e009f-ddb9-42a0-9c4e-89e88f6ed8e2'
 const API_BASE = window.location.origin
+const MAX_MESSAGES = 10
 
 const SUGGESTIONS = [
   'What is Cane?',
@@ -18,6 +19,7 @@ export default function Demo() {
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [msgCount, setMsgCount] = useState(0)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
 
@@ -27,13 +29,17 @@ export default function Demo() {
 
   useEffect(() => { inputRef.current?.focus() }, [])
 
+  const rateLimited = msgCount >= MAX_MESSAGES
+
   const send = async (text) => {
+    if (rateLimited) return
     const q = (text || input).trim()
     if (!q || loading) return
     setInput('')
 
     const history = messages.filter(m => m.role !== 'system').map(m => ({ role: m.role, content: m.content }))
     setMessages(prev => [...prev, { role: 'user', content: q }])
+    setMsgCount(prev => prev + 1)
     setLoading(true)
 
     try {
@@ -66,6 +72,37 @@ export default function Demo() {
       <div className="demo-nav">
         <Link to="/" className="demo-back">Cane</Link>
         <span className="demo-nav-label">Live demo</span>
+      </div>
+
+      {/* Connector tiles */}
+      <div className="demo-tiles">
+        <div className="demo-tiles-inner">
+          <Link to="/register" className="demo-tile">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="12" y1="18" x2="12" y2="12" />
+              <line x1="9" y1="15" x2="15" y2="15" />
+            </svg>
+            <div className="demo-tile-text">
+              <span className="demo-tile-title">Upload Files</span>
+              <span className="demo-tile-sub">PDF, DOCX, CSV, TXT</span>
+            </div>
+            <span className="demo-tile-badge">Create account</span>
+          </Link>
+
+          <Link to="/register" className="demo-tile">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2L4.5 7.5V16.5L12 22L19.5 16.5V7.5L12 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+              <path d="M12 8V16M8 12H16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+            <div className="demo-tile-text">
+              <span className="demo-tile-title">Google Drive</span>
+              <span className="demo-tile-sub">Live sync folders</span>
+            </div>
+            <span className="demo-tile-badge">Requires account</span>
+          </Link>
+        </div>
       </div>
 
       <div className="demo-chat">
@@ -104,22 +141,32 @@ export default function Demo() {
       </div>
 
       <div className="demo-input-area">
-        <div className="demo-input-wrap">
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKey}
-            placeholder="Ask anything..."
-            disabled={loading}
-          />
-          <button onClick={() => send()} disabled={loading || !input.trim()} className="demo-send">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 12h14M12 5l7 7-7 7" />
-            </svg>
-          </button>
-        </div>
+        {rateLimited ? (
+          <div className="demo-rate-limit">
+            <span>You've reached the demo limit.</span>
+            <Link to="/register" className="demo-cta-btn">Create a free account to continue</Link>
+          </div>
+        ) : (
+          <div className="demo-input-wrap">
+            <input
+              ref={inputRef}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKey}
+              placeholder="Ask anything..."
+              disabled={loading}
+            />
+            <button onClick={() => send()} disabled={loading || !input.trim()} className="demo-send">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        )}
         <div className="demo-footer">
+          {!rateLimited && msgCount > 0 && (
+            <span style={{ marginRight: 8 }}>{MAX_MESSAGES - msgCount} messages remaining</span>
+          )}
           Powered by <Link to="/">Cane</Link>
         </div>
       </div>
@@ -160,10 +207,74 @@ const demoStyles = `
   color: rgba(255,255,255,0.2);
 }
 
+/* Connector tiles */
+.demo-tiles {
+  padding: 24px 24px 0;
+  flex-shrink: 0;
+}
+
+.demo-tiles-inner {
+  max-width: 640px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.demo-tile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  text-decoration: none;
+  color: rgba(255,255,255,0.4);
+  transition: all 0.15s;
+  position: relative;
+}
+
+.demo-tile:hover {
+  border-color: rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.6);
+}
+
+.demo-tile svg {
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+
+.demo-tile-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.demo-tile-title {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+}
+
+.demo-tile-sub {
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.25);
+}
+
+.demo-tile-badge {
+  font-size: 0.6rem;
+  color: rgba(255,255,255,0.2);
+  padding: 2px 8px;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
 .demo-chat {
   flex: 1;
   overflow-y: auto;
-  padding: 40px 24px;
+  padding: 24px 24px;
 }
 
 .demo-chat-inner { max-width: 640px; margin: 0 auto; }
@@ -280,6 +391,35 @@ const demoStyles = `
 .demo-send:hover { opacity: 0.8; }
 .demo-send:disabled { opacity: 0.3; cursor: default; }
 
+.demo-rate-limit {
+  max-width: 640px;
+  margin: 0 auto;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.demo-rate-limit span {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.3);
+}
+
+.demo-cta-btn {
+  display: inline-block;
+  padding: 10px 24px;
+  background: #fff;
+  color: #000;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+
+.demo-cta-btn:hover { opacity: 0.85; color: #000; }
+
 .demo-footer {
   text-align: center;
   margin-top: 10px;
@@ -303,5 +443,9 @@ const demoStyles = `
 @keyframes demoPulse {
   0%, 60%, 100% { opacity: 0.3; }
   30% { opacity: 0.8; }
+}
+
+@media (max-width: 520px) {
+  .demo-tiles-inner { grid-template-columns: 1fr; }
 }
 `

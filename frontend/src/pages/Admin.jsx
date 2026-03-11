@@ -254,7 +254,7 @@ function TenantDetail({ detail, selectedTenant, editingTenant, tenantName, tenan
       </div>
 
       {detail.zero_result_queries?.length > 0 && (
-        <div className="card" style={{ marginBottom: 24, borderColor: 'rgba(196, 78, 63, 0.2)' }}>
+        <div className="card" style={{ marginBottom: 24, borderColor: 'rgba(248,113,113,0.15)' }}>
           <div className="card-header">
             <h3 style={{ color: 'var(--error)' }}>
               <AlertTriangle size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} />
@@ -267,7 +267,7 @@ function TenantDetail({ detail, selectedTenant, editingTenant, tenantName, tenan
                 display: 'flex',
                 justifyContent: 'space-between',
                 padding: '8px 12px',
-                background: 'rgba(196, 78, 63, 0.04)',
+                background: 'rgba(248,113,113,0.04)',
                 borderRadius: 'var(--radius-sm)',
                 fontSize: '0.875rem',
               }}>

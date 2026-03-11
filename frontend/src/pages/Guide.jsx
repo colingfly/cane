@@ -17,13 +17,13 @@ function CodeBlock({ code }) {
         style={{
           position: 'absolute', top: 8, right: 8, background: 'rgba(255,255,255,0.08)',
           border: 'none', borderRadius: 4, padding: '4px 8px', cursor: 'pointer',
-          color: '#aaa', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: 4,
+          color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: 4,
         }}
       >
         {copied ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
       </button>
       <pre style={{
-        background: '#1a1210', color: '#d4c4b0', padding: 16,
+        background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.7)', padding: 16,
         borderRadius: 'var(--radius-sm)', fontSize: '0.78rem', lineHeight: 1.6,
         overflowX: 'auto', border: '1px solid var(--rule)', margin: 0,
         fontFamily: 'var(--font-mono)',
@@ -92,7 +92,7 @@ function FeatureCard({ icon: Icon, title, description, detail }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
         <div style={{
           width: 32, height: 32, borderRadius: 8,
-          background: 'var(--cane-900)', color: 'var(--cane-400)',
+          background: 'rgba(255,255,255,0.08)', color: 'var(--cane-400)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}>
           <Icon size={16} />
@@ -111,7 +111,7 @@ function FeatureCard({ icon: Icon, title, description, detail }) {
         <div style={{
           fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.6,
           fontFamily: 'var(--font-mono)', padding: '8px 12px',
-          background: 'rgba(0,0,0,0.03)', borderRadius: 6,
+          background: 'rgba(255,255,255,0.04)', borderRadius: 6,
         }}>
           {detail}
         </div>
@@ -205,7 +205,7 @@ function GettingStarted() {
             <div key={i} style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
               <div style={{
                 width: 36, height: 36, borderRadius: 8,
-                background: 'var(--cane-900)', color: 'var(--cane-400)',
+                background: 'rgba(255,255,255,0.08)', color: 'var(--cane-400)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                 fontWeight: 800, fontFamily: 'var(--font-display)', fontSize: '0.85rem',
               }}>
@@ -863,7 +863,7 @@ export default function Guide() {
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
             <Link to="/register" style={{
               display: 'inline-block', padding: '10px 24px',
-              background: 'var(--accent)', color: 'white',
+              background: '#fff', color: '#000',
               borderRadius: 'var(--radius-sm)', fontSize: '0.85rem',
               fontWeight: 700, textDecoration: 'none',
             }}>

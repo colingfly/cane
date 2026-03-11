@@ -4,11 +4,11 @@ import { Plus, Trash2 } from 'lucide-react'
 import { getAgents, getAgentTemplates, createAgent, deleteAgent } from '../api/client'
 
 const ICON_COLORS = {
-  OG: { bg: '#c8963e' },
-  AT: { bg: '#5b7bb4' },
-  KB: { bg: '#3d8c5c' },
+  OG: { bg: 'rgba(255,255,255,0.15)' },
+  AT: { bg: 'rgba(255,255,255,0.12)' },
+  KB: { bg: 'rgba(255,255,255,0.10)' },
 }
-const DEFAULT_COLOR = { bg: '#8a7a62' }
+const DEFAULT_COLOR = { bg: 'rgba(255,255,255,0.08)' }
 
 function AgentIcon({ icon, size = 40 }) {
   const label = (icon || '??').slice(0, 2).toUpperCase()
@@ -113,7 +113,7 @@ export default function AgentBuilder() {
       {/* Welcome banner for first-time users — disappears once they create an agent */}
       {!loading && agents.length === 0 && (
         <div style={{
-          background: 'var(--accent-muted)', border: '1px solid rgba(200,150,62,0.2)',
+          background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
           borderRadius: 12, padding: '20px 24px', marginBottom: 28,
         }}>
           <div style={{ fontWeight: 700, fontSize: '0.9375rem', marginBottom: 4, fontFamily: 'var(--font-display)' }}>
@@ -137,7 +137,7 @@ export default function AgentBuilder() {
       {/* Plan limit error */}
       {error && (
         <div style={{
-          background: 'rgba(196,78,63,0.08)', border: '1px solid rgba(196,78,63,0.2)',
+          background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.15)',
           borderRadius: 10, padding: '14px 20px', marginBottom: 24,
           fontSize: '0.8125rem', color: 'var(--error)', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
@@ -228,7 +228,7 @@ export default function AgentBuilder() {
                 {/* Icon square */}
                 <div style={{
                   width: 38, height: 38, borderRadius: 8,
-                  background: 'var(--cane-900)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                   flexShrink: 0, overflow: 'hidden',
                 }}>
                   <AgentIcon icon={a.agent_icon} size={38} />
@@ -252,7 +252,7 @@ export default function AgentBuilder() {
                   fontSize: '0.58rem', fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase',
                   color: a.system_prompt ? 'var(--success)' : 'var(--text-faint)',
                   padding: '4px 10px', borderRadius: 4,
-                  background: a.system_prompt ? 'var(--success-bg)' : 'rgba(30,16,8,0.04)',
+                  background: a.system_prompt ? 'var(--success-bg)' : 'rgba(255,255,255,0.04)',
                 }}>
                   {a.system_prompt ? 'Active' : 'Draft'}
                 </span>

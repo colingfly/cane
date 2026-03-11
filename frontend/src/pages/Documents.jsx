@@ -274,8 +274,8 @@ export default function Documents() {
               top: '50%',
               left: '50%',
               transform: 'translate(-50%, -50%)',
-              background: 'var(--bg-card, #fff)',
-              border: '1px solid var(--border, #e2e2e2)',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
               borderRadius: 12,
               padding: '20px 24px',
               boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
@@ -301,20 +301,20 @@ export default function Documents() {
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '10px 14px',
-                    border: '1px solid var(--border, #e2e2e2)',
+                    border: '1px solid var(--border)',
                     borderRadius: 8,
-                    background: 'var(--bg, #fff)',
+                    background: 'var(--bg)',
                     cursor: 'pointer',
                     fontSize: '0.8125rem',
                     transition: 'all 0.15s',
                   }}
                   onMouseEnter={e => {
                     e.currentTarget.style.borderColor = 'var(--accent)'
-                    e.currentTarget.style.background = 'var(--bg-hover, #f9f7f4)'
+                    e.currentTarget.style.background = 'var(--bg-hover)'
                   }}
                   onMouseLeave={e => {
-                    e.currentTarget.style.borderColor = 'var(--border, #e2e2e2)'
-                    e.currentTarget.style.background = 'var(--bg, #fff)'
+                    e.currentTarget.style.borderColor = 'var(--border)'
+                    e.currentTarget.style.background = 'var(--bg)'
                   }}
                 >
                   <span>{w.name}</span>

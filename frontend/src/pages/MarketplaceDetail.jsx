@@ -153,7 +153,7 @@ export default function MarketplaceDetail() {
       }}>
         <div style={{
           width: 56, height: 56, borderRadius: 14,
-          background: 'var(--cane-900)', color: 'var(--cane-400)',
+          background: 'rgba(255,255,255,0.1)', color: 'var(--cane-400)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontFamily: 'var(--font-display)', fontWeight: 700,
           fontSize: '1.1rem', flexShrink: 0,
@@ -198,7 +198,7 @@ export default function MarketplaceDetail() {
             <div style={{ textAlign: 'center' }}>
               <div style={{
                 padding: '10px 20px', borderRadius: 'var(--radius-sm)',
-                background: 'rgba(59,120,66,0.08)', color: 'var(--status-pass)',
+                background: 'rgba(74,222,128,0.08)', color: 'var(--status-pass)',
                 fontWeight: 700, fontSize: '0.85rem',
                 display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
               }}>
@@ -254,7 +254,7 @@ export default function MarketplaceDetail() {
       {listing.overall_score != null && (
         <div style={{
           border: '1px solid var(--rule)', borderRadius: 'var(--radius)',
-          overflow: 'hidden', marginBottom: 22, background: 'white',
+          overflow: 'hidden', marginBottom: 22, background: 'var(--bg-card)',
         }}>
           <div style={{
             padding: '20px 24px',
@@ -393,7 +393,7 @@ export default function MarketplaceDetail() {
       {/* ─── What's Included ─── */}
       <div style={{
         border: '1px solid var(--rule)', borderRadius: 'var(--radius)',
-        overflow: 'hidden', marginBottom: 22, background: 'white',
+        overflow: 'hidden', marginBottom: 22, background: 'var(--bg-card)',
       }}>
         <div style={{
           padding: '16px 24px',
@@ -539,7 +539,7 @@ export default function MarketplaceDetail() {
       {/* ─── System Prompt Preview ─── */}
       <div style={{
         border: '1px solid var(--rule)', borderRadius: 'var(--radius)',
-        overflow: 'hidden', marginBottom: 22, background: 'white',
+        overflow: 'hidden', marginBottom: 22, background: 'var(--bg-card)',
       }}>
         <button
           onClick={() => setPromptExpanded(!promptExpanded)}
@@ -569,7 +569,7 @@ export default function MarketplaceDetail() {
             padding: '0 24px 18px',
           }}>
             <pre style={{
-              background: '#1a1210', color: '#d4c4b0',
+              background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.7)',
               padding: 16, borderRadius: 'var(--radius-sm)',
               fontSize: '0.76rem', lineHeight: 1.6,
               fontFamily: 'var(--font-mono)',

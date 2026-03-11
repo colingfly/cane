@@ -10,7 +10,7 @@ export default function Layout({ children }) {
       <aside className="sidebar">
         <div className="sidebar-brand">
           <h1>Cane</h1>
-          <p style={{ fontSize: '0.56rem', color: 'var(--cane-700)', marginTop: 8, letterSpacing: '0.12em', fontWeight: 700, textTransform: 'uppercase' }}>
+          <p style={{ fontSize: '0.56rem', color: 'rgba(255,255,255,0.3)', marginTop: 8, letterSpacing: '0.12em', fontWeight: 700, textTransform: 'uppercase' }}>
             Operational Intelligence
           </p>
         </div>
@@ -31,7 +31,7 @@ export default function Layout({ children }) {
           <div style={{ height: 1, background: 'var(--rule)', margin: '8px 12px', opacity: 0.4 }} />
 
           <NavLink to="/marketplace">
-            <Store /> Marketplace <span style={{ fontSize: '0.5rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', padding: '1px 5px', borderRadius: 3, background: 'var(--cane-100)', color: 'var(--cane-700)', marginLeft: 4 }}>Beta</span>
+            <Store /> Marketplace <span style={{ fontSize: '0.5rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', padding: '1px 5px', borderRadius: 3, background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)', marginLeft: 4 }}>Beta</span>
           </NavLink>
           <NavLink to="/guide">
             <HelpCircle /> Docs

@@ -6,7 +6,7 @@ import { getAgent, getAnalytics } from '../api/client'
 function StatCard({ icon: Icon, label, value, sub, color }) {
   return (
     <div style={{
-      padding: '18px 20px', background: 'white',
+      padding: '18px 20px', background: 'var(--bg-card)',
       border: '1px solid var(--border)', borderRadius: 'var(--radius)',
       flex: 1, minWidth: 160,
     }}>
@@ -93,7 +93,7 @@ export default function Analytics() {
             style={{
               padding: '7px 12px', borderRadius: 'var(--radius-sm)',
               border: '1px solid var(--border)', fontSize: '0.8rem',
-              fontFamily: 'var(--font-body)', background: 'white', cursor: 'pointer',
+              fontFamily: 'var(--font-body)', background: 'var(--bg-card)', cursor: 'pointer',
             }}
           >
             <option value={7}>Last 7 days</option>
@@ -195,8 +195,8 @@ export default function Analytics() {
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
                     <span style={{
                       fontSize: '0.6rem', fontWeight: 600, padding: '1px 6px', borderRadius: 4,
-                      background: q.channel === 'widget' ? 'rgba(59,120,66,0.1)' : q.channel === 'api' ? 'rgba(91,123,180,0.1)' : 'var(--cane-100)',
-                      color: q.channel === 'widget' ? 'var(--success)' : q.channel === 'api' ? '#5b7bb4' : 'var(--cane-700)',
+                      background: q.channel === 'widget' ? 'rgba(74,222,128,0.1)' : q.channel === 'api' ? 'rgba(147,197,253,0.1)' : 'var(--cane-100)',
+                      color: q.channel === 'widget' ? 'var(--success)' : q.channel === 'api' ? '#93c5fd' : 'var(--cane-700)',
                       textTransform: 'uppercase',
                     }}>{q.channel}</span>
                     {q.response_time_ms && (
