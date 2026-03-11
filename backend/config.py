@@ -10,6 +10,7 @@ INPUT_DIR = BASE_DIR / "input"
 DB_PATH = str(BASE_DIR / "chroma_db")
 EXTRACTED_DIR = BASE_DIR / "extracted"
 UPLOAD_DIR = BASE_DIR / "uploads"      # per-tenant uploads stored here
+CONNECTOR_SYNC_DIR = BASE_DIR / "connector_downloads"  # files pulled from live connectors
 
 # ── Static frontend (built React app) ──
 STATIC_DIR = Path(os.getenv("CANE_STATIC_DIR", str(Path(__file__).resolve().parent.parent / "frontend" / "dist")))
@@ -55,6 +56,10 @@ ALLOWED_ORIGINS = os.getenv("CANE_ALLOWED_ORIGINS", "http://localhost:5173,http:
 
 # ── Environment ──
 IS_PRODUCTION = os.getenv("CANE_ENV", "development").lower() == "production"
+
+# ── Google OAuth (app-level credentials for Live Connectors) ──
+GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
+GOOGLE_OAUTH_CLIENT_SECRET = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", "")
 
 # ── LLM (Claude API) ──
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
@@ -137,5 +142,5 @@ EXT_MAP = {
 
 def ensure_dirs():
     """Create all required directories."""
-    for d in [INPUT_DIR, EXTRACTED_DIR, Path(DB_PATH), UPLOAD_DIR]:
+    for d in [INPUT_DIR, EXTRACTED_DIR, Path(DB_PATH), UPLOAD_DIR, CONNECTOR_SYNC_DIR]:
         d.mkdir(parents=True, exist_ok=True)

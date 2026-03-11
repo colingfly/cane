@@ -184,3 +184,6 @@ from marketplace_models import (                                    # noqa: E402
     MarketplaceListing, MarketplaceClone,
 )
 from tool_models import AgentTool                                    # noqa: E402, F401
+from connector_models import (                                         # noqa: E402, F401
+    ConnectorCredential, ConnectorSync, ConnectorFile,
+)

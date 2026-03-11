@@ -465,3 +465,47 @@ export async function updateWidgetConfig(workspaceId, config) {
     body: JSON.stringify(config),
   })
 }
+
+// ─── Live Connectors (Google Drive) ───
+
+export async function getGdriveAuthUrl(workspaceId) {
+  return request(`/connectors/google-drive/auth-url?workspace_id=${workspaceId}`)
+}
+
+export async function getGdriveStatus() {
+  return request('/connectors/google-drive/status')
+}
+
+export async function disconnectGdrive() {
+  return request('/connectors/google-drive', { method: 'DELETE' })
+}
+
+export async function listDriveFolders(query = '') {
+  const params = query ? `?q=${encodeURIComponent(query)}` : ''
+  return request(`/connectors/google-drive/folders${params}`)
+}
+
+export async function listSyncs(workspaceId) {
+  return request(`/connectors/syncs?workspace_id=${workspaceId}`)
+}
+
+export async function createSync(workspaceId, folderId, folderName) {
+  const qs = new URLSearchParams({ workspace_id: workspaceId, folder_id: folderId, folder_name: folderName })
+  return request(`/connectors/syncs?${qs.toString()}`, { method: 'POST' })
+}
+
+export async function getSync(syncId) {
+  return request(`/connectors/syncs/${syncId}`)
+}
+
+export async function triggerSync(syncId) {
+  return request(`/connectors/syncs/${syncId}/trigger`, { method: 'POST' })
+}
+
+export async function updateSyncStatus(syncId, status) {
+  return request(`/connectors/syncs/${syncId}?status=${status}`, { method: 'PUT' })
+}
+
+export async function deleteSync(syncId) {
+  return request(`/connectors/syncs/${syncId}`, { method: 'DELETE' })
+}

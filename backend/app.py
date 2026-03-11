@@ -61,6 +61,8 @@ print(f"""
   [Email] GMAIL_CLIENT_SECRET={'SET' if os.getenv('GMAIL_CLIENT_SECRET') else 'MISSING'}
   [Email] GMAIL_REFRESH_TOKEN={'SET' if os.getenv('GMAIL_REFRESH_TOKEN') else 'MISSING'}
   [Email] GMAIL_FROM_EMAIL={os.getenv('GMAIL_FROM_EMAIL', '(not set)')}
+  [GDrive] GOOGLE_OAUTH_CLIENT_ID={'SET' if os.getenv('GOOGLE_OAUTH_CLIENT_ID') else 'MISSING'}
+  [GDrive] GOOGLE_OAUTH_CLIENT_SECRET={'SET' if os.getenv('GOOGLE_OAUTH_CLIENT_SECRET') else 'MISSING'}
 """)
 
 # Initialize ChromaDB (must happen after dirs/db are ready)
@@ -123,6 +125,7 @@ from email_routes import router as email_router
 from calendar_routes import router as calendar_router
 from sheets_routes import router as sheets_router
 from prospect_routes import router as prospect_router
+from connector_routes import router as connector_router
 
 app.include_router(auth_router)
 app.include_router(documents_router)
@@ -143,6 +146,15 @@ app.include_router(email_router)
 app.include_router(calendar_router)
 app.include_router(sheets_router)
 app.include_router(prospect_router)
+app.include_router(connector_router)
+
+
+# ── Background sync loop for Live Connectors ──
+@app.on_event("startup")
+async def start_connector_sync():
+    import asyncio
+    from services.connector_sync import start_sync_loop
+    asyncio.create_task(start_sync_loop())
 
 
 # ── Health check ──

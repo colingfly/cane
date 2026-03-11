@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Upload, Trash2, FileText, Sparkles, Save, ToggleLeft, ToggleRight, MessageSquare, Store, Wrench, Zap, Play, Plus, ChevronDown, ChevronUp, RefreshCw, Link2, Globe, X, BarChart3, Palette, Key, Pencil, Copy, Check } from 'lucide-react'
+import { ArrowLeft, Upload, Trash2, FileText, Sparkles, Save, ToggleLeft, ToggleRight, MessageSquare, Store, Wrench, Zap, Play, Plus, ChevronDown, ChevronUp, RefreshCw, Link2, Globe, X, BarChart3, Palette, Key, Pencil, Copy, Check, CloudDownload, FolderOpen, Search, Pause, Unplug } from 'lucide-react'
 import {
   getAgent, updateAgent, generateAgentPrompt, generateReplicaPrompt,
   getDocuments, uploadDocument, deleteDocument, getDocumentStatus,
@@ -8,6 +8,8 @@ import {
   getMcpCatalog, getMcpServers, connectMcpServer, updateMcpServer, deleteMcpServer, syncMcpServer,
   getWidgetConfig, updateWidgetConfig,
   createApiKey, deleteApiKey, getApiKeys, getAgents,
+  getGdriveAuthUrl, getGdriveStatus, disconnectGdrive,
+  listDriveFolders, listSyncs, createSync, getSync, triggerSync, updateSyncStatus, deleteSync,
 } from '../api/client'
 import { getEnvironments, getRuns } from '../api/eval'
 
@@ -98,6 +100,19 @@ export default function AgentDetail() {
     name: '', server_url: '', auth_type: 'none', auth_value: '',
   })
 
+  // Live Connectors (Google Drive)
+  const [gdriveConnected, setGdriveConnected] = useState(false)
+  const [gdriveEmail, setGdriveEmail] = useState('')
+  const [gdriveLoading, setGdriveLoading] = useState(true)
+  const [syncs, setSyncs] = useState([])
+  const [folderQuery, setFolderQuery] = useState('')
+  const [folderResults, setFolderResults] = useState([])
+  const [folderSearching, setFolderSearching] = useState(false)
+  const [selectedFolder, setSelectedFolder] = useState(null)
+  const [syncCreating, setSyncCreating] = useState(false)
+  const [expandedSync, setExpandedSync] = useState(null)
+  const [syncFiles, setSyncFiles] = useState({})
+
   // Widget config
   const [widgetConfig, setWidgetConfig] = useState({
     color: '#8B7355', greeting: 'Hi! Ask me anything.', position: 'right',
@@ -154,12 +169,48 @@ export default function AgentDetail() {
         const agentSpecificKeys = (keysRes.keys || []).filter(k => k.workspace_id === agentId)
         setAgentKeys(agentSpecificKeys)
       } catch { setAgentKeys([]) }
+
+      // Load Google Drive connector status + syncs
+      loadConnectorStatus()
     } catch (e) {
       console.error('Failed to load agent:', e)
     } finally {
       setLoading(false)
     }
   }
+
+  const loadConnectorStatus = async () => {
+    setGdriveLoading(true)
+    try {
+      const status = await getGdriveStatus()
+      setGdriveConnected(status.connected)
+      setGdriveEmail(status.account_email || '')
+      if (status.connected) {
+        const syncsRes = await listSyncs(agentId)
+        setSyncs(syncsRes.syncs || [])
+      }
+    } catch { /* ignore */ }
+    setGdriveLoading(false)
+  }
+
+  // Poll running syncs for status updates
+  useEffect(() => {
+    const runningSyncs = syncs.filter(s => s.last_sync_status === 'running')
+    if (runningSyncs.length === 0) return
+    const interval = setInterval(async () => {
+      try {
+        const syncsRes = await listSyncs(agentId)
+        setSyncs(syncsRes.syncs || [])
+        const stillRunning = (syncsRes.syncs || []).some(s => s.last_sync_status === 'running')
+        if (!stillRunning) {
+          // Reload docs since new ones may have been added
+          const docsRes = await getDocuments(agentId)
+          setDocuments(docsRes.documents || [])
+        }
+      } catch { /* ignore */ }
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [syncs.filter(s => s.last_sync_status === 'running').length])
 
   const handleUpload = async (files) => {
     if (!files?.length || uploading) return
@@ -564,6 +615,109 @@ export default function AgentDetail() {
     } finally {
       setWidgetSaving(false)
     }
+  }
+
+  // ── Google Drive Connector handlers ──
+  const handleConnectGdrive = async () => {
+    try {
+      const res = await getGdriveAuthUrl(agentId)
+      const popup = window.open(res.auth_url, 'gdrive-auth', 'width=500,height=600,popup=yes')
+      const handleMessage = (event) => {
+        if (event.data?.type === 'gdrive-connected') {
+          window.removeEventListener('message', handleMessage)
+          setGdriveConnected(true)
+          setGdriveEmail(event.data.email || '')
+          loadConnectorStatus()
+        } else if (event.data?.type === 'gdrive-error') {
+          window.removeEventListener('message', handleMessage)
+          alert('Google Drive connection failed: ' + (event.data.error || 'Unknown error'))
+        }
+      }
+      window.addEventListener('message', handleMessage)
+    } catch (e) {
+      alert('Failed to start Google Drive connection: ' + e.message)
+    }
+  }
+
+  const handleDisconnectGdrive = async () => {
+    if (!confirm('Disconnect Google Drive? All synced documents will be removed.')) return
+    try {
+      await disconnectGdrive()
+      setGdriveConnected(false)
+      setGdriveEmail('')
+      setSyncs([])
+      const docsRes = await getDocuments(agentId)
+      setDocuments(docsRes.documents || [])
+    } catch (e) {
+      alert('Failed to disconnect: ' + e.message)
+    }
+  }
+
+  const handleFolderSearch = async (query) => {
+    setFolderQuery(query)
+    setSelectedFolder(null)
+    if (query.length < 2) { setFolderResults([]); return }
+    setFolderSearching(true)
+    try {
+      const res = await listDriveFolders(query)
+      setFolderResults(res.folders || [])
+    } catch { setFolderResults([]) }
+    setFolderSearching(false)
+  }
+
+  const handleCreateSync = async () => {
+    if (!selectedFolder) return
+    setSyncCreating(true)
+    try {
+      await createSync(agentId, selectedFolder.id, selectedFolder.name)
+      setSelectedFolder(null)
+      setFolderQuery('')
+      setFolderResults([])
+      loadConnectorStatus()
+    } catch (e) {
+      alert('Failed to create sync: ' + e.message)
+    }
+    setSyncCreating(false)
+  }
+
+  const handleTriggerSync = async (syncId) => {
+    try {
+      await triggerSync(syncId)
+      setSyncs(prev => prev.map(s => s.id === syncId ? { ...s, last_sync_status: 'running' } : s))
+    } catch (e) {
+      alert('Sync failed: ' + e.message)
+    }
+  }
+
+  const handleToggleSync = async (syncId, currentStatus) => {
+    const newStatus = currentStatus === 'active' ? 'paused' : 'active'
+    try {
+      await updateSyncStatus(syncId, newStatus)
+      setSyncs(prev => prev.map(s => s.id === syncId ? { ...s, status: newStatus } : s))
+    } catch (e) {
+      alert('Failed to update sync: ' + e.message)
+    }
+  }
+
+  const handleDeleteSync = async (syncId, folderName) => {
+    if (!confirm(`Remove sync for "${folderName}"? All synced documents will be deleted.`)) return
+    try {
+      await deleteSync(syncId)
+      setSyncs(prev => prev.filter(s => s.id !== syncId))
+      const docsRes = await getDocuments(agentId)
+      setDocuments(docsRes.documents || [])
+    } catch (e) {
+      alert('Failed to delete sync: ' + e.message)
+    }
+  }
+
+  const handleExpandSync = async (syncId) => {
+    if (expandedSync === syncId) { setExpandedSync(null); return }
+    setExpandedSync(syncId)
+    try {
+      const res = await getSync(syncId)
+      setSyncFiles(prev => ({ ...prev, [syncId]: res.files || [] }))
+    } catch { /* ignore */ }
   }
 
   if (loading) return <div className="loading-center"><div className="spinner" /></div>
@@ -1343,6 +1497,252 @@ export default function AgentDetail() {
             </div>
           </div>
         ) : null}
+      </div>
+
+      {/* ════════════ Live Connectors (Google Drive) ════════════ */}
+      <div className="card" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <CloudDownload size={16} /> Live Connectors
+            {syncs.length > 0 && (
+              <span style={{
+                fontSize: '0.65rem', fontWeight: 700, background: 'var(--accent-muted)',
+                color: 'var(--accent)', padding: '2px 8px', borderRadius: 8,
+              }}>{syncs.reduce((sum, s) => sum + (s.files_synced || 0), 0)} files synced</span>
+            )}
+          </h3>
+          {gdriveConnected && (
+            <button className="btn btn-ghost" onClick={handleDisconnectGdrive} style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              <Unplug size={12} /> Disconnect
+            </button>
+          )}
+        </div>
+
+        {gdriveLoading ? (
+          <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.84rem' }}>
+            <span className="spinner" style={{ width: 14, height: 14, marginRight: 6 }} /> Loading...
+          </div>
+        ) : !gdriveConnected ? (
+          /* ── State A: Not connected ── */
+          <div style={{ textAlign: 'center', padding: '32px 20px' }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>
+              <svg width="40" height="40" viewBox="0 0 87.3 78" style={{ display: 'inline-block' }}>
+                <path d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H1c0 1.55.4 3.1 1.2 4.5z" fill="#0066DA"/>
+                <path d="M43.65 25L29.9 1.2c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0-1.2 4.5h27.5z" fill="#00AC47"/>
+                <path d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.8l5.95 10.3z" fill="#EA4335"/>
+                <path d="M43.65 25L57.4 1.2C56.05.4 54.5 0 52.9 0H34.4c-1.6 0-3.15.45-4.5 1.2z" fill="#00832D"/>
+                <path d="M59.8 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.5 1.2h36.75c1.6 0 3.15-.45 4.5-1.2z" fill="#2684FC"/>
+                <path d="M73.4 26.5l-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3L43.65 25l16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#FFBA00"/>
+              </svg>
+            </div>
+            <div style={{ fontSize: '0.88rem', fontWeight: 600, marginBottom: 6 }}>Connect Google Drive</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 16, maxWidth: 360, margin: '0 auto 16px' }}>
+              Sync files directly from Google Drive into this agent's knowledge base. Files stay up to date automatically.
+            </div>
+            <button className="btn btn-primary" onClick={handleConnectGdrive} style={{ fontSize: '0.84rem' }}>
+              Connect Google Drive
+            </button>
+          </div>
+        ) : (
+          /* ── State B/C: Connected ── */
+          <div>
+            {/* Connected status */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16,
+              padding: '8px 12px', background: 'rgba(61, 140, 92, 0.08)', borderRadius: 'var(--radius-sm)',
+              fontSize: '0.8rem', color: 'var(--success)',
+            }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--success)', flexShrink: 0 }} />
+              Connected as <strong>{gdriveEmail}</strong>
+            </div>
+
+            {/* Folder picker */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{
+                fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)',
+                display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em',
+              }}>
+                Add a folder to sync
+              </label>
+              <div style={{ position: 'relative' }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ position: 'relative', flex: 1 }}>
+                    <input
+                      className="form-input"
+                      value={folderQuery}
+                      onChange={e => handleFolderSearch(e.target.value)}
+                      placeholder="Search your Drive folders..."
+                      style={{ fontSize: '0.84rem', paddingLeft: 32 }}
+                    />
+                    <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    {folderSearching && (
+                      <span className="spinner" style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14 }} />
+                    )}
+                  </div>
+                  {selectedFolder && (
+                    <button
+                      className="btn btn-primary"
+                      onClick={handleCreateSync}
+                      disabled={syncCreating}
+                      style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}
+                    >
+                      {syncCreating ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Syncing...</> : <><Plus size={14} /> Start Sync</>}
+                    </button>
+                  )}
+                </div>
+
+                {/* Folder search results dropdown */}
+                {folderResults.length > 0 && !selectedFolder && (
+                  <div style={{
+                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
+                    background: 'var(--bg-card)', border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-lg)',
+                    maxHeight: 200, overflowY: 'auto', marginTop: 4,
+                  }}>
+                    {folderResults.map(folder => (
+                      <button
+                        key={folder.id}
+                        onClick={() => {
+                          setSelectedFolder(folder)
+                          setFolderQuery(folder.name)
+                          setFolderResults([])
+                        }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                          padding: '8px 12px', border: 'none', background: 'none',
+                          cursor: 'pointer', fontSize: '0.84rem', color: 'var(--text)',
+                          textAlign: 'left',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                      >
+                        <FolderOpen size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                        {folder.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {selectedFolder && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8, marginTop: 8,
+                    padding: '6px 10px', background: 'var(--accent-muted)', borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.8rem',
+                  }}>
+                    <FolderOpen size={14} style={{ color: 'var(--accent)' }} />
+                    <span style={{ fontWeight: 600 }}>{selectedFolder.name}</span>
+                    <button
+                      onClick={() => { setSelectedFolder(null); setFolderQuery(''); }}
+                      style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2 }}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Active syncs */}
+            {syncs.length > 0 && (
+              <div>
+                <label style={{
+                  fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)',
+                  display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em',
+                }}>
+                  Synced Folders
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {syncs.map(sync => {
+                    const isRunning = sync.last_sync_status === 'running'
+                    const hasError = sync.last_sync_status === 'error'
+                    const isPaused = sync.status === 'paused'
+                    const statusColor = isRunning ? 'var(--warning)' : hasError ? 'var(--error)' : isPaused ? 'var(--text-muted)' : 'var(--success)'
+
+                    return (
+                      <div key={sync.id} style={{
+                        padding: '12px 16px', borderRadius: 'var(--radius-sm)',
+                        border: `1px solid ${hasError ? 'rgba(196, 78, 63, 0.3)' : 'var(--border)'}`,
+                        background: isPaused ? 'var(--bg)' : 'white',
+                        opacity: isPaused ? 0.7 : 1,
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
+                            <FolderOpen size={16} style={{ color: 'var(--accent)' }} />
+                            <div>
+                              <div style={{ fontWeight: 600, fontSize: '0.84rem' }}>{sync.remote_folder_name}</div>
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                                {isRunning ? (
+                                  <><span className="spinner" style={{ width: 10, height: 10, marginRight: 4, display: 'inline-block', verticalAlign: 'middle' }} /> Syncing...</>
+                                ) : sync.last_sync_at ? (
+                                  <>Last synced {new Date(sync.last_sync_at).toLocaleString()}</>
+                                ) : 'Not synced yet'}
+                                {sync.last_sync_message && !isRunning && (
+                                  <> — {sync.last_sync_message}</>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{
+                              fontSize: '0.68rem', color: 'var(--text-muted)', padding: '2px 8px',
+                              background: 'var(--bg)', borderRadius: 8,
+                            }}>{sync.files_synced} files</span>
+                            <button className="btn btn-ghost" onClick={() => handleTriggerSync(sync.id)} disabled={isRunning} style={{ padding: '4px 8px', fontSize: '0.75rem' }} title="Sync now">
+                              <RefreshCw size={12} />
+                            </button>
+                            <button className="btn btn-ghost" onClick={() => handleToggleSync(sync.id, sync.status)} style={{ padding: '4px 8px', fontSize: '0.75rem' }} title={isPaused ? 'Resume' : 'Pause'}>
+                              {isPaused ? <Play size={12} /> : <Pause size={12} />}
+                            </button>
+                            <button className="btn btn-ghost" onClick={() => handleExpandSync(sync.id)} style={{ padding: '4px 8px', fontSize: '0.75rem' }}>
+                              {expandedSync === sync.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                            </button>
+                            <button className="btn btn-ghost" onClick={() => handleDeleteSync(sync.id, sync.remote_folder_name)} style={{ padding: '4px 8px', fontSize: '0.75rem', color: 'var(--error)' }} title="Remove sync">
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Expanded file list */}
+                        {expandedSync === sync.id && syncFiles[sync.id] && (
+                          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+                            {syncFiles[sync.id].length === 0 ? (
+                              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', padding: 12 }}>No files synced yet</div>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {syncFiles[sync.id].map(file => (
+                                  <div key={file.id} style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                    padding: '6px 8px', fontSize: '0.78rem', borderRadius: 4,
+                                    background: file.status === 'error' ? 'rgba(196, 78, 63, 0.06)' : 'transparent',
+                                  }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                      <FileText size={12} style={{ color: 'var(--text-muted)' }} />
+                                      <span>{file.remote_name}</span>
+                                    </div>
+                                    <span className={`badge badge-${file.status === 'ready' ? 'ready' : file.status === 'error' ? 'error' : 'processing'}`} style={{ fontSize: '0.65rem' }}>
+                                      {file.status}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {syncs.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '12px 0', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                Search for a Google Drive folder above to start syncing documents.
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* MCP Connections */}

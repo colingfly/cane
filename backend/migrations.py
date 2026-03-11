@@ -16,6 +16,7 @@ def run_all():
     _migrate_mcp_servers_table()
     _migrate_conversation_logs_table()
     _migrate_widget_config_columns()
+    _migrate_connector_tables()
 
 
 def _migrate_agent_columns():
@@ -267,3 +268,92 @@ def _migrate_widget_config_columns():
             print("  [DB] Added widget_config column to workspaces")
         except Exception as e:
             print(f"  [DB] widget_config migration failed: {e}")
+
+
+def _migrate_connector_tables():
+    """Create connector_credentials, connector_syncs, and connector_files tables."""
+    insp = inspect(engine)
+    tables = insp.get_table_names()
+
+    if "connector_credentials" not in tables:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                CREATE TABLE connector_credentials (
+                    id VARCHAR(36) PRIMARY KEY,
+                    tenant_id VARCHAR(36) NOT NULL,
+                    provider VARCHAR(50) NOT NULL,
+                    refresh_token TEXT DEFAULT '',
+                    access_token TEXT DEFAULT '',
+                    token_expires_at DATETIME NULL,
+                    account_email VARCHAR(255) DEFAULT '',
+                    is_active TINYINT(1) DEFAULT 1,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+                )
+            """))
+        print("  [DB] connector_credentials table created")
+    else:
+        print("  [DB] connector_credentials table already exists")
+
+    if "connector_syncs" not in tables:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                CREATE TABLE connector_syncs (
+                    id VARCHAR(36) PRIMARY KEY,
+                    tenant_id VARCHAR(36) NOT NULL,
+                    credential_id VARCHAR(36) NOT NULL,
+                    workspace_id VARCHAR(36) NOT NULL,
+                    provider VARCHAR(50) DEFAULT 'google_drive',
+                    remote_folder_id VARCHAR(255) NOT NULL,
+                    remote_folder_name VARCHAR(500) DEFAULT '',
+                    status VARCHAR(20) DEFAULT 'active',
+                    last_sync_at DATETIME NULL,
+                    last_sync_status VARCHAR(20) DEFAULT '',
+                    last_sync_message TEXT DEFAULT '',
+                    files_synced INT DEFAULT 0,
+                    sync_interval_minutes INT DEFAULT 60,
+                    last_change_token TEXT DEFAULT '',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+                    FOREIGN KEY (credential_id) REFERENCES connector_credentials(id),
+                    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+                )
+            """))
+            conn.execute(text(
+                "CREATE INDEX idx_connector_syncs_active ON connector_syncs(status, last_sync_at)"
+            ))
+        print("  [DB] connector_syncs table created")
+    else:
+        print("  [DB] connector_syncs table already exists")
+
+    if "connector_files" not in tables:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                CREATE TABLE connector_files (
+                    id VARCHAR(36) PRIMARY KEY,
+                    sync_id VARCHAR(36) NOT NULL,
+                    tenant_id VARCHAR(36) NOT NULL,
+                    document_id VARCHAR(36) NULL,
+                    remote_file_id VARCHAR(255) NOT NULL,
+                    remote_name VARCHAR(500) DEFAULT '',
+                    remote_mime_type VARCHAR(255) DEFAULT '',
+                    remote_modified_at DATETIME NULL,
+                    remote_size_bytes INT DEFAULT 0,
+                    local_path VARCHAR(1000) DEFAULT '',
+                    status VARCHAR(20) DEFAULT 'pending',
+                    error_message TEXT DEFAULT '',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (sync_id) REFERENCES connector_syncs(id) ON DELETE CASCADE,
+                    FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+                    FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE SET NULL
+                )
+            """))
+            conn.execute(text(
+                "CREATE INDEX idx_connector_files_sync ON connector_files(sync_id, status)"
+            ))
+        print("  [DB] connector_files table created")
+    else:
+        print("  [DB] connector_files table already exists")
