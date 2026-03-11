@@ -6,12 +6,6 @@ const WORKSPACE_ID = '826e009f-ddb9-42a0-9c4e-89e88f6ed8e2'
 const API_BASE = window.location.origin
 const MAX_MESSAGES = 10
 
-const SUGGESTIONS = [
-  'What is Cane?',
-  'How does the RAG pipeline work?',
-  'What integrations are supported?',
-  'How does evaluation scoring work?',
-]
 
 export default function Demo() {
   const [messages, setMessages] = useState([
@@ -202,14 +196,6 @@ export default function Demo() {
               <div className="demo-msg-content">
                 <div className="demo-typing"><span /><span /><span /></div>
               </div>
-            </div>
-          )}
-
-          {messages.length === 1 && !loading && (
-            <div className="demo-suggestions">
-              {SUGGESTIONS.map((s, i) => (
-                <button key={i} onClick={() => send(s)}>{s}</button>
-              ))}
             </div>
           )}
 
