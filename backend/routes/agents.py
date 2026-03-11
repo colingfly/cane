@@ -203,6 +203,10 @@ def delete_agent(agent_id: str, user: User = Depends(get_current_user), db: Sess
         # ── 3b. Agent links (parent or child) ──
         _safe_delete(db, "DELETE FROM agent_links WHERE parent_workspace_id = :wid OR child_workspace_id = :wid", {"wid": agent_id})
 
+        # ── 3c. Scheduled runs + schedules ──
+        _safe_delete(db, "DELETE FROM agent_schedule_runs WHERE workspace_id = :wid", {"wid": agent_id})
+        _safe_delete(db, "DELETE FROM agent_schedules WHERE workspace_id = :wid", {"wid": agent_id})
+
         # ── 4. MCP servers (safe) ──
         _safe_delete(db, "DELETE FROM mcp_servers WHERE workspace_id = :wid", {"wid": agent_id})
 

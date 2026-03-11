@@ -187,3 +187,4 @@ from tool_models import AgentTool, AgentLink                           # noqa: E
 from connector_models import (                                         # noqa: E402, F401
     ConnectorCredential, ConnectorSync, ConnectorFile,
 )
+from schedule_models import AgentSchedule, AgentScheduleRun            # noqa: E402, F401

@@ -127,6 +127,7 @@ from sheets_routes import router as sheets_router
 from prospect_routes import router as prospect_router
 from connector_routes import router as connector_router
 from routes.demo import router as demo_router
+from schedule_routes import router as schedule_router
 
 app.include_router(auth_router)
 app.include_router(documents_router)
@@ -149,6 +150,7 @@ app.include_router(sheets_router)
 app.include_router(prospect_router)
 app.include_router(connector_router)
 app.include_router(demo_router)
+app.include_router(schedule_router)
 
 
 # ── Background sync loop for Live Connectors ──
@@ -157,6 +159,14 @@ async def start_connector_sync():
     import asyncio
     from services.connector_sync import start_sync_loop
     asyncio.create_task(start_sync_loop())
+
+
+# ── Background schedule loop for Scheduled Agent Runs ──
+@app.on_event("startup")
+async def start_schedule_runner():
+    import asyncio
+    from services.schedule_runner import start_schedule_loop
+    asyncio.create_task(start_schedule_loop())
 
 
 # ── Health check ──

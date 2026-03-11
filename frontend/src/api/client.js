@@ -408,6 +408,38 @@ export async function deleteAgentLink(agentId, linkId) {
   return request(`/agents/${agentId}/links/${linkId}`, { method: 'DELETE' })
 }
 
+// ─── Agent Schedules ───
+
+export async function getSchedules(agentId) {
+  return request(`/agents/${agentId}/schedules`)
+}
+
+export async function createSchedule(agentId, data) {
+  return request(`/agents/${agentId}/schedules`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function updateSchedule(agentId, scheduleId, data) {
+  return request(`/agents/${agentId}/schedules/${scheduleId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteSchedule(agentId, scheduleId) {
+  return request(`/agents/${agentId}/schedules/${scheduleId}`, { method: 'DELETE' })
+}
+
+export async function getScheduleRuns(agentId, scheduleId) {
+  return request(`/agents/${agentId}/schedules/${scheduleId}/runs`)
+}
+
+export async function triggerSchedule(agentId, scheduleId) {
+  return request(`/agents/${agentId}/schedules/${scheduleId}/trigger`, { method: 'POST' })
+}
+
 // ─── MCP Servers ───
 
 export async function getMcpCatalog() {

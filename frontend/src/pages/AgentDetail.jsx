@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Upload, Trash2, FileText, Sparkles, Save, ToggleLeft, ToggleRight, MessageSquare, Store, Wrench, Zap, Play, Plus, ChevronDown, ChevronUp, RefreshCw, Link2, Globe, X, BarChart3, Palette, Key, Pencil, Copy, Check, Cloud, FolderOpen, Search, Pause, Unplug } from 'lucide-react'
+import { ArrowLeft, Upload, Trash2, FileText, Sparkles, Save, ToggleLeft, ToggleRight, MessageSquare, Store, Wrench, Zap, Play, Plus, ChevronDown, ChevronUp, RefreshCw, Link2, Globe, X, BarChart3, Palette, Key, Pencil, Copy, Check, Cloud, FolderOpen, Search, Pause, Unplug, Clock } from 'lucide-react'
 import {
   getAgent, updateAgent, generateAgentPrompt, generateReplicaPrompt,
   getDocuments, uploadDocument, deleteDocument, getDocumentStatus,
@@ -9,6 +9,7 @@ import {
   getWidgetConfig, updateWidgetConfig,
   createApiKey, deleteApiKey, getApiKeys, getAgents,
   getAgentLinks, createAgentLink, updateAgentLink, deleteAgentLink,
+  getSchedules, createSchedule, updateSchedule, deleteSchedule, getScheduleRuns, triggerSchedule,
   getGdriveAuthUrl, getGdriveStatus, disconnectGdrive,
   listDriveFolders, listSyncs, createSync, getSync, triggerSync, updateSyncStatus, deleteSync,
 } from '../api/client'
@@ -135,6 +136,18 @@ export default function AgentDetail() {
   const [availableAgents, setAvailableAgents] = useState([])
   const [newLink, setNewLink] = useState({ child_agent_id: '', tool_name: '', tool_description: '' })
 
+  // Scheduled Runs
+  const [schedule, setSchedule] = useState(null)
+  const [scheduleRuns, setScheduleRuns] = useState([])
+  const [showAddSchedule, setShowAddSchedule] = useState(false)
+  const [showScheduleRuns, setShowScheduleRuns] = useState(false)
+  const [expandedRun, setExpandedRun] = useState(null)
+  const [scheduleSaving, setScheduleSaving] = useState(false)
+  const [scheduleTriggering, setScheduleTriggering] = useState(false)
+  const [newSchedule, setNewSchedule] = useState({
+    prompt: '', schedule_type: 'interval', interval_minutes: 60, daily_time: '09:00',
+  })
+
   useEffect(() => { loadAgent() }, [agentId])
 
   const loadAgent = async () => {
@@ -188,6 +201,17 @@ export default function AgentDetail() {
         const agentSpecificKeys = (keysRes.keys || []).filter(k => k.workspace_id === agentId)
         setAgentKeys(agentSpecificKeys)
       } catch { setAgentKeys([]) }
+
+      // Load schedule
+      try {
+        const schedRes = await getSchedules(agentId)
+        const s = (schedRes.schedules || [])[0] || null
+        setSchedule(s)
+        if (s) {
+          const runsRes = await getScheduleRuns(agentId, s.id)
+          setScheduleRuns(runsRes.runs || [])
+        }
+      } catch { setSchedule(null) }
 
       // Load Google Drive connector status + syncs
       loadConnectorStatus()
@@ -2275,6 +2299,291 @@ export default function AgentDetail() {
             <div style={{ fontSize: '0.84rem', fontWeight: 500 }}>No sub-agents linked</div>
             <div style={{ fontSize: '0.78rem', marginTop: 4 }}>
               Link other agents as tools so this agent can delegate questions to specialists.
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Scheduled Runs */}
+      <div className="card" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Clock size={16} /> Scheduled Runs
+            {schedule?.is_enabled && (
+              <span style={{ fontSize: '0.65rem', fontWeight: 700, background: 'rgba(74,222,128,0.12)', color: '#4ade80', padding: '2px 8px', borderRadius: 10 }}>Active</span>
+            )}
+          </h3>
+          {!schedule && (
+            <button className="btn btn-ghost" onClick={() => setShowAddSchedule(v => !v)} style={{ fontSize: '0.82rem' }}>
+              <Plus size={14} style={{ marginRight: 4 }} /> Add Schedule
+            </button>
+          )}
+        </div>
+
+        {/* Add schedule form */}
+        {showAddSchedule && !schedule && (
+          <div style={{ marginBottom: 16, padding: 16, background: 'var(--cane-50)', borderRadius: 8, border: '1px solid var(--rule)' }}>
+            <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+              Prompt (what the agent should do each run)
+            </label>
+            <textarea
+              className="form-input"
+              rows={3}
+              value={newSchedule.prompt}
+              onChange={e => setNewSchedule(p => ({ ...p, prompt: e.target.value }))}
+              placeholder="e.g. Find the top 5 AI news stories from today and summarize them."
+              style={{ marginBottom: 12, width: '100%' }}
+            />
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                  Schedule Type
+                </label>
+                <select
+                  className="form-input"
+                  value={newSchedule.schedule_type}
+                  onChange={e => setNewSchedule(p => ({ ...p, schedule_type: e.target.value }))}
+                >
+                  <option value="interval">Interval (every N minutes)</option>
+                  <option value="daily">Daily (at a specific time)</option>
+                </select>
+              </div>
+              <div>
+                {newSchedule.schedule_type === 'interval' ? (
+                  <>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                      Every (minutes, min 15)
+                    </label>
+                    <input
+                      className="form-input"
+                      type="number"
+                      min={15}
+                      value={newSchedule.interval_minutes}
+                      onChange={e => setNewSchedule(p => ({ ...p, interval_minutes: parseInt(e.target.value) || 60 }))}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>
+                      Time (UTC, HH:MM)
+                    </label>
+                    <input
+                      className="form-input"
+                      type="time"
+                      value={newSchedule.daily_time}
+                      onChange={e => setNewSchedule(p => ({ ...p, daily_time: e.target.value }))}
+                    />
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className="btn btn-primary"
+                disabled={!newSchedule.prompt.trim() || scheduleSaving}
+                onClick={async () => {
+                  setScheduleSaving(true)
+                  try {
+                    const res = await createSchedule(agentId, newSchedule)
+                    setSchedule(res)
+                    setShowAddSchedule(false)
+                    setNewSchedule({ prompt: '', schedule_type: 'interval', interval_minutes: 60, daily_time: '09:00' })
+                  } catch (e) { alert(e.message) }
+                  setScheduleSaving(false)
+                }}
+              >
+                {scheduleSaving ? 'Creating...' : 'Create Schedule'}
+              </button>
+              <button className="btn btn-ghost" onClick={() => setShowAddSchedule(false)}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {/* Schedule display */}
+        {schedule && (
+          <div>
+            <div style={{ padding: 14, background: 'var(--cane-50)', borderRadius: 8, border: '1px solid var(--rule)', marginBottom: 12 }}>
+              <div style={{ fontSize: '0.82rem', color: 'var(--text)', marginBottom: 8, lineHeight: 1.6 }}>
+                {schedule.prompt.length > 120 ? schedule.prompt.slice(0, 120) + '...' : schedule.prompt}
+              </div>
+              <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  {schedule.schedule_type === 'daily'
+                    ? `Daily at ${schedule.daily_time || '09:00'} UTC`
+                    : `Every ${schedule.interval_minutes} minutes`
+                  }
+                </span>
+                {schedule.last_run_at && (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{
+                      width: 6, height: 6, borderRadius: '50%', display: 'inline-block',
+                      background: schedule.last_run_status === 'success' ? '#4ade80' : schedule.last_run_status === 'error' ? '#f87171' : '#fbbf24',
+                    }} />
+                    Last: {new Date(schedule.last_run_at).toLocaleString()}
+                  </span>
+                )}
+                {schedule.run_count > 0 && (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    {schedule.run_count} run{schedule.run_count !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Toggle */}
+              <button
+                className="btn btn-ghost"
+                style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 6 }}
+                onClick={async () => {
+                  try {
+                    const res = await updateSchedule(agentId, schedule.id, { is_enabled: !schedule.is_enabled })
+                    setSchedule(res)
+                  } catch (e) { alert(e.message) }
+                }}
+              >
+                {schedule.is_enabled
+                  ? <ToggleRight size={18} style={{ color: '#4ade80' }} />
+                  : <ToggleLeft size={18} style={{ color: 'var(--text-muted)' }} />
+                }
+                {schedule.is_enabled ? 'Enabled' : 'Disabled'}
+              </button>
+
+              {/* Run Now */}
+              <button
+                className="btn btn-ghost"
+                style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 6 }}
+                disabled={scheduleTriggering || schedule.last_run_status === 'running'}
+                onClick={async () => {
+                  setScheduleTriggering(true)
+                  try {
+                    await triggerSchedule(agentId, schedule.id)
+                    // Poll for completion
+                    setTimeout(async () => {
+                      try {
+                        const schedRes = await getSchedules(agentId)
+                        const s = (schedRes.schedules || [])[0] || null
+                        setSchedule(s)
+                        if (s) {
+                          const runsRes = await getScheduleRuns(agentId, s.id)
+                          setScheduleRuns(runsRes.runs || [])
+                        }
+                      } catch {}
+                      setScheduleTriggering(false)
+                    }, 5000)
+                  } catch (e) {
+                    alert(e.message)
+                    setScheduleTriggering(false)
+                  }
+                }}
+              >
+                {scheduleTriggering ? <RefreshCw size={14} className="spin" /> : <Play size={14} />}
+                {scheduleTriggering ? 'Running...' : 'Run Now'}
+              </button>
+
+              {/* View History */}
+              <button
+                className="btn btn-ghost"
+                style={{ fontSize: '0.82rem' }}
+                onClick={async () => {
+                  if (!showScheduleRuns && schedule) {
+                    try {
+                      const runsRes = await getScheduleRuns(agentId, schedule.id)
+                      setScheduleRuns(runsRes.runs || [])
+                    } catch {}
+                  }
+                  setShowScheduleRuns(v => !v)
+                }}
+              >
+                {showScheduleRuns ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                {' '}History ({schedule.run_count || 0})
+              </button>
+
+              {/* Delete */}
+              <button
+                className="btn btn-ghost"
+                style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}
+                onClick={async () => {
+                  if (!confirm('Delete this schedule and all run history?')) return
+                  try {
+                    await deleteSchedule(agentId, schedule.id)
+                    setSchedule(null)
+                    setScheduleRuns([])
+                    setShowScheduleRuns(false)
+                  } catch (e) { alert(e.message) }
+                }}
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+
+            {/* Run History */}
+            {showScheduleRuns && (
+              <div style={{ marginTop: 16 }}>
+                {scheduleRuns.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: 16, color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                    No runs yet. Click "Run Now" to trigger the first execution.
+                  </div>
+                )}
+                {scheduleRuns.map(run => (
+                  <div
+                    key={run.id}
+                    style={{
+                      padding: '10px 14px', borderBottom: '1px solid var(--rule)',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => setExpandedRun(expandedRun === run.id ? null : run.id)}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{
+                          width: 7, height: 7, borderRadius: '50%', display: 'inline-block',
+                          background: run.status === 'success' ? '#4ade80' : run.status === 'error' ? '#f87171' : '#fbbf24',
+                        }} />
+                        <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                          {new Date(run.created_at).toLocaleString()}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        {run.duration_ms > 0 ? `${(run.duration_ms / 1000).toFixed(1)}s` : ''}
+                      </span>
+                    </div>
+
+                    {expandedRun === run.id && (
+                      <div style={{ marginTop: 10 }}>
+                        {run.status === 'error' && run.error_message && (
+                          <div style={{ fontSize: '0.78rem', color: '#f87171', marginBottom: 8, padding: '8px 10px', background: 'rgba(248,113,113,0.08)', borderRadius: 6 }}>
+                            {run.error_message}
+                          </div>
+                        )}
+                        {run.response && (
+                          <pre style={{
+                            fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.6,
+                            whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                            background: 'var(--cane-50)', padding: 12, borderRadius: 6,
+                            maxHeight: 300, overflow: 'auto', margin: 0,
+                          }}>
+                            {run.response}
+                          </pre>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!schedule && !showAddSchedule && (
+          <div style={{ textAlign: 'center', padding: '20px 16px', color: 'var(--text-muted)' }}>
+            <Clock size={24} style={{ marginBottom: 8, opacity: 0.4 }} />
+            <div style={{ fontSize: '0.84rem', fontWeight: 500 }}>No schedule configured</div>
+            <div style={{ fontSize: '0.78rem', marginTop: 4 }}>
+              Set up a schedule to run this agent automatically. Great for daily briefings, automated reports, or periodic data pulls.
             </div>
           </div>
         )}

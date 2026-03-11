@@ -18,6 +18,7 @@ def run_all():
     _migrate_widget_config_columns()
     _migrate_connector_tables()
     _migrate_agent_links_table()
+    _migrate_agent_schedules_table()
 
 
 def _migrate_agent_columns():
@@ -385,3 +386,60 @@ def _migrate_agent_links_table():
         print("  [DB] agent_links table created")
     else:
         print("  [DB] agent_links table already exists")
+
+
+def _migrate_agent_schedules_table():
+    """Create agent_schedules and agent_schedule_runs tables."""
+    insp = inspect(engine)
+    tables = insp.get_table_names()
+
+    if "agent_schedules" not in tables:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                CREATE TABLE agent_schedules (
+                    id VARCHAR(36) PRIMARY KEY,
+                    workspace_id VARCHAR(36) NOT NULL,
+                    tenant_id VARCHAR(36) NOT NULL,
+                    prompt TEXT NOT NULL,
+                    schedule_type VARCHAR(20) DEFAULT 'interval',
+                    interval_minutes INT DEFAULT 60,
+                    daily_time VARCHAR(5) DEFAULT '',
+                    is_enabled TINYINT(1) DEFAULT 1,
+                    last_run_at DATETIME NULL,
+                    last_run_status VARCHAR(20) DEFAULT '',
+                    next_run_at DATETIME NULL,
+                    run_count INT DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+                    FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+                    INDEX idx_schedules_next_run (is_enabled, next_run_at)
+                )
+            """))
+        print("  [DB] agent_schedules table created")
+    else:
+        print("  [DB] agent_schedules table already exists")
+
+    if "agent_schedule_runs" not in tables:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                CREATE TABLE agent_schedule_runs (
+                    id VARCHAR(36) PRIMARY KEY,
+                    schedule_id VARCHAR(36) NOT NULL,
+                    workspace_id VARCHAR(36) NOT NULL,
+                    tenant_id VARCHAR(36) NOT NULL,
+                    prompt TEXT NOT NULL,
+                    response TEXT DEFAULT '',
+                    status VARCHAR(20) DEFAULT 'running',
+                    error_message TEXT DEFAULT '',
+                    duration_ms INT DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (schedule_id) REFERENCES agent_schedules(id) ON DELETE CASCADE,
+                    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+                    FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+                    INDEX idx_schedule_runs_schedule (schedule_id, created_at)
+                )
+            """))
+        print("  [DB] agent_schedule_runs table created")
+    else:
+        print("  [DB] agent_schedule_runs table already exists")
