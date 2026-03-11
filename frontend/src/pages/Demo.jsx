@@ -6,15 +6,15 @@ const WORKSPACE_ID = '826e009f-ddb9-42a0-9c4e-89e88f6ed8e2'
 const API_BASE = window.location.origin
 
 const SUGGESTIONS = [
-  'What is Cane and what can it do?',
-  'How does the evaluation engine work?',
-  'What integrations does Cane support?',
-  'Tell me about the agent marketplace',
+  'What is Cane?',
+  'How does the RAG pipeline work?',
+  'What integrations are supported?',
+  'How does evaluation scoring work?',
 ]
 
 export default function Demo() {
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: "Hey — I'm an AI agent built on Cane. I know everything about the platform. Ask me anything, or try one of the suggestions below." },
+    { role: 'assistant', content: "This is a live AI agent running on Cane. It has access to all platform documentation. Ask it anything." },
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -25,9 +25,7 @@ export default function Demo() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  useEffect(() => {
-    inputRef.current?.focus()
-  }, [])
+  useEffect(() => { inputRef.current?.focus() }, [])
 
   const send = async (text) => {
     const q = (text || input).trim()
@@ -62,33 +60,23 @@ export default function Demo() {
   }
 
   return (
-    <div style={styles.page}>
+    <div className="demo-page">
       <style>{demoStyles}</style>
 
-      {/* Top bar */}
-      <div style={styles.topBar}>
-        <Link to="/" style={styles.brand}>
-          <span style={styles.brandText}>CANE</span>
-          <span style={styles.brandSub}>live demo</span>
-        </Link>
-        <div style={styles.topRight}>
-          <span style={styles.statusDot} />
-          <span style={styles.statusText}>Agent online</span>
-          <Link to="/" style={styles.backLink}>Back to home</Link>
-        </div>
+      <div className="demo-nav">
+        <Link to="/" className="demo-back">Cane</Link>
+        <span className="demo-nav-label">Live demo</span>
       </div>
 
-      {/* Chat area */}
-      <div style={styles.chatArea}>
-        <div style={styles.chatInner}>
+      <div className="demo-chat">
+        <div className="demo-chat-inner">
           {messages.map((m, i) => (
-            <div key={i} style={{ ...styles.msgRow, justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
-              {m.role === 'assistant' && <div style={styles.avatar}>C</div>}
-              <div style={m.role === 'user' ? styles.userBubble : styles.agentBubble}>
-                <div style={styles.msgText}>{m.content}</div>
+            <div key={i} className={`demo-msg demo-msg-${m.role}`}>
+              <div className="demo-msg-content">
+                <div className="demo-msg-text">{m.content}</div>
                 {m.sources?.length > 0 && (
-                  <div style={styles.sources}>
-                    {m.sources.map((s, j) => <span key={j} style={styles.sourceTag}>{s}</span>)}
+                  <div className="demo-sources">
+                    {m.sources.map((s, j) => <span key={j}>{s}</span>)}
                   </div>
                 )}
               </div>
@@ -96,21 +84,17 @@ export default function Demo() {
           ))}
 
           {loading && (
-            <div style={styles.msgRow}>
-              <div style={styles.avatar}>C</div>
-              <div style={styles.agentBubble}>
-                <div className="demo-typing">
-                  <span /><span /><span />
-                </div>
+            <div className="demo-msg demo-msg-assistant">
+              <div className="demo-msg-content">
+                <div className="demo-typing"><span /><span /><span /></div>
               </div>
             </div>
           )}
 
-          {/* Suggestions — only show at start */}
           {messages.length === 1 && !loading && (
-            <div style={styles.suggestions}>
+            <div className="demo-suggestions">
               {SUGGESTIONS.map((s, i) => (
-                <button key={i} onClick={() => send(s)} style={styles.suggestionBtn}>{s}</button>
+                <button key={i} onClick={() => send(s)}>{s}</button>
               ))}
             </div>
           )}
@@ -119,143 +103,205 @@ export default function Demo() {
         </div>
       </div>
 
-      {/* Input */}
-      <div style={styles.inputArea}>
-        <div style={styles.inputWrap}>
+      <div className="demo-input-area">
+        <div className="demo-input-wrap">
           <input
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKey}
-            placeholder="Ask anything about Cane..."
-            style={styles.input}
+            placeholder="Ask anything..."
             disabled={loading}
           />
-          <button onClick={() => send()} disabled={loading || !input.trim()} style={styles.sendBtn}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+          <button onClick={() => send()} disabled={loading || !input.trim()} className="demo-send">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 12h14M12 5l7 7-7 7" />
             </svg>
           </button>
         </div>
-        <div style={styles.inputFooter}>
-          Built with <Link to="/" style={styles.footerLink}>Cane</Link> — AI agent platform by Colin
+        <div className="demo-footer">
+          Powered by <Link to="/">Cane</Link>
         </div>
       </div>
     </div>
   )
 }
 
-const styles = {
-  page: {
-    height: '100vh', display: 'flex', flexDirection: 'column',
-    background: '#06080f', color: '#c8d6e5', fontFamily: "'DM Sans', sans-serif",
-  },
-  topBar: {
-    padding: '14px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    borderBottom: '1px solid rgba(0, 180, 255, 0.08)', background: 'rgba(6, 8, 15, 0.95)',
-    backdropFilter: 'blur(20px)', flexShrink: 0,
-  },
-  brand: { display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' },
-  brandText: {
-    fontFamily: "'Space Grotesk', 'Outfit', sans-serif", fontWeight: 800, fontSize: '1.3rem',
-    color: '#00d4ff', letterSpacing: '0.08em',
-  },
-  brandSub: {
-    fontSize: '0.65rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase',
-    color: '#3d6b8a', padding: '3px 8px', borderRadius: 4,
-    border: '1px solid rgba(0, 180, 255, 0.15)', background: 'rgba(0, 180, 255, 0.05)',
-  },
-  topRight: { display: 'flex', alignItems: 'center', gap: 14 },
-  statusDot: {
-    width: 7, height: 7, borderRadius: '50%', background: '#00ff88',
-    boxShadow: '0 0 8px rgba(0, 255, 136, 0.4)',
-  },
-  statusText: { fontSize: '0.75rem', color: '#4a7a6a', fontWeight: 500 },
-  backLink: {
-    fontSize: '0.78rem', color: '#3d6b8a', textDecoration: 'none', fontWeight: 500,
-    padding: '6px 14px', borderRadius: 6, border: '1px solid rgba(0, 180, 255, 0.12)',
-    transition: 'all 0.2s',
-  },
-
-  chatArea: {
-    flex: 1, overflowY: 'auto', padding: '32px 24px',
-  },
-  chatInner: { maxWidth: 720, margin: '0 auto' },
-
-  msgRow: { display: 'flex', gap: 12, marginBottom: 20, alignItems: 'flex-start' },
-  avatar: {
-    width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-    background: 'rgba(0, 180, 255, 0.1)', color: '#00d4ff',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: '0.75rem',
-    border: '1px solid rgba(0, 180, 255, 0.15)',
-  },
-  userBubble: {
-    maxWidth: '75%', padding: '12px 16px', borderRadius: '14px 14px 4px 14px',
-    background: 'rgba(0, 140, 255, 0.12)', border: '1px solid rgba(0, 180, 255, 0.15)',
-    color: '#d0e4f5',
-  },
-  agentBubble: {
-    maxWidth: '75%', padding: '12px 16px', borderRadius: '14px 14px 14px 4px',
-    background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.06)',
-    color: '#c8d6e5',
-  },
-  msgText: { fontSize: '0.88rem', lineHeight: 1.7, whiteSpace: 'pre-wrap' },
-  sources: { display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 },
-  sourceTag: {
-    padding: '2px 8px', borderRadius: 4, fontSize: '0.65rem',
-    fontFamily: "'JetBrains Mono', monospace",
-    background: 'rgba(0, 180, 255, 0.08)', color: '#00b4ff',
-    border: '1px solid rgba(0, 180, 255, 0.12)',
-  },
-
-  suggestions: {
-    display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8, marginLeft: 44,
-  },
-  suggestionBtn: {
-    padding: '8px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 500,
-    background: 'rgba(0, 180, 255, 0.06)', border: '1px solid rgba(0, 180, 255, 0.12)',
-    color: '#6ab4d4', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-    transition: 'all 0.2s',
-  },
-
-  inputArea: {
-    padding: '16px 24px 20px', borderTop: '1px solid rgba(0, 180, 255, 0.08)',
-    background: 'rgba(6, 8, 15, 0.95)', backdropFilter: 'blur(20px)', flexShrink: 0,
-  },
-  inputWrap: {
-    maxWidth: 720, margin: '0 auto', display: 'flex', gap: 10,
-    background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(0, 180, 255, 0.12)',
-    borderRadius: 12, padding: '4px 4px 4px 16px', alignItems: 'center',
-  },
-  input: {
-    flex: 1, background: 'none', border: 'none', outline: 'none',
-    color: '#d0e4f5', fontSize: '0.9rem', fontFamily: "'DM Sans', sans-serif",
-    padding: '10px 0',
-  },
-  sendBtn: {
-    width: 40, height: 40, borderRadius: 8, border: 'none', cursor: 'pointer',
-    background: '#00b4ff', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    transition: 'all 0.2s', flexShrink: 0,
-  },
-  inputFooter: {
-    textAlign: 'center', marginTop: 10, fontSize: '0.7rem', color: '#2a3f52',
-  },
-  footerLink: { color: '#00b4ff', textDecoration: 'none', fontWeight: 600 },
+const demoStyles = `
+.demo-page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+  color: rgba(255,255,255,0.5);
+  font-family: 'DM Sans', -apple-system, sans-serif;
 }
 
-const demoStyles = `
-  .demo-typing { display: flex; gap: 5px; padding: 4px 0; }
-  .demo-typing span {
-    width: 7px; height: 7px; border-radius: 50%;
-    background: rgba(0, 180, 255, 0.4);
-    animation: demoBounce 1.2s infinite;
-  }
-  .demo-typing span:nth-child(2) { animation-delay: 0.15s; }
-  .demo-typing span:nth-child(3) { animation-delay: 0.3s; }
-  @keyframes demoBounce {
-    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-    30% { transform: translateY(-6px); opacity: 1; }
-  }
-  .demo-typing span:hover, button:hover { opacity: 0.85; }
+.demo-nav {
+  padding: 0 32px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+
+.demo-back {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: #fff;
+  text-decoration: none;
+}
+
+.demo-nav-label {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.2);
+}
+
+.demo-chat {
+  flex: 1;
+  overflow-y: auto;
+  padding: 40px 24px;
+}
+
+.demo-chat-inner { max-width: 640px; margin: 0 auto; }
+
+.demo-msg { margin-bottom: 24px; }
+
+.demo-msg-user { display: flex; justify-content: flex-end; }
+
+.demo-msg-user .demo-msg-content {
+  background: rgba(255,255,255,0.06);
+  border-radius: 16px 16px 4px 16px;
+  padding: 12px 16px;
+  max-width: 80%;
+  color: rgba(255,255,255,0.8);
+}
+
+.demo-msg-assistant .demo-msg-content {
+  max-width: 80%;
+  padding: 4px 0;
+  color: rgba(255,255,255,0.55);
+}
+
+.demo-msg-text {
+  font-size: 0.88rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.demo-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.demo-sources span {
+  font-size: 0.68rem;
+  color: rgba(255,255,255,0.25);
+  padding: 2px 8px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+}
+
+.demo-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.demo-suggestions button {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.4);
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: all 0.15s;
+}
+
+.demo-suggestions button:hover {
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.6);
+}
+
+.demo-input-area {
+  padding: 16px 24px 20px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+
+.demo-input-wrap {
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  gap: 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 4px 4px 4px 16px;
+  align-items: center;
+}
+
+.demo-input-wrap input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: rgba(255,255,255,0.8);
+  font-size: 0.88rem;
+  font-family: 'DM Sans', sans-serif;
+  padding: 10px 0;
+}
+
+.demo-input-wrap input::placeholder { color: rgba(255,255,255,0.2); }
+
+.demo-send {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  background: #fff;
+  color: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.demo-send:hover { opacity: 0.8; }
+.demo-send:disabled { opacity: 0.3; cursor: default; }
+
+.demo-footer {
+  text-align: center;
+  margin-top: 10px;
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.15);
+}
+
+.demo-footer a {
+  color: rgba(255,255,255,0.3);
+  text-decoration: none;
+}
+
+.demo-typing { display: flex; gap: 4px; padding: 8px 0; }
+.demo-typing span {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  animation: demoPulse 1.2s infinite;
+}
+.demo-typing span:nth-child(2) { animation-delay: 0.15s; }
+.demo-typing span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes demoPulse {
+  0%, 60%, 100% { opacity: 0.3; }
+  30% { opacity: 0.8; }
+}
 `
