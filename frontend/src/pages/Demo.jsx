@@ -1,14 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 
-const API_KEY = 'cane_d26764c44d6887c7b0820033388c6810b6c9fed3bdf91989'
-const WORKSPACE_ID = '826e009f-ddb9-42a0-9c4e-89e88f6ed8e2'
 const API_BASE = window.location.origin
 const MAX_MESSAGES = 10
 
 export default function Demo() {
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: "This is a live AI agent running on Cane. It has access to all platform documentation. Ask it anything." },
+    { role: 'assistant', content: "This is a live AI agent running on Cane. Upload your own documents and ask questions — everything stays isolated to this session." },
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -19,6 +17,8 @@ export default function Demo() {
   const [uploadedFiles, setUploadedFiles] = useState([])
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const [session, setSession] = useState(null) // { workspace_id, api_key }
+  const [sessionLoading, setSessionLoading] = useState(true)
   const fileInputRef = useRef(null)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
@@ -29,12 +29,30 @@ export default function Demo() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  useEffect(() => { inputRef.current?.focus() }, [])
+  // Initialize demo session on mount
+  useEffect(() => {
+    const initSession = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/demo/session`, { method: 'POST' })
+        if (!res.ok) throw new Error('Failed to start demo session')
+        const data = await res.json()
+        setSession({ workspace_id: data.workspace_id, api_key: data.api_key })
+      } catch (e) {
+        console.error('Demo session error:', e)
+        setMessages([{ role: 'assistant', content: 'Failed to initialize demo session. Please refresh.' }])
+      } finally {
+        setSessionLoading(false)
+      }
+    }
+    initSession()
+  }, [])
+
+  useEffect(() => { if (!sessionLoading) inputRef.current?.focus() }, [sessionLoading])
 
   const rateLimited = msgCount >= MAX_MESSAGES
 
   const handleFiles = async (files) => {
-    if (uploading) return
+    if (uploading || !session) return
     const allowed = ['application/pdf', 'text/plain', 'text/csv',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
     const valid = Array.from(files).filter(f => {
@@ -51,19 +69,47 @@ export default function Demo() {
       try {
         const form = new FormData()
         form.append('file', f)
-        form.append('workspace_id', WORKSPACE_ID)
-        const res = await fetch(`${API_BASE}/documents/upload`, {
+        form.append('workspace_id', session.workspace_id)
+        const res = await fetch(`${API_BASE}/api/demo/upload`, {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${API_KEY}` },
           body: form,
         })
-        newFiles.push({ name: f.name, status: res.ok ? 'uploaded' : 'error' })
+        const data = await res.json()
+        newFiles.push({
+          name: f.name,
+          status: res.ok ? 'processing' : 'error',
+          docId: data.document_id,
+        })
       } catch {
         newFiles.push({ name: f.name, status: 'error' })
       }
     }
     setUploadedFiles(prev => [...prev, ...newFiles])
     setUploading(false)
+
+    // Poll for processing completion
+    pollDocuments()
+  }
+
+  const pollDocuments = () => {
+    if (!session) return
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/demo/documents/${session.workspace_id}`)
+        const data = await res.json()
+        const allDone = data.documents.every(d => d.status !== 'processing')
+        setUploadedFiles(prev => prev.map(f => {
+          const match = data.documents.find(d => d.filename === f.name)
+          if (match) return { ...f, status: match.status, chunks: match.chunk_count }
+          return f
+        }))
+        if (allDone) clearInterval(interval)
+      } catch {
+        clearInterval(interval)
+      }
+    }, 2000)
+    // Stop polling after 60s max
+    setTimeout(() => clearInterval(interval), 60000)
   }
 
   const onDrop = (e) => {
@@ -73,10 +119,20 @@ export default function Demo() {
   }
 
   const send = async (text) => {
-    if (rateLimited) return
+    if (rateLimited || !session) return
     const q = (text || input).trim()
     if (!q || loading) return
     setInput('')
+
+    // Check if user has uploaded any docs
+    const readyDocs = uploadedFiles.filter(f => f.status === 'ready')
+    if (readyDocs.length === 0 && uploadedFiles.length === 0) {
+      setMessages(prev => [...prev,
+        { role: 'user', content: q },
+        { role: 'assistant', content: 'Upload some documents first so I have something to search through. Drag and drop files onto the Upload Files tile above.' },
+      ])
+      return
+    }
 
     const history = messages.filter(m => m.role !== 'system').map(m => ({ role: m.role, content: m.content }))
     setMessages(prev => [...prev, { role: 'user', content: q }])
@@ -89,16 +145,16 @@ export default function Demo() {
     const t0 = Date.now()
 
     try {
-      const headers = { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' }
+      const headers = { 'Authorization': `Bearer ${session.api_key}`, 'Content-Type': 'application/json' }
 
       const [askRes, searchRes] = await Promise.all([
         fetch(`${API_BASE}/v1/ask`, {
           method: 'POST', headers,
-          body: JSON.stringify({ query: q, workspace_id: WORKSPACE_ID, history }),
+          body: JSON.stringify({ query: q, workspace_id: session.workspace_id, history }),
         }),
         fetch(`${API_BASE}/v1/search`, {
           method: 'POST', headers,
-          body: JSON.stringify({ query: q, workspace_id: WORKSPACE_ID, max_results: 5 }),
+          body: JSON.stringify({ query: q, workspace_id: session.workspace_id, max_results: 5 }),
         }),
       ])
 
@@ -129,6 +185,17 @@ export default function Demo() {
 
   const handleKey = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+  }
+
+  if (sessionLoading) {
+    return (
+      <div className="demo-page">
+        <style>{demoStyles}</style>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '0.84rem' }}>
+          Starting demo session...
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -171,13 +238,19 @@ export default function Demo() {
                 <span className="demo-tile-title">Upload Files</span>
                 <span className="demo-tile-sub">
                   {uploading ? 'Uploading...' : uploadedFiles.length > 0
-                    ? uploadedFiles.map(f => f.name).join(', ')
-                    : 'PDF, DOCX, CSV, TXT'}
+                    ? uploadedFiles.map(f => {
+                        const icon = f.status === 'ready' ? '\u2713' : f.status === 'processing' ? '\u23F3' : f.status === 'error' ? '\u2717' : ''
+                        return `${icon} ${f.name}`
+                      }).join(', ')
+                    : 'PDF, DOCX, CSV, TXT — drag & drop or click'}
                 </span>
               </div>
               {uploadedFiles.length > 0 ? (
-                <span className="demo-tile-badge" style={{ color: 'rgba(74,222,128,0.7)', borderColor: 'rgba(74,222,128,0.15)' }}>
-                  {uploadedFiles.length}/{MAX_FILES}
+                <span className="demo-tile-badge" style={{
+                  color: uploadedFiles.some(f => f.status === 'processing') ? 'rgba(251,191,36,0.7)' : 'rgba(74,222,128,0.7)',
+                  borderColor: uploadedFiles.some(f => f.status === 'processing') ? 'rgba(251,191,36,0.15)' : 'rgba(74,222,128,0.15)',
+                }}>
+                  {uploadedFiles.filter(f => f.status === 'ready').length}/{uploadedFiles.length} ready
                 </span>
               ) : (
                 <span className="demo-tile-badge">{uploading ? '...' : `Up to ${MAX_FILES}`}</span>

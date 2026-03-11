@@ -126,6 +126,7 @@ from calendar_routes import router as calendar_router
 from sheets_routes import router as sheets_router
 from prospect_routes import router as prospect_router
 from connector_routes import router as connector_router
+from routes.demo import router as demo_router
 
 app.include_router(auth_router)
 app.include_router(documents_router)
@@ -147,6 +148,7 @@ app.include_router(calendar_router)
 app.include_router(sheets_router)
 app.include_router(prospect_router)
 app.include_router(connector_router)
+app.include_router(demo_router)
 
 
 # ── Background sync loop for Live Connectors ──
