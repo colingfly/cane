@@ -53,19 +53,19 @@ export default function Landing() {
         </div>
       </nav>
 
-      {/* Hero — big typography, minimal */}
+      {/* Hero */}
       <section className="lp-hero">
         <h1 className="lp-reveal">
-          An AI agent platform<br />
-          built from the ground up
+          The complete stack for<br />
+          production AI agents
         </h1>
         <p className="lp-hero-sub lp-reveal">
-          Ingest documents. Build specialized agents. Connect them to external tools.
-          Evaluate with automated scoring. Deploy anywhere. Everything in one system.
+          Ingest documents. Build specialized agents. Connect them to tools and to each other.
+          Score accuracy with automated evals. Deploy anywhere with one script tag.
         </p>
         <div className="lp-hero-actions lp-reveal">
           <Link to="/demo" className="lp-btn-fill">Try the live demo</Link>
-          <a href="#architecture" className="lp-btn-ghost">How it works</a>
+          <Link to="/architecture" className="lp-btn-ghost">See the architecture</Link>
         </div>
       </section>
 
@@ -74,9 +74,9 @@ export default function Landing() {
         <div className="lp-stats-inner">
           {[
             ['Hybrid RAG', 'Vector + BM25 + cross-encoder re-ranking'],
-            ['Google Drive Sync', 'OAuth 2.0 + incremental Changes API'],
-            ['Tool Execution', 'MCP protocol + webhook actions'],
-            ['LLM-as-Judge', 'Automated evaluation with weighted criteria'],
+            ['Agent Orchestration', 'Supervisor agents delegate to specialist sub-agents'],
+            ['Tool Execution', 'Webhooks, MCP protocol, agent-as-tool delegation'],
+            ['LLM-as-Judge', 'Automated eval with weighted scoring criteria'],
           ].map(([title, desc], i) => (
             <div key={i} className="lp-stat">
               <div className="lp-stat-title">{title}</div>
@@ -91,28 +91,33 @@ export default function Landing() {
         <div className="lp-contain">
           <div className="lp-section-head lp-reveal">
             <h2>Architecture</h2>
-            <p>Four layers. Each one built, not imported.</p>
+            <p>Five layers. Each one built, not imported.</p>
           </div>
           <div className="lp-arch-grid">
             {[
               {
                 n: '01', title: 'Ingestion',
-                body: 'Upload files or connect Google Drive via OAuth. Text extraction for PDFs and DOCX, OCR for images, Whisper transcription for audio/video. Content is chunked and embedded with BGE for vector search.',
+                body: 'Upload files or connect Google Drive via OAuth. Text extraction for PDFs and DOCX, OCR for images, Whisper transcription for audio and video. Content is chunked and embedded with BGE for vector search.',
                 stack: 'FastAPI, Tesseract, Whisper, Google Drive API, Fernet encryption',
               },
               {
-                n: '02', title: 'Search',
-                body: 'Hybrid retrieval combining dense vector similarity and sparse BM25 keyword matching. Results merged with Reciprocal Rank Fusion, then re-ranked by a cross-encoder. Final chunks sent to Claude with conversation history.',
+                n: '02', title: 'Retrieval',
+                body: 'Hybrid search combining dense vector similarity and sparse BM25 keyword matching. Results merged with Reciprocal Rank Fusion, then re-ranked by a cross-encoder. Final chunks sent to Claude with full conversation history.',
                 stack: 'ChromaDB, BGE-base-en, BM25, ms-marco MiniLM cross-encoder',
               },
               {
-                n: '03', title: 'Agents',
-                body: 'Scoped knowledge bases with custom system prompts. Agents can execute webhook tools and connect to MCP servers for external actions. Claude handles tool selection natively. Full streaming over SSE.',
-                stack: 'Claude API, MCP Protocol, SSE streaming, webhook tool execution',
+                n: '03', title: 'Agents & Orchestration',
+                body: 'Scoped knowledge bases with custom system prompts. Agents call webhook tools, connect to MCP servers, and delegate to other agents as tools. A supervisor can route questions to the right specialist automatically.',
+                stack: 'Claude API, MCP Protocol, agent-as-tool, depth-limited recursion',
               },
               {
-                n: '04', title: 'Evaluation',
-                body: 'Automated test suites scored by an LLM judge. Four criteria: accuracy, completeness, relevance, and faithfulness, with configurable weights and custom rules. Score history tracks improvement over time.',
+                n: '04', title: 'Tools & Integrations',
+                body: 'Three tool backends unified into one palette. Webhook actions for HTTP calls, MCP servers for protocol-native integrations, and linked agents for multi-agent delegation. Claude picks the right tool at runtime.',
+                stack: 'Webhook executor, MCP client, SSE streaming, unified tool router',
+              },
+              {
+                n: '05', title: 'Evaluation',
+                body: 'Automated test suites scored by an LLM judge. Four criteria: accuracy, completeness, relevance, and faithfulness. Configurable weights and custom rules. Score history tracks improvement across runs.',
                 stack: 'LLM-as-Judge, weighted criteria, custom rules, regression tracking',
               },
             ].map((item, i) => (
@@ -123,6 +128,9 @@ export default function Landing() {
                 <div className="lp-arch-stack">{item.stack}</div>
               </div>
             ))}
+          </div>
+          <div className="lp-arch-link lp-reveal">
+            <Link to="/architecture">Full architecture deep dive &rarr;</Link>
           </div>
         </div>
       </section>
@@ -136,13 +144,15 @@ export default function Landing() {
           </div>
           <div className="lp-cap-list">
             {[
-              ['Google Drive Sync', 'OAuth popup, folder picker, incremental sync via Changes API. Google Docs and Sheets auto-export. Encrypted credential storage with Fernet.'],
-              ['MCP Connections', 'Model Context Protocol for connecting agents to external services. Catalog of pre-built connectors plus custom server support. Auto-discovers available tools.'],
-              ['Webhook Tools', 'HTTP actions triggered by agent reasoning. Fire-and-forget for notifications, wait-for-response for live data. Custom payload templates.'],
-              ['Evaluation Engine', 'Write test cases with expected answers. Run automated scoring with configurable criteria weights and custom rules. Track scores across runs.'],
-              ['Analytics Dashboard', 'Per-agent conversation tracking. Volume, response times, channel breakdown, tool usage, satisfaction scores from user feedback.'],
-              ['Widget & API', 'Embeddable chat widget. One script tag, full customization. REST API with key-scoped auth. Streaming responses. Deploy on any website.'],
-              ['Agent Marketplace', 'Publish agents with eval scores. Others can clone and independently verify by re-running the test suite against their copy.'],
+              ['Hybrid RAG Pipeline', 'Vector search, BM25 keyword matching, Reciprocal Rank Fusion, and cross-encoder re-ranking in a single retrieval pass. Not just embeddings.'],
+              ['Google Drive Sync', 'OAuth popup, folder picker, incremental sync via the Changes API. Google Docs and Sheets auto-export to text. Encrypted credential storage.'],
+              ['Multi-Agent Orchestration', 'Link agents as callable tools. A supervisor agent delegates questions to specialists and combines their answers. Depth-limited recursion prevents runaway chains.'],
+              ['MCP Connections', 'Model Context Protocol for connecting agents to Slack, Google Calendar, HubSpot, and more. Pre-built connector catalog plus custom server support.'],
+              ['Webhook Tools', 'HTTP actions triggered by agent reasoning. Fire-and-forget for notifications, wait-for-response for live data lookups. Custom headers and payload templates.'],
+              ['Evaluation Engine', 'Write test cases with expected answers. Run automated scoring with configurable criteria weights and custom rules. Track scores across runs to catch regressions.'],
+              ['Analytics Dashboard', 'Per-agent conversation tracking. Volume, response times, channel breakdown, tool usage, and satisfaction scores from user feedback.'],
+              ['Widget & API Deployment', 'Embeddable chat widget with full customization. REST API with key-scoped auth and streaming responses. One script tag to deploy on any website.'],
+              ['Agent Marketplace', 'Publish agents with eval scores attached. Others can clone your agent and independently verify accuracy by re-running the test suite on their copy.'],
             ].map(([title, desc], i) => (
               <div key={i} className="lp-cap-row lp-reveal">
                 <h3>{title}</h3>
@@ -162,11 +172,11 @@ export default function Landing() {
           <div className="lp-stack-row lp-reveal">
             {[
               ['Backend', 'Python, FastAPI, Gunicorn, SQLAlchemy'],
-              ['AI / ML', 'Claude API, BGE embeddings, BM25, cross-encoder'],
+              ['AI / ML', 'Claude API, BGE embeddings, BM25, cross-encoder re-ranking'],
               ['Storage', 'MySQL, ChromaDB, Google Drive API'],
-              ['Frontend', 'React, Vite'],
-              ['Auth', 'JWT, OAuth 2.0, Fernet encryption, API keys'],
-              ['Infra', 'Railway, background sync, multi-worker'],
+              ['Frontend', 'React 18, Vite, Lucide icons'],
+              ['Auth', 'JWT, OAuth 2.0, Fernet encryption, scoped API keys'],
+              ['Infra', 'Railway, background sync workers, multi-process'],
             ].map(([label, val], i) => (
               <div key={i} className="lp-stack-item">
                 <span className="lp-stack-label">{label}</span>
@@ -182,9 +192,12 @@ export default function Landing() {
         <div className="lp-contain lp-reveal" style={{ textAlign: 'center' }}>
           <h2 style={{ marginBottom: 16 }}>Talk to it.</h2>
           <p className="lp-demo-sub">
-            There is a live agent running on this platform right now. No account needed.
+            There is a live agent running on this platform right now. Upload a file, ask a question, and see the full pipeline in action. No account needed.
           </p>
-          <Link to="/demo" className="lp-btn-fill">Open demo</Link>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+            <Link to="/demo" className="lp-btn-fill">Open demo</Link>
+            <Link to="/architecture" className="lp-btn-ghost">Read the architecture</Link>
+          </div>
         </div>
       </section>
 
@@ -197,6 +210,7 @@ export default function Landing() {
         <div className="lp-footer-links">
           <Link to="/demo">Demo</Link>
           <Link to="/guide">Docs</Link>
+          <Link to="/architecture">Architecture</Link>
           <Link to="/marketplace">Marketplace</Link>
           <a href="mailto:hello@cane.fyi">Contact</a>
         </div>
@@ -281,7 +295,7 @@ const landingStyles = `
 .lp-hero-sub {
   font-size: 1.05rem;
   color: rgba(255,255,255,0.4);
-  max-width: 540px;
+  max-width: 560px;
   line-height: 1.7;
   margin-bottom: 40px;
 }
@@ -428,6 +442,21 @@ const landingStyles = `
   line-height: 1.6;
 }
 
+.lp-arch-link {
+  margin-top: 32px;
+  text-align: center;
+}
+
+.lp-arch-link a {
+  color: rgba(255,255,255,0.35);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: color 0.15s;
+}
+
+.lp-arch-link a:hover { color: rgba(255,255,255,0.7); }
+
 /* Capabilities list */
 .lp-cap-list {
   display: flex;
@@ -438,7 +467,7 @@ const landingStyles = `
   padding: 28px 0;
   border-bottom: 1px solid rgba(255,255,255,0.06);
   display: grid;
-  grid-template-columns: 200px 1fr;
+  grid-template-columns: 220px 1fr;
   gap: 40px;
   align-items: baseline;
 }

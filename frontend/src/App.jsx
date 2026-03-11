@@ -18,6 +18,7 @@ import MarketplaceDetail from './pages/MarketplaceDetail'
 import Environments from './pages/Environments'
 import EnvironmentDetail from './pages/EnvironmentDetail'
 import Analytics from './pages/Analytics'
+import Architecture from './pages/Architecture'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -101,6 +102,7 @@ export default function App() {
       } />
 
       <Route path="/demo" element={<Demo />} />
+      <Route path="/architecture" element={<Architecture />} />
 
       <Route path="/guide" element={
         user ? (
