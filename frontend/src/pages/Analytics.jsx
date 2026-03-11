@@ -85,7 +85,7 @@ export default function Analytics() {
         </Link>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2 style={{ fontSize: '1.4rem', fontWeight: 700, fontFamily: 'var(--font-display)' }}>
-            Analytics — {agent.name}
+            Analytics: {agent.name}
           </h2>
           <select
             value={days}

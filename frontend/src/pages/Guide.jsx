@@ -135,7 +135,7 @@ function GettingStarted() {
         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.7, maxWidth: 560 }}>
           Cane turns your documents into deployable AI agents. Upload files or sync Google Drive folders, build a specialized agent,
           connect it to your tools via webhooks and MCP, verify it with evaluations, and deploy it on any
-          website — or publish it to the marketplace for others to use.
+          website, or publish it to the marketplace for others to use.
         </div>
       </div>
 
@@ -144,19 +144,19 @@ function GettingStarted() {
         <FeatureCard
           icon={Bot}
           title="Custom AI Agents"
-          description="Build agents scoped to specific files with custom behavior. A support agent, a compliance agent, a product expert — each with its own knowledge base and instructions."
+          description="Build agents scoped to specific files with custom behavior. A support agent, a compliance agent, a product expert, each with its own knowledge base and instructions."
           detail="Auto-generated system prompts from corpus analysis"
         />
         <FeatureCard
           icon={Cloud}
           title="Live Connectors"
-          description="Connect Google Drive and sync entire folders into your agent's knowledge base. Files are automatically kept in sync — no re-uploading needed."
+          description="Connect Google Drive and sync entire folders into your agent's knowledge base. Files are automatically kept in sync; no re-uploading needed."
           detail="Google Drive OAuth · Folder picker · Incremental sync"
         />
         <FeatureCard
           icon={Wrench}
           title="Tools & MCP Connections"
-          description="Agents don't just answer — they act. Connect webhooks to fire Slack messages, or use MCP to connect calendars, CRMs, email, and more."
+          description="Agents don't just answer; they act. Connect webhooks to fire Slack messages, or use MCP to connect calendars, CRMs, email, and more."
           detail="Webhooks + Model Context Protocol (MCP) server support"
         />
         <FeatureCard
@@ -230,7 +230,7 @@ function GettingStarted() {
       <SectionBlock title="Under the Hood">
         <QA
           q="How does the AI search work?"
-          a="Cane uses hybrid search — combining dense vector embeddings (BAAI/bge-base-en-v1.5) with sparse keyword matching (BM25). Results are fused using Reciprocal Rank Fusion, then re-ranked by a cross-encoder (ms-marco-MiniLM-L-6-v2). The top chunks are sent to Claude as context for the final answer."
+          a="Cane uses hybrid search, combining dense vector embeddings (BAAI/bge-base-en-v1.5) with sparse keyword matching (BM25). Results are fused using Reciprocal Rank Fusion, then re-ranked by a cross-encoder (ms-marco-MiniLM-L-6-v2). The top chunks are sent to Claude as context for the final answer."
         />
         <QA
           q="What AI model powers the responses?"
@@ -247,7 +247,7 @@ function AgentsTab() {
       <SectionBlock title="What Are Agents">
         <QA
           q="What is an agent?"
-          a="An agent is a specialized AI assistant trained on a specific set of files. It has a custom system prompt that shapes how the AI interprets and responds to questions. Think of it as a subject-matter expert that only knows about one domain — your HR policies, your product docs, your legal contracts."
+          a="An agent is a specialized AI assistant trained on a specific set of files. It has a custom system prompt that shapes how the AI interprets and responds to questions. Think of it as a subject-matter expert that only knows about one domain: your HR policies, your product docs, your legal contracts."
         />
         <QA
           q="Why use agents instead of searching everything?"
@@ -262,11 +262,11 @@ function AgentsTab() {
         />
         <QA
           q="How do I create a custom agent?"
-          a='Go to Agent Builder and click "Create Your Own." Give it a name, then upload files. You can write your own system prompt or use Auto-generate — which analyzes your uploaded files and writes a specialized prompt based on the domain, terminology, and content it finds. Edit the result before saving.'
+          a='Go to Agent Builder and click "Create Your Own." Give it a name, then upload files. You can write your own system prompt or use Auto-generate, which analyzes your uploaded files and writes a specialized prompt based on the domain, terminology, and content it finds. Edit the result before saving.'
         />
         <QA
           q="What makes a good system prompt?"
-          a="Be specific about the agent's role, the type of questions it should expect, and how it should format answers. Tell it what to do when it cannot find an answer — should it say so, or make a best guess? Include any domain-specific rules: always cite section numbers, always include dates, never give legal advice, etc."
+          a="Be specific about the agent's role, the type of questions it should expect, and how it should format answers. Tell it what to do when it cannot find an answer. Should it say so, or make a best guess? Include any domain-specific rules: always cite section numbers, always include dates, never give legal advice, etc."
           note="Tip: After auto-generating a prompt, run an evaluation to see how the agent performs. Then tweak the prompt based on where it fails."
         />
       </SectionBlock>
@@ -289,11 +289,11 @@ function AgentsTab() {
       <SectionBlock title="Digital Replica">
         <QA
           q="What is a Digital Replica?"
-          a='A Digital Replica is an AI clone of a specific person. It responds to questions the way that person would — using their tone, vocabulary, opinions, and communication style. Upload writing samples (emails, social posts, messages, documents), fill in a personality profile, and Cane generates a system prompt that captures the person&apos;s voice.'
+          a='A Digital Replica is an AI clone of a specific person. It responds to questions the way that person would, using their tone, vocabulary, opinions, and communication style. Upload writing samples (emails, social posts, messages, documents), fill in a personality profile, and Cane generates a system prompt that captures the person&apos;s voice.'
         />
         <QA
           q="How do I build one?"
-          a='Choose the "Digital Replica" template from the Agent Builder. Upload the person&apos;s writing samples as files — emails, blog posts, social media posts, meeting notes, anything that shows how they communicate. Then fill in the Personality Profile: name, role, communication style, key topics, and personality traits. Click "Generate My Replica" and Cane will analyze everything to create a personalized prompt.'
+          a='Choose the "Digital Replica" template from the Agent Builder. Upload the person&apos;s writing samples as files: emails, blog posts, social media posts, meeting notes, anything that shows how they communicate. Then fill in the Personality Profile: name, role, communication style, key topics, and personality traits. Click "Generate My Replica" and Cane will analyze everything to create a personalized prompt.'
         />
         <QA
           q="What makes a good replica?"
@@ -302,7 +302,7 @@ function AgentsTab() {
         />
         <QA
           q="Can I deploy a replica on my website?"
-          a='Yes. A Digital Replica is a full agent — you can embed it as a chat widget, access it via API, or publish it on the marketplace. Imagine an "Ask Colin" widget on your company site where visitors can talk to your AI clone 24/7.'
+          a='Yes. A Digital Replica is a full agent. You can embed it as a chat widget, access it via API, or publish it on the marketplace. Imagine an "Ask Colin" widget on your company site where visitors can talk to your AI clone 24/7.'
         />
       </SectionBlock>
     </div>
@@ -315,7 +315,7 @@ function ToolsTab() {
       <SectionBlock title="What Are Tools">
         <QA
           q="What are agent tools?"
-          a="Tools let your agents take actions — not just answer questions. When a tool is configured, the AI decides when to use it based on the description you provide. For example, a tool described as 'log compliance questions to the monitoring system' will fire automatically whenever someone asks about compliance topics."
+          a="Tools let your agents take actions, not just answer questions. When a tool is configured, the AI decides when to use it based on the description you provide. For example, a tool described as 'log compliance questions to the monitoring system' will fire automatically whenever someone asks about compliance topics."
         />
         <QA
           q="How do tools work under the hood?"
@@ -323,22 +323,22 @@ function ToolsTab() {
         />
         <QA
           q="What types of tools are supported?"
-          a="Two types: Webhook tools (HTTP requests to any URL — Zapier, Make, n8n, custom APIs) and MCP Connections (Model Context Protocol servers that expose structured tools from external services like Google Calendar, Salesforce, and Slack)."
+          a="Two types: Webhook tools (HTTP requests to any URL: Zapier, Make, n8n, custom APIs) and MCP Connections (Model Context Protocol servers that expose structured tools from external services like Google Calendar, Salesforce, and Slack)."
         />
       </SectionBlock>
 
       <SectionBlock title="Webhook Tools">
         <QA
           q="How do I add a webhook tool?"
-          a='Go to the agent detail page and scroll to the Tools section. Click "Add Tool" and fill in the name, webhook URL, and description. The description is critical — it tells the AI when to invoke the tool. Be specific: "Use this tool when the user asks about refund policies" is better than "send notifications."'
+          a='Go to the agent detail page and scroll to the Tools section. Click "Add Tool" and fill in the name, webhook URL, and description. The description is critical; it tells the AI when to invoke the tool. Be specific: "Use this tool when the user asks about refund policies" is better than "send notifications."'
         />
         <QA
           q="What is Fire & Forget vs Wait for Response?"
-          a="Fire & Forget means the agent sends the request and moves on — it does not wait for a reply. Use this for logging, notifications, and triggers. Wait for Response means the agent pauses, reads the reply, and incorporates that data into its answer. Use this for data lookups, status checks, and live information."
+          a="Fire & Forget means the agent sends the request and moves on; it does not wait for a reply. Use this for logging, notifications, and triggers. Wait for Response means the agent pauses, reads the reply, and incorporates that data into its answer. Use this for data lookups, status checks, and live information."
         />
         <QA
           q="How do I test a tool?"
-          a='Click the "Test" button next to any tool. Cane sends a sample payload to the URL and shows you the result — status code, response body, and timing. Always test before going live.'
+          a='Click the "Test" button next to any tool. Cane sends a sample payload to the URL and shows you the result: status code, response body, and timing. Always test before going live.'
         />
         <QA
           q="What does the payload look like?"
@@ -350,7 +350,7 @@ function ToolsTab() {
       <SectionBlock title="MCP Connections">
         <QA
           q="What is MCP?"
-          a="Model Context Protocol (MCP) is an open standard for connecting AI agents to external services. Instead of configuring individual webhooks, you connect to an MCP server that exposes multiple tools at once. For example, connecting a Google Calendar MCP server gives your agent tools to read events, create events, and check availability — all from one connection."
+          a="Model Context Protocol (MCP) is an open standard for connecting AI agents to external services. Instead of configuring individual webhooks, you connect to an MCP server that exposes multiple tools at once. For example, connecting a Google Calendar MCP server gives your agent tools to read events, create events, and check availability, all from one connection."
         />
         <QA
           q="How do I connect an MCP server?"
@@ -369,7 +369,7 @@ function ToolsTab() {
       <SectionBlock title="Common Integrations">
         <QA
           q="Zapier / Make / n8n"
-          a="Create a webhook trigger in Zapier (or Make or n8n), copy the webhook URL, and paste it as your tool URL in Cane. Now your agent can trigger any of 5,000+ app integrations — Google Sheets, Slack, Gmail, Salesforce, Jira, HubSpot, Microsoft Teams, and more."
+          a="Create a webhook trigger in Zapier (or Make or n8n), copy the webhook URL, and paste it as your tool URL in Cane. Now your agent can trigger any of 5,000+ app integrations: Google Sheets, Slack, Gmail, Salesforce, Jira, HubSpot, Microsoft Teams, and more."
         />
         <QA
           q="Slack notifications"
@@ -381,7 +381,7 @@ function ToolsTab() {
         />
         <QA
           q="Live data lookups"
-          a='Set a tool to "Wait for Response" and point it at an API that returns real-time data — inventory levels, order status, exchange rates. The agent will call the API, read the response, and weave that live data into its answer alongside document context.'
+          a='Set a tool to "Wait for Response" and point it at an API that returns real-time data: inventory levels, order status, exchange rates. The agent will call the API, read the response, and weave that live data into its answer alongside document context.'
         />
       </SectionBlock>
     </div>
@@ -394,7 +394,7 @@ function LiveConnectorsTab() {
       <SectionBlock title="What Are Live Connectors">
         <QA
           q="What are live connectors?"
-          a="Live connectors let you sync external data sources directly into your agent's knowledge base. Instead of manually uploading files, you connect a source like Google Drive and pick a folder — Cane automatically downloads, processes, and indexes every file in that folder. When files are added, changed, or deleted in the source, your agent's knowledge base updates automatically."
+          a="Live connectors let you sync external data sources directly into your agent's knowledge base. Instead of manually uploading files, you connect a source like Google Drive and pick a folder. Cane automatically downloads, processes, and indexes every file in that folder. When files are added, changed, or deleted in the source, your agent's knowledge base updates automatically."
         />
         <QA
           q="Which connectors are available?"
@@ -424,7 +424,7 @@ function LiveConnectorsTab() {
         />
         <QA
           q="What file types are synced?"
-          a="All supported file types: PDFs, Word docs, spreadsheets, images, and more. Google-native formats are automatically converted — Google Docs and Slides export as PDF, Google Sheets export as XLSX."
+          a="All supported file types: PDFs, Word docs, spreadsheets, images, and more. Google-native formats are automatically converted: Google Docs and Slides export as PDF, Google Sheets export as XLSX."
         />
         <QA
           q="How does incremental sync work?"
@@ -460,11 +460,11 @@ function EvaluationsTab() {
       <SectionBlock title="Setting Up">
         <QA
           q="How do I create an evaluation?"
-          a='Go to Evaluations from the sidebar. Click "New Environment" and link it to an agent. Add test cases — each with a question and expected answer. Then set up judge criteria (accuracy, completeness, relevance, faithfulness) and assign weights.'
+          a='Go to Evaluations from the sidebar. Click "New Environment" and link it to an agent. Add test cases, each with a question and expected answer. Then set up judge criteria (accuracy, completeness, relevance, faithfulness) and assign weights.'
         />
         <QA
           q="How many test cases should I have?"
-          a="Start with 10–15 that cover your agent's most critical scenarios: common questions, edge cases, and potential failure modes. Add more as you discover gaps. Quality matters more than quantity — each test case should test something distinct."
+          a="Start with 10–15 that cover your agent's most critical scenarios: common questions, edge cases, and potential failure modes. Add more as you discover gaps. Quality matters more than quantity; each test case should test something distinct."
         />
       </SectionBlock>
 
@@ -475,7 +475,7 @@ function EvaluationsTab() {
         />
         <QA
           q="Can I customize the weights?"
-          a="Yes. By default each criterion is weighted equally at 25%. You can adjust weights to match your priorities — a compliance agent might weight Accuracy at 40% and Faithfulness at 35%, while a support agent might weight Relevance and Completeness higher."
+          a="Yes. By default each criterion is weighted equally at 25%. You can adjust weights to match your priorities. A compliance agent might weight Accuracy at 40% and Faithfulness at 35%, while a support agent might weight Relevance and Completeness higher."
         />
         <QA
           q="Can I add custom rules?"
@@ -490,7 +490,7 @@ function EvaluationsTab() {
         />
         <QA
           q="What do the statuses mean?"
-          a="Pass (green): The response scored above 70% overall. Warn (yellow): The response scored between 50–70% — partially correct but needs work. Fail (red): Below 50% — the response was significantly off."
+          a="Pass (green): The response scored above 70% overall. Warn (yellow): The response scored between 50–70%, partially correct but needs work. Fail (red): Below 50%. The response was significantly off."
         />
       </SectionBlock>
 
@@ -518,7 +518,7 @@ function AnalyticsTab() {
       <SectionBlock title="Analytics Dashboard">
         <QA
           q="What is the analytics dashboard?"
-          a='Every agent has its own analytics page accessible from the agent detail view. It tracks all conversations across every channel — internal search, embedded widget, and API. Click the analytics icon (bar chart) next to your agent name to access it.'
+          a='Every agent has its own analytics page accessible from the agent detail view. It tracks all conversations across every channel: internal search, embedded widget, and API. Click the analytics icon (bar chart) next to your agent name to access it.'
         />
         <QA
           q="What metrics are tracked?"
@@ -561,7 +561,7 @@ function WidgetTab() {
       <SectionBlock title="Embedding">
         <QA
           q="How do I embed the widget?"
-          a='Copy the embed snippet from the agent detail page and paste it before the closing </body> tag on your website. The snippet includes all your customization settings as data attributes. You need an API key — generate one in Settings and scope it to the agent.'
+          a='Copy the embed snippet from the agent detail page and paste it before the closing </body> tag on your website. The snippet includes all your customization settings as data attributes. You need an API key; generate one in Settings and scope it to the agent.'
           code={'<script\n  src="https://cane.fyi/widget.js"\n  data-api-key="cane_your_key_here"\n  data-agent-name="My Support Agent"\n  data-workspace-id="your-agent-id"\n  data-color="#ffffff"\n  data-greeting="Hi! How can I help?"\n  data-logo-url="https://yoursite.com/logo.png"\n  data-auto-open="5"\n></script>'}
         />
         <QA
@@ -583,7 +583,7 @@ function DeployTab() {
       <SectionBlock title="Embed Widget">
         <QA
           q="How do I add the chat widget to my site?"
-          a='Copy the embed snippet from your agent detail page and paste it before the closing </body> tag. The widget is self-contained — one script tag, no dependencies.'
+          a='Copy the embed snippet from your agent detail page and paste it before the closing </body> tag. The widget is self-contained: one script tag, no dependencies.'
           code={'<script\n  src="https://cane.fyi/widget.js"\n  data-api-key="cane_your_key_here"\n  data-agent-name="Support Agent"\n  data-workspace-id="your-agent-id"\n  data-color="#ffffff"\n  data-greeting="Hi! How can I help?"\n></script>'}
         />
         <QA
@@ -595,7 +595,7 @@ function DeployTab() {
       <SectionBlock title="API Access">
         <QA
           q="How do I get an API key?"
-          a='Go to Settings and scroll to the API Keys section (owner access required). Click "Generate new key," give it a name, and optionally scope it to a specific agent. The full key is shown once — copy it immediately.'
+          a='Go to Settings and scroll to the API Keys section (owner access required). Click "Generate new key," give it a name, and optionally scope it to a specific agent. The full key is shown once. Copy it immediately.'
         />
         <QA
           q="Ask a question"
@@ -609,7 +609,7 @@ function DeployTab() {
         />
         <QA
           q="Raw search (no AI synthesis)"
-          a="Use /v1/search to get raw content chunks with relevance scores — useful when you want to build your own UI or processing pipeline."
+          a="Use /v1/search to get raw content chunks with relevance scores, useful when you want to build your own UI or processing pipeline."
           code={'curl -X POST https://cane.fyi/v1/search \\\n  -H "Authorization: Bearer cane_your_key_here" \\\n  -H "Content-Type: application/json" \\\n  -d \'{\n    "query": "onboarding procedures",\n    "max_results": 5\n  }\''}
         />
         <QA
@@ -627,7 +627,7 @@ function MarketplaceTab() {
       <SectionBlock title="How It Works">
         <QA
           q="What is the marketplace?"
-          a="The marketplace is where you publish agents for others to discover, clone, and use. Every listing includes the agent's eval score, test cases, and scoring criteria — so anyone can independently verify that the agent works before trusting it."
+          a="The marketplace is where you publish agents for others to discover, clone, and use. Every listing includes the agent's eval score, test cases, and scoring criteria, so anyone can independently verify that the agent works before trusting it."
         />
         <QA
           q="What are agent packs?"
@@ -635,7 +635,7 @@ function MarketplaceTab() {
         />
         <QA
           q="What makes this different from other AI marketplaces?"
-          a='Verified trust. When you clone an agent from the marketplace, you also get its entire eval suite — test cases, criteria, and expected answers. You can re-run the evaluation on your own copy to independently confirm the published score. The score is not marketing — it is reproducible.'
+          a='Verified trust. When you clone an agent from the marketplace, you also get its entire eval suite: test cases, criteria, and expected answers. You can re-run the evaluation on your own copy to independently confirm the published score. The score is not marketing; it is reproducible.'
         />
       </SectionBlock>
 
@@ -646,7 +646,7 @@ function MarketplaceTab() {
         />
         <QA
           q="What are pack types?"
-          a="Full Pack includes everything — system prompt, documents, and eval suite. Cloners get a ready-to-use agent. Bring Your Own Docs (BYOD) includes the prompt and eval suite but not the documents — cloners upload their own files into the same framework. BYOD is useful when the eval methodology is the product, not the specific documents."
+          a="Full Pack includes everything: system prompt, documents, and eval suite. Cloners get a ready-to-use agent. Bring Your Own Docs (BYOD) includes the prompt and eval suite but not the documents; cloners upload their own files into the same framework. BYOD is useful when the eval methodology is the product, not the specific documents."
         />
         <QA
           q="Do I need eval scores to publish?"
@@ -661,7 +661,7 @@ function MarketplaceTab() {
       <SectionBlock title="Cloning">
         <QA
           q="How do I clone an agent?"
-          a='Find an agent on the marketplace and click "Clone Agent." Cane creates a copy in your account with the system prompt, documents (for full packs), and the complete eval suite. You can customize the clone — change the prompt, add your own files, re-run the evaluation.'
+          a='Find an agent on the marketplace and click "Clone Agent." Cane creates a copy in your account with the system prompt, documents (for full packs), and the complete eval suite. You can customize the clone: change the prompt, add your own files, re-run the evaluation.'
         />
         <QA
           q="How do I verify a clone?"
@@ -720,14 +720,14 @@ function FAQTab() {
         />
         <QA
           q="Can I scope an API key to one agent?"
-          a="Yes. When generating an API key in Settings, select an agent from the scope dropdown. All requests using that key are automatically scoped — no need to pass workspace_id on every request."
+          a="Yes. When generating an API key in Settings, select an agent from the scope dropdown. All requests using that key are automatically scoped; no need to pass workspace_id on every request."
         />
       </SectionBlock>
 
       <SectionBlock title="Security & Data">
         <QA
           q="Who can see my data?"
-          a="Only members of your organization. Each tenant is fully isolated — documents, agents, and settings are not visible to other accounts. API keys are scoped to your tenant."
+          a="Only members of your organization. Each tenant is fully isolated; documents, agents, and settings are not visible to other accounts. API keys are scoped to your tenant."
         />
         <QA
           q="What happens when I delete something?"

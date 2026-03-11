@@ -393,10 +393,10 @@ export default function EnvironmentDetail() {
                     value={genCount}
                     onChange={e => setGenCount(parseInt(e.target.value))}
                   >
-                    <option value={5}>5 — Quick check</option>
-                    <option value={10}>10 — Standard</option>
-                    <option value={15}>15 — Thorough</option>
-                    <option value={20}>20 — Comprehensive</option>
+                    <option value={5}>5 (Quick check)</option>
+                    <option value={10}>10 (Standard)</option>
+                    <option value={15}>15 (Thorough)</option>
+                    <option value={20}>20 (Comprehensive)</option>
                   </select>
                 </div>
                 <div style={{ flex: 1 }}>
@@ -408,9 +408,9 @@ export default function EnvironmentDetail() {
                     value={genDifficulty}
                     onChange={e => setGenDifficulty(e.target.value)}
                   >
-                    <option value="easy">Easy — Straightforward factual</option>
-                    <option value="mixed">Mixed — Facts + edge cases + adversarial</option>
-                    <option value="adversarial">Adversarial — Hallucination traps + tricks</option>
+                    <option value="easy">Easy: Straightforward factual</option>
+                    <option value="mixed">Mixed: Facts + edge cases + adversarial</option>
+                    <option value="adversarial">Adversarial: Hallucination traps + tricks</option>
                   </select>
                 </div>
               </div>

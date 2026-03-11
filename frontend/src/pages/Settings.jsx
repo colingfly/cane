@@ -470,7 +470,7 @@ function ApiKeysSection({ workspaces }) {
           borderRadius: 'var(--radius-sm)', marginBottom: 16,
         }}>
           <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--success)', marginBottom: 6 }}>
-            Copy your API key now — it won't be shown again
+            Copy your API key now. It won't be shown again
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <code style={{

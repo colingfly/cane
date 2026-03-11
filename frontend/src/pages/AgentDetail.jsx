@@ -1172,7 +1172,7 @@ export default function AgentDetail() {
 
             <div style={{ marginBottom: 12 }}>
               <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Description <span style={{ fontWeight: 400, textTransform: 'none' }}>— tells the AI when to use this tool</span>
+                Description <span style={{ fontWeight: 400, textTransform: 'none' }}>(tells the AI when to use this tool)</span>
               </label>
               <textarea
                 className="form-input"
@@ -1249,7 +1249,7 @@ export default function AgentDetail() {
             <div style={{ marginBottom: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Parameters <span style={{ fontWeight: 400, textTransform: 'none' }}>— fields the AI will send</span>
+                  Parameters <span style={{ fontWeight: 400, textTransform: 'none' }}>(fields the AI will send)</span>
                 </label>
                 <button
                   className="btn btn-ghost"
@@ -1260,7 +1260,7 @@ export default function AgentDetail() {
                 </button>
               </div>
               {newTool.parameters.length === 0 && (
-                <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.35)', padding: '8px 0' }}>No parameters — the AI will send raw question/answer fields</div>
+                <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.35)', padding: '8px 0' }}>No parameters. The AI will send raw question/answer fields</div>
               )}
               {newTool.parameters.map((p, i) => (
                 <div key={i} style={{ display: 'grid', gridTemplateColumns: '140px 80px 1fr 60px 30px', gap: 8, marginBottom: 6, alignItems: 'center' }}>
@@ -1493,7 +1493,7 @@ export default function AgentDetail() {
             <Wrench size={24} style={{ marginBottom: 8, opacity: 0.4 }} />
             <div style={{ fontSize: '0.84rem', fontWeight: 500 }}>No tools configured</div>
             <div style={{ fontSize: '0.78rem', marginTop: 4 }}>
-              Add webhooks to let this agent take actions — log to sheets, send Slack messages, trigger Zapier workflows.
+              Add webhooks to let this agent take actions: log to sheets, send Slack messages, trigger Zapier workflows.
             </div>
           </div>
         ) : null}
@@ -2100,7 +2100,7 @@ export default function AgentDetail() {
             <Globe size={24} style={{ marginBottom: 8, opacity: 0.4 }} />
             <div style={{ fontSize: '0.84rem', fontWeight: 500 }}>No connections configured</div>
             <div style={{ fontSize: '0.78rem', marginTop: 4 }}>
-              Connect MCP servers to let this agent interact with external services — calendars, CRMs, email, Slack, and more.
+              Connect MCP servers to let this agent interact with external services: calendars, CRMs, email, Slack, and more.
             </div>
           </div>
         ) : null}
@@ -2124,7 +2124,7 @@ export default function AgentDetail() {
             background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.3)',
           }}>
             <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#4ade80', marginBottom: 6 }}>
-              New API key created — copy it now, it won't be shown again
+              New API key created. Copy it now, it won't be shown again
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <code style={{
@@ -2434,7 +2434,7 @@ export default function AgentDetail() {
                       color: 'var(--text)', outline: 'none',
                     }}
                   >
-                    <option value="">None — publish without eval scores</option>
+                    <option value="">None (publish without eval scores)</option>
                     {envs.map(e => (
                       <option key={e.id} value={e.id}>{e.name}</option>
                     ))}

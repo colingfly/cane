@@ -131,9 +131,9 @@ export default function MarketplaceDetail() {
   const avgTime = evalData.response_time_avg_ms
 
   const PACK_DESCRIPTIONS = {
-    byod: 'Bring Your Own Docs — clone the blueprint and eval spec, upload your own files.',
-    open: 'Open Pack — documents included. Clone and start using immediately.',
-    licensed: 'Licensed Pack — curated documents included with the agent.',
+    byod: 'Bring Your Own Docs: clone the blueprint and eval spec, upload your own files.',
+    open: 'Open Pack: documents included. Clone and start using immediately.',
+    licensed: 'Licensed Pack: curated documents included with the agent.',
   }
 
   return (

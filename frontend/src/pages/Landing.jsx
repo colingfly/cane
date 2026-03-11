@@ -23,7 +23,7 @@ export default function Landing() {
     script.setAttribute('data-agent-name', 'Cane')
     script.setAttribute('data-color', '#2563eb')
     script.setAttribute('data-position', 'right')
-    script.setAttribute('data-greeting', "Ask me anything about Cane — how it works, the architecture, what it can do.")
+    script.setAttribute('data-greeting', "Ask me anything about Cane: how it works, the architecture, what it can do.")
     script.setAttribute('data-subtitle', 'Live agent')
     script.setAttribute('data-placeholder', 'Ask a question...')
     script.setAttribute('data-auto-open', '8')
@@ -112,7 +112,7 @@ export default function Landing() {
               },
               {
                 n: '04', title: 'Evaluation',
-                body: 'Automated test suites scored by an LLM judge. Four criteria — accuracy, completeness, relevance, faithfulness — with configurable weights and custom rules. Score history tracks improvement over time.',
+                body: 'Automated test suites scored by an LLM judge. Four criteria: accuracy, completeness, relevance, and faithfulness, with configurable weights and custom rules. Score history tracks improvement over time.',
                 stack: 'LLM-as-Judge, weighted criteria, custom rules, regression tracking',
               },
             ].map((item, i) => (
@@ -141,7 +141,7 @@ export default function Landing() {
               ['Webhook Tools', 'HTTP actions triggered by agent reasoning. Fire-and-forget for notifications, wait-for-response for live data. Custom payload templates.'],
               ['Evaluation Engine', 'Write test cases with expected answers. Run automated scoring with configurable criteria weights and custom rules. Track scores across runs.'],
               ['Analytics Dashboard', 'Per-agent conversation tracking. Volume, response times, channel breakdown, tool usage, satisfaction scores from user feedback.'],
-              ['Widget & API', 'Embeddable chat widget — one script tag, full customization. REST API with key-scoped auth. Streaming responses. Deploy on any website.'],
+              ['Widget & API', 'Embeddable chat widget. One script tag, full customization. REST API with key-scoped auth. Streaming responses. Deploy on any website.'],
               ['Agent Marketplace', 'Publish agents with eval scores. Others can clone and independently verify by re-running the test suite against their copy.'],
             ].map(([title, desc], i) => (
               <div key={i} className="lp-cap-row lp-reveal">

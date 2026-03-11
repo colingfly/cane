@@ -146,7 +146,7 @@ export default function Documents() {
           const status = await getDocumentStatus(docId)
           if (status.status === 'ready') {
             remaining.delete(docId)
-            setUploadStatus(`✓ ${names[docId]} ready (${status.chunks} chunks)${remaining.size > 0 ? ` — ${remaining.size} still processing...` : ''}`)
+            setUploadStatus(`✓ ${names[docId]} ready (${status.chunks} chunks)${remaining.size > 0 ? ` · ${remaining.size} still processing...` : ''}`)
             loadDocs()
           } else if (status.status === 'error') {
             remaining.delete(docId)

@@ -93,7 +93,7 @@ export default function Admin() {
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <h2>Client Management</h2>
-          <p>Your SMB clients — click to view intelligence</p>
+          <p>Your SMB clients. Click to view intelligence</p>
         </div>
         <button className="btn btn-primary" onClick={() => setShowCreate(!showCreate)}>
           <Plus size={16} /> Onboard Client

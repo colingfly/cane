@@ -1,88 +1,92 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import ReactMarkdown from 'react-markdown'
 
 const API_BASE = window.location.origin
 const MAX_MESSAGES = 10
+const MAX_FILES = 3
+const MAX_SIZE = 5 * 1024 * 1024
+const ALLOWED_EXT = /\.(pdf|txt|csv|docx)$/i
 
 export default function Demo() {
-  const [messages, setMessages] = useState([
-    { role: 'assistant', content: "Upload your documents and ask questions — everything stays isolated to this session." },
-  ])
-  const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [msgCount, setMsgCount] = useState(0)
-  const [uploadedFiles, setUploadedFiles] = useState([])
-  const [uploading, setUploading] = useState(false)
-  const [dragOver, setDragOver] = useState(false)
+  // Session
   const [session, setSession] = useState(null)
   const [sessionLoading, setSessionLoading] = useState(true)
-  const fileInputRef = useRef(null)
+
+  // Agent config
+  const [agentName, setAgentName] = useState('My Agent')
+  const [agentDesc, setAgentDesc] = useState('')
+
+  // Files
+  const [documents, setDocuments] = useState([])
+  const [uploading, setUploading] = useState(false)
+  const [uploadStatus, setUploadStatus] = useState('')
+  const [dragover, setDragover] = useState(false)
+  const fileRef = useRef()
+
+  // Chat
+  const [query, setQuery] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [streamText, setStreamText] = useState('')
+  const [history, setHistory] = useState([])
+  const [msgCount, setMsgCount] = useState(0)
+  const [error, setError] = useState(null)
   const bottomRef = useRef(null)
-  const inputRef = useRef(null)
-  const MAX_FILES = 3
-  const MAX_SIZE = 5 * 1024 * 1024
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  const rateLimited = msgCount >= MAX_MESSAGES
+  const readyDocs = documents.filter(d => d.status === 'ready')
+  const processingDocs = documents.filter(d => d.status === 'processing')
 
-  // Initialize demo session on mount
+  // Initialize demo session
   useEffect(() => {
-    const initSession = async () => {
+    const init = async () => {
       try {
         const res = await fetch(`${API_BASE}/api/demo/session`, { method: 'POST' })
-        if (!res.ok) throw new Error('Failed to start demo session')
+        if (!res.ok) throw new Error('Failed to start demo')
         const data = await res.json()
         setSession({ workspace_id: data.workspace_id, api_key: data.api_key })
       } catch (e) {
         console.error('Demo session error:', e)
-        setMessages([{ role: 'assistant', content: 'Failed to initialize demo session. Please refresh.' }])
       } finally {
         setSessionLoading(false)
       }
     }
-    initSession()
+    init()
   }, [])
 
-  useEffect(() => { if (!sessionLoading) inputRef.current?.focus() }, [sessionLoading])
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [history, streamText])
 
-  const rateLimited = msgCount >= MAX_MESSAGES
-
-  const handleFiles = async (files) => {
-    if (uploading || !session) return
-    const allowed = ['application/pdf', 'text/plain', 'text/csv',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-    const valid = Array.from(files).filter(f => {
-      if (uploadedFiles.length + 1 > MAX_FILES) return false
-      if (f.size > MAX_SIZE) return false
-      if (!allowed.includes(f.type) && !f.name.match(/\.(pdf|txt|csv|docx)$/i)) return false
-      return true
-    }).slice(0, MAX_FILES - uploadedFiles.length)
+  // File upload
+  const handleUpload = async (files) => {
+    if (!files?.length || uploading || !session) return
+    const valid = Array.from(files).filter(f =>
+      f.size <= MAX_SIZE && ALLOWED_EXT.test(f.name)
+    ).slice(0, MAX_FILES - documents.length)
     if (valid.length === 0) return
 
     setUploading(true)
-    const newFiles = []
-    for (const f of valid) {
+    for (const file of valid) {
+      setUploadStatus(`Uploading ${file.name}...`)
       try {
         const form = new FormData()
-        form.append('file', f)
+        form.append('file', file)
         form.append('workspace_id', session.workspace_id)
-        const res = await fetch(`${API_BASE}/api/demo/upload`, {
-          method: 'POST',
-          body: form,
-        })
+        const res = await fetch(`${API_BASE}/api/demo/upload`, { method: 'POST', body: form })
         const data = await res.json()
-        newFiles.push({
-          name: f.name,
-          status: res.ok ? 'processing' : 'error',
-          docId: data.document_id,
-        })
-      } catch {
-        newFiles.push({ name: f.name, status: 'error' })
+        if (res.ok && data.document_id) {
+          setDocuments(prev => [...prev, {
+            id: data.document_id, filename: data.filename,
+            status: 'processing', chunk_count: 0,
+          }])
+        }
+      } catch (e) {
+        console.error('Upload failed:', e)
       }
     }
-    setUploadedFiles(prev => [...prev, ...newFiles])
     setUploading(false)
+    setUploadStatus('')
     pollDocuments()
   }
 
@@ -92,437 +96,342 @@ export default function Demo() {
       try {
         const res = await fetch(`${API_BASE}/api/demo/documents/${session.workspace_id}`)
         const data = await res.json()
-        const allDone = data.documents.every(d => d.status !== 'processing')
-        setUploadedFiles(prev => prev.map(f => {
-          const match = data.documents.find(d => d.filename === f.name)
-          if (match) return { ...f, status: match.status, chunks: match.chunk_count }
-          return f
-        }))
+        setDocuments(data.documents || [])
+        const allDone = (data.documents || []).every(d => d.status !== 'processing')
         if (allDone) clearInterval(interval)
       } catch {
         clearInterval(interval)
       }
     }, 2000)
-    setTimeout(() => clearInterval(interval), 60000)
+    setTimeout(() => clearInterval(interval), 120000)
   }
 
-  const onDrop = (e) => {
+  const handleDrop = (e) => {
     e.preventDefault()
-    setDragOver(false)
-    handleFiles(e.dataTransfer.files)
+    setDragover(false)
+    handleUpload(e.dataTransfer.files)
   }
 
-  const send = async (text) => {
-    if (rateLimited || !session) return
-    const q = (text || input).trim()
-    if (!q || loading) return
-    setInput('')
+  // Chat / Ask
+  const handleAsk = async (e) => {
+    e.preventDefault()
+    if (!query.trim() || loading || rateLimited || !session) return
 
-    const readyDocs = uploadedFiles.filter(f => f.status === 'ready')
-    if (readyDocs.length === 0 && uploadedFiles.length === 0) {
-      setMessages(prev => [...prev,
-        { role: 'user', content: q },
-        { role: 'assistant', content: 'Upload some documents first so I have something to search through. Drag and drop files onto the Upload Files tile above.' },
-      ])
+    if (readyDocs.length === 0) {
+      setError('Upload at least one file before asking questions.')
       return
     }
 
-    const history = messages.filter(m => m.role !== 'system').map(m => ({ role: m.role, content: m.content }))
-    setMessages(prev => [...prev, { role: 'user', content: q }])
-    setMsgCount(prev => prev + 1)
+    const q = query.trim()
+    setQuery('')
     setLoading(true)
+    setStreamText('')
+    setError(null)
+    setMsgCount(prev => prev + 1)
 
     try {
-      const headers = { 'Authorization': `Bearer ${session.api_key}`, 'Content-Type': 'application/json' }
-
-      const askRes = await fetch(`${API_BASE}/v1/ask`, {
-        method: 'POST', headers,
-        body: JSON.stringify({ query: q, workspace_id: session.workspace_id, history }),
+      const res = await fetch(`${API_BASE}/v1/ask`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.api_key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: q,
+          workspace_id: session.workspace_id,
+          history: history.map(h => [
+            { role: 'user', content: h.q },
+            { role: 'assistant', content: h.a },
+          ]).flat(),
+        }),
       })
 
-      const askData = await askRes.json()
+      const data = await res.json()
+      const answer = data.answer || data.error || 'No response.'
+      const sources = data.sources || []
 
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: askData.answer || askData.error || 'No response.',
-        sources: askData.sources || [],
-      }])
+      setHistory(prev => [...prev, { q, a: answer, sources }])
     } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Connection error. Try again.' }])
+      setHistory(prev => [...prev, { q, a: 'Connection error. Please try again.', sources: [] }])
     } finally {
       setLoading(false)
+      setStreamText('')
     }
-  }
-
-  const handleKey = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
   }
 
   if (sessionLoading) {
     return (
-      <div className="demo-page">
-        <style>{demoStyles}</style>
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '0.84rem' }}>
-          Starting demo session...
-        </div>
+      <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="spinner" />
       </div>
     )
   }
 
   return (
-    <div className="demo-page">
-      <style>{demoStyles}</style>
+    <div className="fade-in" style={{ maxWidth: 800, margin: '0 auto', padding: '0 24px 60px' }}>
+      {/* Nav */}
+      <div style={{ paddingTop: 16, marginBottom: 24 }}>
+        <Link to="/" style={{
+          color: 'var(--text-muted)', fontSize: '0.8125rem',
+          display: 'flex', alignItems: 'center', gap: 4, marginBottom: 12, textDecoration: 'none',
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          Back to home
+        </Link>
 
-      <div className="demo-nav">
-        <Link to="/" className="demo-back">Cane</Link>
-        <span className="demo-nav-label">Live demo</span>
-      </div>
-
-      <div className="demo-body">
-        <div className="demo-main">
-          {/* Connector tiles */}
-          <div className="demo-tiles">
-            <div
-              className={`demo-tile demo-tile-upload${dragOver ? ' drag-over' : ''}`}
-              onClick={() => uploadedFiles.length < MAX_FILES && fileInputRef.current?.click()}
-              onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={onDrop}
-              style={{ cursor: uploadedFiles.length >= MAX_FILES ? 'default' : 'pointer' }}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.docx,.txt,.csv"
-                multiple
-                style={{ display: 'none' }}
-                onChange={e => { handleFiles(e.target.files); e.target.value = '' }}
-              />
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="12" y1="18" x2="12" y2="12" />
-                <line x1="9" y1="15" x2="15" y2="15" />
-              </svg>
-              <div className="demo-tile-text">
-                <span className="demo-tile-title">Upload Files</span>
-                <span className="demo-tile-sub">
-                  {uploading ? 'Uploading...' : uploadedFiles.length > 0
-                    ? uploadedFiles.map(f => {
-                        const icon = f.status === 'ready' ? '\u2713' : f.status === 'processing' ? '\u23F3' : f.status === 'error' ? '\u2717' : ''
-                        return `${icon} ${f.name}`
-                      }).join(', ')
-                    : 'PDF, DOCX, CSV, TXT — drag & drop or click'}
-                </span>
-              </div>
-              {uploadedFiles.length > 0 ? (
-                <span className="demo-tile-badge" style={{
-                  color: uploadedFiles.some(f => f.status === 'processing') ? 'rgba(251,191,36,0.7)' : 'rgba(74,222,128,0.7)',
-                  borderColor: uploadedFiles.some(f => f.status === 'processing') ? 'rgba(251,191,36,0.15)' : 'rgba(74,222,128,0.15)',
-                }}>
-                  {uploadedFiles.filter(f => f.status === 'ready').length}/{uploadedFiles.length} ready
-                </span>
-              ) : (
-                <span className="demo-tile-badge">{uploading ? '...' : `Up to ${MAX_FILES}`}</span>
-              )}
-            </div>
-
-            <Link to="/register" className="demo-tile">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M12 2L4.5 7.5V16.5L12 22L19.5 16.5V7.5L12 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-                <path d="M12 8V16M8 12H16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-              <div className="demo-tile-text">
-                <span className="demo-tile-title">Google Drive</span>
-                <span className="demo-tile-sub">Live sync folders</span>
-              </div>
-              <span className="demo-tile-badge">Requires account</span>
-            </Link>
+        {/* Agent header */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 12,
+            background: 'rgba(255,255,255,0.08)', color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem',
+            flexShrink: 0,
+          }}>
+            {(agentName || 'MY').slice(0, 2).toUpperCase()}
           </div>
-
-          {/* Chat */}
-          <div className="demo-chat">
-            <div className="demo-chat-inner">
-              {messages.map((m, i) => (
-                <div key={i} className={`demo-msg demo-msg-${m.role}`}>
-                  <div className="demo-msg-content">
-                    <div className="demo-msg-text">{m.content}</div>
-                    {m.sources?.length > 0 && (
-                      <div className="demo-sources">
-                        {m.sources.map((s, j) => <span key={j}>{s}</span>)}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {loading && (
-                <div className="demo-msg demo-msg-assistant">
-                  <div className="demo-msg-content">
-                    <div className="demo-typing"><span /><span /><span /></div>
-                  </div>
-                </div>
-              )}
-              <div ref={bottomRef} />
-            </div>
+          <div style={{ flex: 1 }}>
+            <input
+              value={agentName}
+              onChange={e => setAgentName(e.target.value)}
+              placeholder="Agent name"
+              style={{
+                fontSize: '1.5rem', fontWeight: 700, fontFamily: 'var(--font-display)',
+                border: 'none', background: 'transparent', color: 'var(--text)',
+                width: '100%', padding: 0, outline: 'none',
+                borderBottom: '1px solid transparent',
+              }}
+              onFocus={e => e.target.style.borderBottomColor = 'var(--rule)'}
+              onBlur={e => e.target.style.borderBottomColor = 'transparent'}
+            />
+            <input
+              value={agentDesc}
+              onChange={e => setAgentDesc(e.target.value)}
+              placeholder="Add a description..."
+              style={{
+                color: 'var(--text-muted)', fontSize: '0.875rem',
+                border: 'none', background: 'transparent',
+                width: '100%', padding: 0, marginTop: 2, outline: 'none',
+                borderBottom: '1px solid transparent',
+              }}
+              onFocus={e => e.target.style.borderBottomColor = 'var(--rule)'}
+              onBlur={e => e.target.style.borderBottomColor = 'transparent'}
+            />
           </div>
-
-          {/* Input */}
-          <div className="demo-input-area">
-            {rateLimited ? (
-              <div className="demo-rate-limit">
-                <span>Demo limit reached</span>
-                <Link to="/register" className="demo-cta-btn">Create a free account to continue</Link>
-              </div>
-            ) : (
-              <div className="demo-input-wrap">
-                <input
-                  ref={inputRef}
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
-                  onKeyDown={handleKey}
-                  placeholder="Ask anything about your documents..."
-                  disabled={loading}
-                />
-                <button onClick={() => send()} disabled={loading || !input.trim()} className="demo-send">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M5 12h14M12 5l7 7-7 7" />
-                  </svg>
-                </button>
-              </div>
-            )}
-            <div className="demo-footer">
-              {!rateLimited && msgCount > 0 && (
-                <span style={{ marginRight: 8 }}>{MAX_MESSAGES - msgCount} remaining</span>
-              )}
-              Powered by <Link to="/">Cane</Link>
-            </div>
+          <div style={{
+            fontSize: '0.65rem', fontWeight: 600, color: 'rgba(255,255,255,0.3)',
+            padding: '3px 8px', border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 4, whiteSpace: 'nowrap', flexShrink: 0, marginTop: 6,
+          }}>
+            DEMO
           </div>
         </div>
       </div>
+
+      {/* Files card */}
+      <div className="card" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h3 style={{ margin: 0 }}>Files</h3>
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+            {documents.length}/{MAX_FILES} files · PDF, DOCX, TXT, CSV · 5MB max
+          </span>
+        </div>
+
+        {documents.length < MAX_FILES && (
+          <div
+            style={{
+              border: `2px dashed ${dragover ? 'var(--accent)' : 'var(--border)'}`,
+              borderRadius: 'var(--radius)',
+              padding: 24,
+              textAlign: 'center',
+              marginBottom: 16,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              background: dragover ? 'rgba(255,255,255,0.04)' : 'transparent',
+            }}
+            onClick={() => fileRef.current?.click()}
+            onDragOver={e => { e.preventDefault(); setDragover(true) }}
+            onDragLeave={() => setDragover(false)}
+            onDrop={handleDrop}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 8 }}>
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <div style={{ fontSize: '0.875rem', fontWeight: 500, marginBottom: 4 }}>
+              {uploading ? uploadStatus : 'Drop files here or click to upload'}
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Upload your own documents to ask questions about
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              multiple
+              accept=".pdf,.docx,.txt,.csv"
+              style={{ display: 'none' }}
+              onChange={e => { handleUpload(e.target.files); e.target.value = '' }}
+            />
+          </div>
+        )}
+
+        {/* Processing docs */}
+        {processingDocs.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            {processingDocs.map(d => (
+              <div key={d.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 0', fontSize: '0.8125rem', color: 'var(--text-muted)',
+              }}>
+                <div className="spinner" style={{ width: 14, height: 14 }} />
+                Processing: {d.filename}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Ready docs */}
+        {readyDocs.length > 0 ? (
+          <div>
+            {readyDocs.map((d, i) => (
+              <div key={d.id} style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '10px 0',
+                borderBottom: i < readyDocs.length - 1 ? '1px solid var(--border)' : 'none',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                  </svg>
+                  <span style={{ fontSize: '0.875rem' }}>{d.filename}</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    {d.chunk_count} chunks
+                  </span>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </div>
+            ))}
+          </div>
+        ) : processingDocs.length === 0 && (
+          <div style={{ textAlign: 'center', padding: 16, color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+            No files yet. Upload documents to start asking questions.
+          </div>
+        )}
+      </div>
+
+      {/* Google Drive teaser */}
+      <div className="card" style={{ marginBottom: 24, opacity: 0.5 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2L4.5 7.5V16.5L12 22L19.5 16.5V7.5L12 2Z" />
+            </svg>
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>Google Drive</div>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                Live sync folders from Drive. Auto-updates when files change
+              </div>
+            </div>
+          </div>
+          <Link to="/register" className="btn btn-outline" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+            Requires account
+          </Link>
+        </div>
+      </div>
+
+      {/* Ask section — mirrors Search.jsx */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: 4, fontFamily: 'var(--font-display)' }}>
+            Ask your documents
+          </h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+            {readyDocs.length > 0
+              ? `Searching across ${readyDocs.length} file${readyDocs.length !== 1 ? 's' : ''} · ${readyDocs.reduce((sum, d) => sum + d.chunk_count, 0)} chunks indexed`
+              : 'Upload files above to start asking questions'}
+          </p>
+        </div>
+
+        <div className="search-container">
+          <form onSubmit={handleAsk}>
+            <div className="search-input-wrapper">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="search-icon">
+                <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                type="text"
+                className="search-input"
+                placeholder={history.length > 0 ? "Ask a follow-up..." : "Ask anything about your files..."}
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                disabled={readyDocs.length === 0 || rateLimited}
+                autoFocus
+              />
+            </div>
+          </form>
+
+          <div className="search-modes">
+            {msgCount > 0 && !rateLimited && (
+              <span className="search-mode-btn" style={{ cursor: 'default', opacity: 0.5 }}>
+                {MAX_MESSAGES - msgCount} questions remaining
+              </span>
+            )}
+          </div>
+        </div>
+
+        {error && (
+          <div style={{
+            marginTop: 12, padding: '10px 14px', borderRadius: 'var(--radius-sm)',
+            background: 'rgba(248,113,113,0.08)', color: 'var(--error)',
+            fontSize: '0.8125rem',
+          }}>
+            {error}
+          </div>
+        )}
+      </div>
+
+      {/* Conversation history */}
+      {history.map((turn, i) => (
+        <div key={i} className="ai-summary fade-in" style={{ marginBottom: 16, opacity: i < history.length - 1 ? 0.7 : 1 }}>
+          <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            {turn.q}
+          </div>
+          <div className="summary-text"><ReactMarkdown>{turn.a}</ReactMarkdown></div>
+          {turn.sources?.length > 0 && (
+            <div className="summary-sources">Sources: {turn.sources.join(' · ')}</div>
+          )}
+        </div>
+      ))}
+
+      {/* Loading state */}
+      {loading && (
+        <div className="ai-summary fade-in">
+          <div className="loading-center"><div className="spinner" /></div>
+        </div>
+      )}
+
+      <div ref={bottomRef} />
+
+      {/* Rate limit CTA */}
+      {rateLimited && (
+        <div className="card" style={{ textAlign: 'center', padding: 32 }}>
+          <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: 16 }}>
+            Demo limit reached. {MAX_MESSAGES} questions max per session.
+          </div>
+          <Link to="/register" className="btn btn-primary" style={{ fontSize: '0.9375rem', padding: '10px 24px', justifyContent: 'center' }}>
+            Create a free account to continue
+          </Link>
+          <div style={{ marginTop: 12, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            Free plan includes 3 documents, 50 searches/month, and 1 agent.
+          </div>
+        </div>
+      )}
     </div>
   )
 }
-
-const demoStyles = `
-.demo-page {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: #000;
-  color: rgba(255,255,255,0.5);
-  font-family: 'DM Sans', -apple-system, sans-serif;
-}
-
-.demo-nav {
-  padding: 0 32px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  flex-shrink: 0;
-}
-
-.demo-back {
-  font-family: 'Space Grotesk', sans-serif;
-  font-weight: 700;
-  font-size: 0.92rem;
-  color: #fff;
-  text-decoration: none;
-}
-
-.demo-nav-label {
-  font-size: 0.75rem;
-  color: rgba(255,255,255,0.2);
-}
-
-.demo-body {
-  flex: 1;
-  display: flex;
-  overflow: hidden;
-  justify-content: center;
-}
-
-.demo-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  max-width: 720px;
-  min-width: 0;
-}
-
-/* Connector tiles */
-.demo-tiles {
-  padding: 20px 24px 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  flex-shrink: 0;
-}
-
-.demo-tile {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 8px;
-  text-decoration: none;
-  color: rgba(255,255,255,0.4);
-  transition: all 0.15s;
-}
-
-.demo-tile:hover {
-  border-color: rgba(255,255,255,0.12);
-  color: rgba(255,255,255,0.6);
-}
-
-.demo-tile-upload.drag-over {
-  border-color: rgba(255,255,255,0.3);
-  background: rgba(255,255,255,0.04);
-}
-
-.demo-tile svg { flex-shrink: 0; opacity: 0.4; }
-
-.demo-tile-text { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
-.demo-tile-title { font-size: 0.78rem; font-weight: 600; color: rgba(255,255,255,0.6); }
-.demo-tile-sub { font-size: 0.65rem; color: rgba(255,255,255,0.2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.demo-tile-badge {
-  font-size: 0.55rem; color: rgba(255,255,255,0.2);
-  padding: 2px 6px; border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 3px; white-space: nowrap;
-}
-
-/* Chat */
-.demo-chat {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px 24px;
-}
-
-.demo-chat-inner { }
-
-.demo-msg { margin-bottom: 20px; }
-.demo-msg-user { display: flex; justify-content: flex-end; }
-
-.demo-msg-user .demo-msg-content {
-  background: rgba(255,255,255,0.06);
-  border-radius: 14px 14px 4px 14px;
-  padding: 10px 14px;
-  max-width: 80%;
-  color: rgba(255,255,255,0.8);
-}
-
-.demo-msg-assistant .demo-msg-content {
-  max-width: 85%;
-  padding: 4px 0;
-  color: rgba(255,255,255,0.55);
-}
-
-.demo-msg-text {
-  font-size: 0.84rem;
-  line-height: 1.7;
-  white-space: pre-wrap;
-}
-
-.demo-sources {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 8px;
-}
-
-.demo-sources span {
-  font-size: 0.62rem;
-  color: rgba(255,255,255,0.2);
-  padding: 1px 6px;
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 3px;
-}
-
-/* Input */
-.demo-input-area {
-  padding: 12px 24px 16px;
-  border-top: 1px solid rgba(255,255,255,0.06);
-  flex-shrink: 0;
-}
-
-.demo-input-wrap {
-  display: flex;
-  gap: 8px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 10px;
-  padding: 4px 4px 4px 14px;
-  align-items: center;
-}
-
-.demo-input-wrap input {
-  flex: 1;
-  background: none;
-  border: none;
-  outline: none;
-  color: rgba(255,255,255,0.8);
-  font-size: 0.84rem;
-  font-family: 'DM Sans', sans-serif;
-  padding: 8px 0;
-}
-
-.demo-input-wrap input::placeholder { color: rgba(255,255,255,0.2); }
-
-.demo-send {
-  width: 32px; height: 32px; border-radius: 6px;
-  border: none; cursor: pointer;
-  background: #fff; color: #000;
-  display: flex; align-items: center; justify-content: center;
-  transition: opacity 0.15s; flex-shrink: 0;
-}
-
-.demo-send:hover { opacity: 0.8; }
-.demo-send:disabled { opacity: 0.3; cursor: default; }
-
-.demo-rate-limit {
-  text-align: center;
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
-}
-
-.demo-rate-limit span { font-size: 0.78rem; color: rgba(255,255,255,0.25); }
-
-.demo-cta-btn {
-  display: inline-block; padding: 8px 20px;
-  background: #fff; color: #000; border-radius: 6px;
-  font-size: 0.8rem; font-weight: 600; text-decoration: none;
-  transition: opacity 0.15s;
-}
-
-.demo-cta-btn:hover { opacity: 0.85; color: #000; }
-
-.demo-footer {
-  text-align: center; margin-top: 8px;
-  font-size: 0.65rem; color: rgba(255,255,255,0.12);
-}
-
-.demo-footer a { color: rgba(255,255,255,0.25); text-decoration: none; }
-
-/* Typing indicator */
-.demo-typing { display: flex; gap: 4px; padding: 8px 0; }
-.demo-typing span {
-  width: 5px; height: 5px; border-radius: 50%;
-  background: rgba(255,255,255,0.2);
-  animation: demoPulse 1.2s infinite;
-}
-.demo-typing span:nth-child(2) { animation-delay: 0.15s; }
-.demo-typing span:nth-child(3) { animation-delay: 0.3s; }
-@keyframes demoPulse {
-  0%, 60%, 100% { opacity: 0.3; }
-  30% { opacity: 0.8; }
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .demo-tiles { grid-template-columns: 1fr; }
-  .demo-nav { padding: 0 16px; }
-  .demo-chat { padding: 16px; }
-  .demo-input-area { padding: 12px 16px 16px; }
-}
-`
