@@ -16,6 +16,10 @@ export default function Demo() {
   // Agent config
   const [agentName, setAgentName] = useState('My Agent')
   const [agentDesc, setAgentDesc] = useState('')
+  const [systemPrompt, setSystemPrompt] = useState('')
+  const [promptSaving, setPromptSaving] = useState(false)
+  const [promptDirty, setPromptDirty] = useState(false)
+  const promptTimer = useRef(null)
 
   // Files
   const [documents, setDocuments] = useState([])
@@ -32,6 +36,9 @@ export default function Demo() {
   const [msgCount, setMsgCount] = useState(0)
   const [error, setError] = useState(null)
   const bottomRef = useRef(null)
+
+  // Deploy
+  const [copied, setCopied] = useState(false)
 
   const rateLimited = msgCount >= MAX_MESSAGES
   const readyDocs = documents.filter(d => d.status === 'ready')
@@ -57,6 +64,31 @@ export default function Demo() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [history, streamText])
+
+  // Auto-save system prompt (debounced)
+  const savePrompt = async (prompt) => {
+    if (!session) return
+    setPromptSaving(true)
+    try {
+      await fetch(`${API_BASE}/api/demo/prompt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_id: session.workspace_id, system_prompt: prompt }),
+      })
+      setPromptDirty(false)
+    } catch (e) {
+      console.error('Failed to save prompt:', e)
+    } finally {
+      setPromptSaving(false)
+    }
+  }
+
+  const handlePromptChange = (val) => {
+    setSystemPrompt(val)
+    setPromptDirty(true)
+    if (promptTimer.current) clearTimeout(promptTimer.current)
+    promptTimer.current = setTimeout(() => savePrompt(val), 1000)
+  }
 
   // File upload
   const handleUpload = async (files) => {
@@ -122,6 +154,11 @@ export default function Demo() {
       return
     }
 
+    // Save prompt if dirty before asking
+    if (promptDirty) {
+      await savePrompt(systemPrompt)
+    }
+
     const q = query.trim()
     setQuery('')
     setLoading(true)
@@ -157,6 +194,30 @@ export default function Demo() {
       setLoading(false)
       setStreamText('')
     }
+  }
+
+  // Widget embed code
+  const getEmbedCode = () => {
+    if (!session) return ''
+    return `<script
+  src="${window.location.origin}/widget.js"
+  data-api-key="${session.api_key}"
+  data-agent-name="${agentName}"
+  data-workspace-id="${session.workspace_id}"
+  data-color="#ffffff"
+  data-greeting="Hi! Ask me anything."
+  data-position="right"
+  data-subtitle="Powered by Cane"
+  data-placeholder="Type a message..."
+  data-border-radius="16"
+></script>`
+  }
+
+  const handleCopyEmbed = () => {
+    navigator.clipboard.writeText(getEmbedCode()).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
   }
 
   if (sessionLoading) {
@@ -325,6 +386,49 @@ export default function Demo() {
         )}
       </div>
 
+      {/* System Prompt card */}
+      <div className="card" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+            System Prompt
+          </h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {promptSaving && (
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Saving...</span>
+            )}
+            {!promptSaving && promptDirty && (
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Unsaved</span>
+            )}
+            {!promptSaving && !promptDirty && systemPrompt && (
+              <span style={{ fontSize: '0.72rem', color: 'var(--success)' }}>Saved</span>
+            )}
+          </div>
+        </div>
+
+        <textarea
+          value={systemPrompt}
+          onChange={e => handlePromptChange(e.target.value)}
+          placeholder="Tell the AI how to behave when answering questions about your files. For example: &quot;You are a helpful HR assistant. Answer questions about company policies using only the uploaded documents. Be concise and cite specific sections.&quot;"
+          style={{
+            width: '100%',
+            minHeight: 140,
+            padding: 12,
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--rule)',
+            background: 'var(--paper)',
+            color: 'var(--text)',
+            fontFamily: 'var(--font-body)',
+            fontSize: '0.8125rem',
+            lineHeight: 1.5,
+            resize: 'vertical',
+            outline: 'none',
+          }}
+        />
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 8 }}>
+          This prompt tells the AI how to interpret and answer questions about your uploaded files. Optional, but recommended.
+        </div>
+      </div>
+
       {/* Google Drive teaser */}
       <div className="card" style={{ marginBottom: 24, opacity: 0.5 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -345,7 +449,7 @@ export default function Demo() {
         </div>
       </div>
 
-      {/* Ask section — mirrors Search.jsx */}
+      {/* Ask section */}
       <div style={{ marginBottom: 24 }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: 4, fontFamily: 'var(--font-display)' }}>
@@ -418,6 +522,73 @@ export default function Demo() {
 
       <div ref={bottomRef} />
 
+      {/* Deploy card */}
+      {readyDocs.length > 0 && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="16 18 22 12 16 6" />
+                <polyline points="8 6 2 12 8 18" />
+              </svg>
+              Deploy
+            </h3>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+              Expires in 24 hours
+            </div>
+          </div>
+
+          <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: 16 }}>
+            Copy this snippet into any HTML page to embed your agent as a chat widget. It will work for 24 hours with the files you uploaded in this session.
+          </div>
+
+          {/* Embed snippet */}
+          <div style={{
+            position: 'relative',
+            background: '#1e1e2e', borderRadius: 'var(--radius-sm)',
+            padding: '16px 18px', fontSize: '0.78rem',
+            fontFamily: "'SF Mono', Consolas, 'Liberation Mono', monospace",
+            color: '#cdd6f4', lineHeight: 1.6, overflow: 'auto',
+          }}>
+            <button
+              onClick={handleCopyEmbed}
+              style={{
+                position: 'absolute', top: 8, right: 8,
+                background: copied ? 'rgba(166,227,161,0.2)' : 'rgba(255,255,255,0.1)',
+                border: 'none',
+                color: copied ? '#a6e3a1' : '#cdd6f4',
+                padding: '4px 10px', borderRadius: 6,
+                fontSize: '0.7rem', cursor: 'pointer', fontFamily: 'var(--font-body)',
+                transition: 'all 0.15s',
+              }}
+            >{copied ? 'Copied!' : 'Copy'}</button>
+            <span style={{ color: '#89b4fa' }}>&lt;script</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>src</span>=<span style={{ color: '#f9e2af' }}>"{window.location.origin}/widget.js"</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-api-key</span>=<span style={{ color: '#f9e2af' }}>"{session?.api_key}"</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-agent-name</span>=<span style={{ color: '#f9e2af' }}>"{agentName}"</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-workspace-id</span>=<span style={{ color: '#f9e2af' }}>"{session?.workspace_id}"</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-color</span>=<span style={{ color: '#f9e2af' }}>"#ffffff"</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-greeting</span>=<span style={{ color: '#f9e2af' }}>"Hi! Ask me anything."</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-position</span>=<span style={{ color: '#f9e2af' }}>"right"</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-subtitle</span>=<span style={{ color: '#f9e2af' }}>"Powered by Cane"</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-placeholder</span>=<span style={{ color: '#f9e2af' }}>"Type a message..."</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-border-radius</span>=<span style={{ color: '#f9e2af' }}>"16"</span><br />
+            <span style={{ color: '#89b4fa' }}>&gt;&lt;/script&gt;</span>
+          </div>
+
+          <div style={{
+            marginTop: 16, padding: '12px 16px',
+            borderRadius: 'var(--radius-sm)',
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid var(--rule)',
+            fontSize: '0.78rem', color: 'var(--text-muted)',
+            lineHeight: 1.6,
+          }}>
+            <strong style={{ color: 'var(--text-secondary)' }}>How it works:</strong> Paste this into any HTML file, open it in a browser, and you will see a chat bubble in the bottom-right corner. Your uploaded files and system prompt are baked in. With a full account you get permanent agents, Google Drive sync, tools, eval suites, and more.
+          </div>
+        </div>
+      )}
+
       {/* Rate limit CTA */}
       {rateLimited && (
         <div className="card" style={{ textAlign: 'center', padding: 32 }}>
@@ -430,6 +601,18 @@ export default function Demo() {
           <div style={{ marginTop: 12, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
             Free plan includes 3 documents, 50 searches/month, and 1 agent.
           </div>
+        </div>
+      )}
+
+      {/* Bottom CTA */}
+      {!rateLimited && (
+        <div style={{ textAlign: 'center', padding: '24px 0', borderTop: '1px solid var(--rule)', marginTop: 24 }}>
+          <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 12 }}>
+            Want permanent agents, Google Drive sync, webhook tools, eval suites, and a public API?
+          </div>
+          <Link to="/register" className="btn btn-outline" style={{ fontSize: '0.82rem' }}>
+            Create a free account
+          </Link>
         </div>
       )}
     </div>

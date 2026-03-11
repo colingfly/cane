@@ -327,6 +327,48 @@ def demo_documents(workspace_id: str):
         db.close()
 
 
+@router.post("/prompt")
+async def update_demo_prompt(request: Request):
+    """Save a system prompt on a demo workspace."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    workspace_id = body.get("workspace_id", "")
+    system_prompt = body.get("system_prompt", "")
+
+    if not workspace_id:
+        raise HTTPException(400, "workspace_id is required")
+    if len(system_prompt) > 4000:
+        raise HTTPException(400, "System prompt too long (max 4000 characters)")
+
+    db = SessionLocal()
+    try:
+        tenant = db.query(Tenant).filter(Tenant.slug == DEMO_TENANT_SLUG).first()
+        if not tenant:
+            raise HTTPException(400, "Demo not available")
+
+        ws = db.query(Workspace).filter(
+            Workspace.id == workspace_id,
+            Workspace.tenant_id == tenant.id,
+        ).first()
+        if not ws:
+            raise HTTPException(400, "Invalid demo session")
+
+        ws.system_prompt = system_prompt.strip()
+        db.commit()
+
+        return {"status": "ok", "message": "Prompt saved"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Demo] Prompt update error: {e}")
+        raise HTTPException(500, "Failed to save prompt")
+    finally:
+        db.close()
+
+
 def _run_demo_ingestion(doc_id: str, filepath: str, tenant_id: str, workspace_id: str):
     """Background task: ingest a demo file."""
     db = SessionLocal()
