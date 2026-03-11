@@ -6,7 +6,6 @@ const WORKSPACE_ID = '826e009f-ddb9-42a0-9c4e-89e88f6ed8e2'
 const API_BASE = window.location.origin
 const MAX_MESSAGES = 10
 
-
 export default function Demo() {
   const [messages, setMessages] = useState([
     { role: 'assistant', content: "This is a live AI agent running on Cane. It has access to all platform documentation. Ask it anything." },
@@ -14,6 +13,9 @@ export default function Demo() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [msgCount, setMsgCount] = useState(0)
+  const [pipelineData, setPipelineData] = useState(null)
+  const [pipelineLoading, setPipelineLoading] = useState(false)
+  const [lastMeta, setLastMeta] = useState(null)
   const [uploadedFiles, setUploadedFiles] = useState([])
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
@@ -41,7 +43,6 @@ export default function Demo() {
       if (!allowed.includes(f.type) && !f.name.match(/\.(pdf|txt|csv|docx)$/i)) return false
       return true
     }).slice(0, MAX_FILES - uploadedFiles.length)
-
     if (valid.length === 0) return
 
     setUploading(true)
@@ -56,11 +57,7 @@ export default function Demo() {
           headers: { 'Authorization': `Bearer ${API_KEY}` },
           body: form,
         })
-        if (res.ok) {
-          newFiles.push({ name: f.name, status: 'uploaded' })
-        } else {
-          newFiles.push({ name: f.name, status: 'error' })
-        }
+        newFiles.push({ name: f.name, status: res.ok ? 'uploaded' : 'error' })
       } catch {
         newFiles.push({ name: f.name, status: 'error' })
       }
@@ -85,23 +82,48 @@ export default function Demo() {
     setMessages(prev => [...prev, { role: 'user', content: q }])
     setMsgCount(prev => prev + 1)
     setLoading(true)
+    setPipelineLoading(true)
+    setPipelineData(null)
+    setLastMeta(null)
+
+    const t0 = Date.now()
 
     try {
-      const res = await fetch(`${API_BASE}/v1/ask`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q, workspace_id: WORKSPACE_ID, history }),
-      })
-      const data = await res.json()
+      const headers = { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' }
+
+      const [askRes, searchRes] = await Promise.all([
+        fetch(`${API_BASE}/v1/ask`, {
+          method: 'POST', headers,
+          body: JSON.stringify({ query: q, workspace_id: WORKSPACE_ID, history }),
+        }),
+        fetch(`${API_BASE}/v1/search`, {
+          method: 'POST', headers,
+          body: JSON.stringify({ query: q, workspace_id: WORKSPACE_ID, max_results: 5 }),
+        }),
+      ])
+
+      const askData = await askRes.json()
+      const searchData = await searchRes.json()
+      const elapsed = ((Date.now() - t0) / 1000).toFixed(1)
+
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: data.answer || data.error || 'No response.',
-        sources: data.sources || [],
+        content: askData.answer || askData.error || 'No response.',
+        sources: askData.sources || [],
       }])
+
+      setPipelineData(searchData)
+      setLastMeta({
+        model: askData.model || 'claude-3.5-sonnet',
+        chunksUsed: askData.chunks_used || 0,
+        sources: askData.sources || [],
+        elapsed,
+      })
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Connection error. Try again.' }])
     } finally {
       setLoading(false)
+      setPipelineLoading(false)
     }
   }
 
@@ -118,119 +140,183 @@ export default function Demo() {
         <span className="demo-nav-label">Live demo</span>
       </div>
 
-      {/* Connector tiles */}
-      <div className="demo-tiles">
-        <div className="demo-tiles-inner">
-          <div
-            className={`demo-tile demo-tile-upload${dragOver ? ' drag-over' : ''}`}
-            onClick={() => uploadedFiles.length < MAX_FILES && fileInputRef.current?.click()}
-            onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={onDrop}
-            style={{ cursor: uploadedFiles.length >= MAX_FILES ? 'default' : 'pointer' }}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.docx,.txt,.csv"
-              multiple
-              style={{ display: 'none' }}
-              onChange={e => { handleFiles(e.target.files); e.target.value = '' }}
-            />
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-              <polyline points="14 2 14 8 20 8" />
-              <line x1="12" y1="18" x2="12" y2="12" />
-              <line x1="9" y1="15" x2="15" y2="15" />
-            </svg>
-            <div className="demo-tile-text">
-              <span className="demo-tile-title">Upload Files</span>
-              {uploadedFiles.length === 0 ? (
-                <span className="demo-tile-sub">{uploading ? 'Uploading...' : 'PDF, DOCX, CSV, TXT'}</span>
-              ) : (
+      <div className="demo-body">
+        {/* Left: tiles + chat + input */}
+        <div className="demo-main">
+          {/* Connector tiles */}
+          <div className="demo-tiles">
+            <div
+              className={`demo-tile demo-tile-upload${dragOver ? ' drag-over' : ''}`}
+              onClick={() => uploadedFiles.length < MAX_FILES && fileInputRef.current?.click()}
+              onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={onDrop}
+              style={{ cursor: uploadedFiles.length >= MAX_FILES ? 'default' : 'pointer' }}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.docx,.txt,.csv"
+                multiple
+                style={{ display: 'none' }}
+                onChange={e => { handleFiles(e.target.files); e.target.value = '' }}
+              />
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="12" y1="18" x2="12" y2="12" />
+                <line x1="9" y1="15" x2="15" y2="15" />
+              </svg>
+              <div className="demo-tile-text">
+                <span className="demo-tile-title">Upload Files</span>
                 <span className="demo-tile-sub">
-                  {uploadedFiles.map(f => f.name).join(', ')}
+                  {uploading ? 'Uploading...' : uploadedFiles.length > 0
+                    ? uploadedFiles.map(f => f.name).join(', ')
+                    : 'PDF, DOCX, CSV, TXT'}
                 </span>
+              </div>
+              {uploadedFiles.length > 0 ? (
+                <span className="demo-tile-badge" style={{ color: 'rgba(74,222,128,0.7)', borderColor: 'rgba(74,222,128,0.15)' }}>
+                  {uploadedFiles.length}/{MAX_FILES}
+                </span>
+              ) : (
+                <span className="demo-tile-badge">{uploading ? '...' : `Up to ${MAX_FILES}`}</span>
               )}
             </div>
-            {uploadedFiles.length > 0 ? (
-              <span className="demo-tile-badge" style={{ color: 'rgba(74,222,128,0.7)', borderColor: 'rgba(74,222,128,0.15)' }}>
-                {uploadedFiles.length}/{MAX_FILES}
-              </span>
-            ) : (
-              <span className="demo-tile-badge">{uploading ? '...' : `Up to ${MAX_FILES} files`}</span>
-            )}
+
+            <Link to="/register" className="demo-tile">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2L4.5 7.5V16.5L12 22L19.5 16.5V7.5L12 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                <path d="M12 8V16M8 12H16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+              <div className="demo-tile-text">
+                <span className="demo-tile-title">Google Drive</span>
+                <span className="demo-tile-sub">Live sync folders</span>
+              </div>
+              <span className="demo-tile-badge">Requires account</span>
+            </Link>
           </div>
 
-          <Link to="/register" className="demo-tile">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L4.5 7.5V16.5L12 22L19.5 16.5V7.5L12 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-              <path d="M12 8V16M8 12H16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
-            <div className="demo-tile-text">
-              <span className="demo-tile-title">Google Drive</span>
-              <span className="demo-tile-sub">Live sync folders</span>
-            </div>
-            <span className="demo-tile-badge">Requires account</span>
-          </Link>
-        </div>
-      </div>
-
-      <div className="demo-chat">
-        <div className="demo-chat-inner">
-          {messages.map((m, i) => (
-            <div key={i} className={`demo-msg demo-msg-${m.role}`}>
-              <div className="demo-msg-content">
-                <div className="demo-msg-text">{m.content}</div>
-                {m.sources?.length > 0 && (
-                  <div className="demo-sources">
-                    {m.sources.map((s, j) => <span key={j}>{s}</span>)}
+          {/* Chat */}
+          <div className="demo-chat">
+            <div className="demo-chat-inner">
+              {messages.map((m, i) => (
+                <div key={i} className={`demo-msg demo-msg-${m.role}`}>
+                  <div className="demo-msg-content">
+                    <div className="demo-msg-text">{m.content}</div>
+                    {m.sources?.length > 0 && (
+                      <div className="demo-sources">
+                        {m.sources.map((s, j) => <span key={j}>{s}</span>)}
+                      </div>
+                    )}
                   </div>
+                </div>
+              ))}
+              {loading && (
+                <div className="demo-msg demo-msg-assistant">
+                  <div className="demo-msg-content">
+                    <div className="demo-typing"><span /><span /><span /></div>
+                  </div>
+                </div>
+              )}
+              <div ref={bottomRef} />
+            </div>
+          </div>
+
+          {/* Input */}
+          <div className="demo-input-area">
+            {rateLimited ? (
+              <div className="demo-rate-limit">
+                <span>Demo limit reached</span>
+                <Link to="/register" className="demo-cta-btn">Create a free account to continue</Link>
+              </div>
+            ) : (
+              <div className="demo-input-wrap">
+                <input
+                  ref={inputRef}
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={handleKey}
+                  placeholder="Ask anything..."
+                  disabled={loading}
+                />
+                <button onClick={() => send()} disabled={loading || !input.trim()} className="demo-send">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            )}
+            <div className="demo-footer">
+              {!rateLimited && msgCount > 0 && (
+                <span style={{ marginRight: 8 }}>{MAX_MESSAGES - msgCount} remaining</span>
+              )}
+              Powered by <Link to="/">Cane</Link>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Pipeline panel */}
+        <div className="demo-pipeline">
+          <div className="demo-pipe-header">Pipeline</div>
+
+          {!pipelineData && !pipelineLoading && (
+            <div className="demo-pipe-empty">
+              <div className="demo-pipe-empty-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+              </div>
+              <p>Ask a question to see the RAG pipeline in action</p>
+            </div>
+          )}
+
+          {pipelineLoading && (
+            <div className="demo-pipe-loading">
+              <div className="demo-pipe-loading-bar" />
+              <span>Retrieving chunks...</span>
+            </div>
+          )}
+
+          {pipelineData && (
+            <div className="demo-pipe-results">
+              <div className="demo-pipe-section">
+                <div className="demo-pipe-label">Retrieval</div>
+                {pipelineData.results?.map((chunk, i) => (
+                  <div className="demo-pipe-chunk" key={i}>
+                    <div className="demo-pipe-chunk-head">
+                      <span className={`demo-pipe-score${chunk.score >= 0.7 ? ' high' : chunk.score >= 0.4 ? ' mid' : ''}`}>
+                        {(chunk.score * 100).toFixed(0)}%
+                      </span>
+                      <span className="demo-pipe-file">{chunk.source_file}</span>
+                      {chunk.metadata?.page != null && (
+                        <span className="demo-pipe-page">p.{chunk.metadata.page + 1}</span>
+                      )}
+                    </div>
+                    <div className="demo-pipe-text">
+                      {chunk.text?.length > 180 ? chunk.text.slice(0, 180) + '...' : chunk.text}
+                    </div>
+                  </div>
+                ))}
+                {pipelineData.results?.length === 0 && (
+                  <div className="demo-pipe-none">No chunks retrieved</div>
                 )}
               </div>
-            </div>
-          ))}
 
-          {loading && (
-            <div className="demo-msg demo-msg-assistant">
-              <div className="demo-msg-content">
-                <div className="demo-typing"><span /><span /><span /></div>
-              </div>
+              {lastMeta && (
+                <div className="demo-pipe-section">
+                  <div className="demo-pipe-label">Generation</div>
+                  <div className="demo-pipe-meta">
+                    <div><span>Model</span><span>{lastMeta.model}</span></div>
+                    <div><span>Chunks used</span><span>{lastMeta.chunksUsed}</span></div>
+                    <div><span>Sources</span><span>{lastMeta.sources.length}</span></div>
+                    <div><span>Latency</span><span>{lastMeta.elapsed}s</span></div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
-
-          <div ref={bottomRef} />
-        </div>
-      </div>
-
-      <div className="demo-input-area">
-        {rateLimited ? (
-          <div className="demo-rate-limit">
-            <span>You've reached the demo limit.</span>
-            <Link to="/register" className="demo-cta-btn">Create a free account to continue</Link>
-          </div>
-        ) : (
-          <div className="demo-input-wrap">
-            <input
-              ref={inputRef}
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKey}
-              placeholder="Ask anything..."
-              disabled={loading}
-            />
-            <button onClick={() => send()} disabled={loading || !input.trim()} className="demo-send">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 12h14M12 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
-        )}
-        <div className="demo-footer">
-          {!rateLimited && msgCount > 0 && (
-            <span style={{ marginRight: 8 }}>{MAX_MESSAGES - msgCount} messages remaining</span>
-          )}
-          Powered by <Link to="/">Cane</Link>
         </div>
       </div>
     </div>
@@ -270,35 +356,44 @@ const demoStyles = `
   color: rgba(255,255,255,0.2);
 }
 
-/* Connector tiles */
-.demo-tiles {
-  padding: 24px 24px 0;
-  flex-shrink: 0;
+/* Body: chat + pipeline */
+.demo-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
 }
 
-.demo-tiles-inner {
-  max-width: 640px;
-  margin: 0 auto;
+.demo-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Connector tiles */
+.demo-tiles {
+  padding: 20px 24px 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 10px;
+  max-width: 640px;
+  flex-shrink: 0;
 }
 
 .demo-tile {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 16px 20px;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 10px;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
   text-decoration: none;
   color: rgba(255,255,255,0.4);
   transition: all 0.15s;
-  position: relative;
 }
 
 .demo-tile:hover {
-  border-color: rgba(255,255,255,0.15);
+  border-color: rgba(255,255,255,0.12);
   color: rgba(255,255,255,0.6);
 }
 
@@ -307,66 +402,45 @@ const demoStyles = `
   background: rgba(255,255,255,0.04);
 }
 
-.demo-tile svg {
-  flex-shrink: 0;
-  opacity: 0.5;
-}
+.demo-tile svg { flex-shrink: 0; opacity: 0.4; }
 
-.demo-tile-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-}
-
-.demo-tile-title {
-  font-size: 0.84rem;
-  font-weight: 600;
-  color: rgba(255,255,255,0.7);
-}
-
-.demo-tile-sub {
-  font-size: 0.7rem;
-  color: rgba(255,255,255,0.25);
-}
-
+.demo-tile-text { display: flex; flex-direction: column; gap: 1px; flex: 1; }
+.demo-tile-title { font-size: 0.78rem; font-weight: 600; color: rgba(255,255,255,0.6); }
+.demo-tile-sub { font-size: 0.65rem; color: rgba(255,255,255,0.2); }
 .demo-tile-badge {
-  font-size: 0.6rem;
-  color: rgba(255,255,255,0.2);
-  padding: 2px 8px;
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 4px;
-  white-space: nowrap;
+  font-size: 0.55rem; color: rgba(255,255,255,0.2);
+  padding: 2px 6px; border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 3px; white-space: nowrap;
 }
 
+/* Chat */
 .demo-chat {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 24px;
+  padding: 20px 24px;
 }
 
-.demo-chat-inner { max-width: 640px; margin: 0 auto; }
+.demo-chat-inner { max-width: 640px; }
 
-.demo-msg { margin-bottom: 24px; }
-
+.demo-msg { margin-bottom: 20px; }
 .demo-msg-user { display: flex; justify-content: flex-end; }
 
 .demo-msg-user .demo-msg-content {
   background: rgba(255,255,255,0.06);
-  border-radius: 16px 16px 4px 16px;
-  padding: 12px 16px;
+  border-radius: 14px 14px 4px 14px;
+  padding: 10px 14px;
   max-width: 80%;
   color: rgba(255,255,255,0.8);
 }
 
 .demo-msg-assistant .demo-msg-content {
-  max-width: 80%;
+  max-width: 85%;
   padding: 4px 0;
   color: rgba(255,255,255,0.55);
 }
 
 .demo-msg-text {
-  font-size: 0.88rem;
+  font-size: 0.84rem;
   line-height: 1.7;
   white-space: pre-wrap;
 }
@@ -374,57 +448,33 @@ const demoStyles = `
 .demo-sources {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.demo-sources span {
-  font-size: 0.68rem;
-  color: rgba(255,255,255,0.25);
-  padding: 2px 8px;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 4px;
-}
-
-.demo-suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  gap: 4px;
   margin-top: 8px;
 }
 
-.demo-suggestions button {
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 0.8rem;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
-  color: rgba(255,255,255,0.4);
-  cursor: pointer;
-  font-family: 'DM Sans', sans-serif;
-  transition: all 0.15s;
+.demo-sources span {
+  font-size: 0.62rem;
+  color: rgba(255,255,255,0.2);
+  padding: 1px 6px;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 3px;
 }
 
-.demo-suggestions button:hover {
-  background: rgba(255,255,255,0.08);
-  color: rgba(255,255,255,0.6);
-}
-
+/* Input */
 .demo-input-area {
-  padding: 16px 24px 20px;
+  padding: 12px 24px 16px;
   border-top: 1px solid rgba(255,255,255,0.06);
   flex-shrink: 0;
 }
 
 .demo-input-wrap {
   max-width: 640px;
-  margin: 0 auto;
   display: flex;
   gap: 8px;
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 12px;
-  padding: 4px 4px 4px 16px;
+  border-radius: 10px;
+  padding: 4px 4px 4px 14px;
   align-items: center;
 }
 
@@ -434,26 +484,19 @@ const demoStyles = `
   border: none;
   outline: none;
   color: rgba(255,255,255,0.8);
-  font-size: 0.88rem;
+  font-size: 0.84rem;
   font-family: 'DM Sans', sans-serif;
-  padding: 10px 0;
+  padding: 8px 0;
 }
 
 .demo-input-wrap input::placeholder { color: rgba(255,255,255,0.2); }
 
 .demo-send {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  background: #fff;
-  color: #000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: opacity 0.15s;
-  flex-shrink: 0;
+  width: 32px; height: 32px; border-radius: 6px;
+  border: none; cursor: pointer;
+  background: #fff; color: #000;
+  display: flex; align-items: center; justify-content: center;
+  transition: opacity 0.15s; flex-shrink: 0;
 }
 
 .demo-send:hover { opacity: 0.8; }
@@ -461,45 +504,214 @@ const demoStyles = `
 
 .demo-rate-limit {
   max-width: 640px;
-  margin: 0 auto;
   text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
 }
 
-.demo-rate-limit span {
-  font-size: 0.8rem;
-  color: rgba(255,255,255,0.3);
-}
+.demo-rate-limit span { font-size: 0.78rem; color: rgba(255,255,255,0.25); }
 
 .demo-cta-btn {
-  display: inline-block;
-  padding: 10px 24px;
-  background: #fff;
-  color: #000;
-  border-radius: 8px;
-  font-size: 0.84rem;
-  font-weight: 600;
-  text-decoration: none;
+  display: inline-block; padding: 8px 20px;
+  background: #fff; color: #000; border-radius: 6px;
+  font-size: 0.8rem; font-weight: 600; text-decoration: none;
   transition: opacity 0.15s;
 }
 
 .demo-cta-btn:hover { opacity: 0.85; color: #000; }
 
 .demo-footer {
-  text-align: center;
-  margin-top: 10px;
+  text-align: center; margin-top: 8px;
+  font-size: 0.65rem; color: rgba(255,255,255,0.12);
+}
+
+.demo-footer a { color: rgba(255,255,255,0.25); text-decoration: none; }
+
+/* Pipeline panel */
+.demo-pipeline {
+  width: 320px;
+  border-left: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.demo-pipe-header {
+  padding: 14px 20px;
+  font-family: 'Space Grotesk', sans-serif;
   font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.2);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+
+.demo-pipe-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 24px;
+}
+
+.demo-pipe-empty-icon { color: rgba(255,255,255,0.1); }
+
+.demo-pipe-empty p {
+  font-size: 0.72rem;
   color: rgba(255,255,255,0.15);
+  text-align: center;
+  line-height: 1.5;
 }
 
-.demo-footer a {
+.demo-pipe-loading {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.demo-pipe-loading span {
+  font-size: 0.68rem;
+  color: rgba(255,255,255,0.2);
+}
+
+.demo-pipe-loading-bar {
+  height: 2px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 1px;
+  overflow: hidden;
+  position: relative;
+}
+
+.demo-pipe-loading-bar::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  height: 100%; width: 40%;
+  background: rgba(255,255,255,0.2);
+  border-radius: 1px;
+  animation: pipeSlide 1s ease infinite;
+}
+
+@keyframes pipeSlide {
+  0% { left: -40%; }
+  100% { left: 100%; }
+}
+
+.demo-pipe-results {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.demo-pipe-section {}
+
+.demo-pipe-label {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.15);
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.demo-pipe-chunk {
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.demo-pipe-chunk-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.demo-pipe-score {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.06);
   color: rgba(255,255,255,0.3);
-  text-decoration: none;
 }
 
+.demo-pipe-score.high {
+  background: rgba(74,222,128,0.1);
+  color: rgba(74,222,128,0.7);
+}
+
+.demo-pipe-score.mid {
+  background: rgba(251,191,36,0.1);
+  color: rgba(251,191,36,0.6);
+}
+
+.demo-pipe-file {
+  font-size: 0.62rem;
+  font-weight: 500;
+  color: rgba(255,255,255,0.35);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.demo-pipe-page {
+  font-size: 0.58rem;
+  color: rgba(255,255,255,0.15);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.demo-pipe-text {
+  font-size: 0.62rem;
+  line-height: 1.55;
+  color: rgba(255,255,255,0.2);
+}
+
+.demo-pipe-none {
+  font-size: 0.68rem;
+  color: rgba(255,255,255,0.15);
+  padding: 12px 0;
+}
+
+.demo-pipe-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.demo-pipe-meta > div {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+.demo-pipe-meta > div:last-child { border-bottom: none; }
+
+.demo-pipe-meta span:first-child {
+  font-size: 0.62rem;
+  color: rgba(255,255,255,0.2);
+}
+
+.demo-pipe-meta span:last-child {
+  font-size: 0.62rem;
+  color: rgba(255,255,255,0.4);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Typing indicator */
 .demo-typing { display: flex; gap: 4px; padding: 8px 0; }
 .demo-typing span {
   width: 5px; height: 5px; border-radius: 50%;
@@ -513,7 +725,9 @@ const demoStyles = `
   30% { opacity: 0.8; }
 }
 
-@media (max-width: 520px) {
-  .demo-tiles-inner { grid-template-columns: 1fr; }
+/* Responsive */
+@media (max-width: 768px) {
+  .demo-pipeline { display: none; }
+  .demo-tiles { grid-template-columns: 1fr; }
 }
 `
