@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Upload, Trash2, FileText, Sparkles, Save, ToggleLeft, ToggleRight, MessageSquare, Store, Wrench, Zap, Play, Plus, ChevronDown, ChevronUp, RefreshCw, Link2, Globe, X, BarChart3, Palette, Key, Pencil, Copy, Check, CloudDownload, FolderOpen, Search, Pause, Unplug } from 'lucide-react'
+import { ArrowLeft, Upload, Trash2, FileText, Sparkles, Save, ToggleLeft, ToggleRight, MessageSquare, Store, Wrench, Zap, Play, Plus, ChevronDown, ChevronUp, RefreshCw, Link2, Globe, X, BarChart3, Palette, Key, Pencil, Copy, Check, Cloud, FolderOpen, Search, Pause, Unplug } from 'lucide-react'
 import {
   getAgent, updateAgent, generateAgentPrompt, generateReplicaPrompt,
   getDocuments, uploadDocument, deleteDocument, getDocumentStatus,
@@ -1503,7 +1503,7 @@ export default function AgentDetail() {
       <div className="card" style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <CloudDownload size={16} /> Live Connectors
+            <Cloud size={16} /> Live Connectors
             {syncs.length > 0 && (
               <span style={{
                 fontSize: '0.65rem', fontWeight: 700, background: 'var(--accent-muted)',
