@@ -23,6 +23,14 @@ const ICON_COLORS = {
 }
 const DEFAULT_COLOR = { bg: 'rgba(255,255,255,0.08)' }
 
+const TABS = [
+  { id: 'configure', label: 'Configure', icon: Sparkles },
+  { id: 'knowledge', label: 'Knowledge', icon: FileText },
+  { id: 'tools', label: 'Tools', icon: Wrench },
+  { id: 'behavior', label: 'Behavior', icon: Brain },
+  { id: 'deploy', label: 'Deploy', icon: Globe },
+]
+
 function AgentIcon({ icon, size = 40 }) {
   const label = (icon || '??').slice(0, 2).toUpperCase()
   const colors = ICON_COLORS[label] || DEFAULT_COLOR
@@ -158,6 +166,9 @@ export default function AgentDetail() {
   const [editMemoryContent, setEditMemoryContent] = useState('')
   const [editMemoryType, setEditMemoryType] = useState('fact')
   const [newMemory, setNewMemory] = useState({ content: '', memory_type: 'fact' })
+
+  // Tabs
+  const [tab, setTab] = useState('configure')
 
   useEffect(() => { loadAgent() }, [agentId])
 
@@ -870,7 +881,38 @@ export default function AgentDetail() {
         </div>
       </div>
 
+      {/* Ask this agent */}
+      {readyDocs.length > 0 && agent.system_prompt && (
+        <div style={{ marginBottom: 24 }}>
+          <button
+            className="btn btn-primary"
+            style={{ width: '100%', padding: 12, justifyContent: 'center', fontSize: '0.9375rem' }}
+            onClick={() => navigate(`/search?workspace=${agentId}`)}
+          >
+            <MessageSquare size={16} /> Ask this agent
+          </button>
+        </div>
+      )}
+
+      {/* Tab Navigation */}
+      <div className="workspace-tabs" style={{ marginBottom: 24 }}>
+        {TABS.map(t => {
+          const Icon = t.icon
+          return (
+            <button
+              key={t.id}
+              className={`workspace-tab ${tab === t.id ? 'active' : ''}`}
+              onClick={() => setTab(t.id)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <Icon size={14} /> {t.label}
+            </button>
+          )
+        })}
+      </div>
+
       {/* Search toggle */}
+      {tab === 'configure' && (
       <div className="card" style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <div style={{ fontWeight: 600, marginBottom: 2 }}>Include on Search page</div>
@@ -889,21 +931,10 @@ export default function AgentDetail() {
           }
         </button>
       </div>
-
-      {/* Ask this agent */}
-      {readyDocs.length > 0 && agent.system_prompt && (
-        <div style={{ marginBottom: 24 }}>
-          <button
-            className="btn btn-primary"
-            style={{ width: '100%', padding: 12, justifyContent: 'center', fontSize: '0.9375rem' }}
-            onClick={() => navigate(`/search?workspace=${agentId}`)}
-          >
-            <MessageSquare size={16} /> Ask this agent
-          </button>
-        </div>
       )}
 
       {/* Files */}
+      {tab === 'knowledge' && (
       <div className="card" style={{ marginBottom: 24 }}>
         <h3 style={{ marginBottom: 16 }}>Files</h3>
 
@@ -984,9 +1015,10 @@ export default function AgentDetail() {
           </div>
         )}
       </div>
+      )}
 
       {/* Replica Personality Profile */}
-      {agent.agent_type === 'digital_replica' && (
+      {tab === 'configure' && agent.agent_type === 'digital_replica' && (
         <div className="card" style={{ marginBottom: 24, borderColor: 'rgba(255,255,255,0.12)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1103,6 +1135,7 @@ export default function AgentDetail() {
       )}
 
       {/* System Prompt */}
+      {tab === 'configure' && (
       <div className="card" style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1153,8 +1186,10 @@ export default function AgentDetail() {
           This prompt tells the AI how to interpret and answer questions about the files in this agent.
         </div>
       </div>
+      )}
 
       {/* Tools */}
+      {tab === 'tools' && (
       <div className="card" style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1589,8 +1624,10 @@ export default function AgentDetail() {
           </div>
         ) : null}
       </div>
+      )}
 
       {/* ════════════ Live Connectors (Google Drive) ════════════ */}
+      {tab === 'knowledge' && (
       <div className="card" style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1835,8 +1872,10 @@ export default function AgentDetail() {
           </div>
         )}
       </div>
+      )}
 
       {/* MCP Connections */}
+      {tab === 'tools' && (
       <div className="card" style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2196,8 +2235,10 @@ export default function AgentDetail() {
           </div>
         ) : null}
       </div>
+      )}
 
       {/* Sub-Agents (Orchestration) */}
+      {tab === 'tools' && (
       <div className="card" style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2320,8 +2361,10 @@ export default function AgentDetail() {
           </div>
         )}
       </div>
+      )}
 
       {/* Scheduled Runs */}
+      {tab === 'behavior' && (
       <div className="card" style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2605,8 +2648,10 @@ export default function AgentDetail() {
           </div>
         )}
       </div>
+      )}
 
       {/* Agent Memory */}
+      {tab === 'behavior' && (
       <div className="card" style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2823,8 +2868,10 @@ export default function AgentDetail() {
           </div>
         )}
       </div>
+      )}
 
       {/* API Keys */}
+      {tab === 'deploy' && (
       <div className="card" style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2894,9 +2941,10 @@ export default function AgentDetail() {
           </div>
         )}
       </div>
+      )}
 
       {/* Widget Customizer + Embed */}
-      {agent.system_prompt && (
+      {tab === 'deploy' && agent.system_prompt && (
         <div className="card" style={{ marginBottom: 24 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -3034,7 +3082,7 @@ export default function AgentDetail() {
       )}
 
       {/* Publish to Marketplace */}
-      {agent.system_prompt && (
+      {tab === 'deploy' && agent.system_prompt && (
         <div className="card" style={{ marginBottom: 24 }}>
           {published ? (
             <div style={{ textAlign: 'center', padding: '8px 0' }}>
