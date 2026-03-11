@@ -37,6 +37,12 @@ export default function Demo() {
   const [error, setError] = useState(null)
   const bottomRef = useRef(null)
 
+  // Widget customizer
+  const [widgetColor, setWidgetColor] = useState('#ffffff')
+  const [widgetGreeting, setWidgetGreeting] = useState('Hi! Ask me anything.')
+  const [widgetPosition, setWidgetPosition] = useState('right')
+  const [widgetSubtitle, setWidgetSubtitle] = useState('Powered by Cane')
+
   // Deploy
   const [copied, setCopied] = useState(false)
 
@@ -204,10 +210,10 @@ export default function Demo() {
   data-api-key="${session.api_key}"
   data-agent-name="${agentName}"
   data-workspace-id="${session.workspace_id}"
-  data-color="#ffffff"
-  data-greeting="Hi! Ask me anything."
-  data-position="right"
-  data-subtitle="Powered by Cane"
+  data-color="${widgetColor}"
+  data-greeting="${widgetGreeting}"
+  data-position="${widgetPosition}"
+  data-subtitle="${widgetSubtitle}"
   data-placeholder="Type a message..."
   data-border-radius="16"
 ></script>`
@@ -449,6 +455,68 @@ export default function Demo() {
         </div>
       </div>
 
+      {/* Webhook Tools teaser */}
+      <div className="card" style={{ marginBottom: 24, opacity: 0.5 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+            </svg>
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>Webhook Tools</div>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                Connect HTTP actions. Fire-and-forget notifications or wait-for-response data lookups
+              </div>
+            </div>
+          </div>
+          <Link to="/register" className="btn btn-outline" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+            Requires account
+          </Link>
+        </div>
+      </div>
+
+      {/* Sub-Agent Orchestration teaser */}
+      <div className="card" style={{ marginBottom: 24, opacity: 0.5 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>Sub-Agent Orchestration</div>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                Link specialist agents as tools. A supervisor delegates questions to the right expert automatically
+              </div>
+            </div>
+          </div>
+          <Link to="/register" className="btn btn-outline" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+            Requires account
+          </Link>
+        </div>
+      </div>
+
+      {/* MCP Connections teaser */}
+      <div className="card" style={{ marginBottom: 24, opacity: 0.5 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="2" y1="12" x2="22" y2="12" />
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            </svg>
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>MCP Connections</div>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                Connect to Slack, Google Calendar, HubSpot, and more via Model Context Protocol
+              </div>
+            </div>
+          </div>
+          <Link to="/register" className="btn btn-outline" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+            Requires account
+          </Link>
+        </div>
+      </div>
+
       {/* Ask section */}
       <div style={{ marginBottom: 24 }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
@@ -522,6 +590,107 @@ export default function Demo() {
 
       <div ref={bottomRef} />
 
+      {/* Widget Customizer */}
+      {readyDocs.length > 0 && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <h3 style={{ margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            Widget Customizer
+          </h3>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+            <div>
+              <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4, color: 'var(--text-muted)' }}>Color</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="color"
+                  value={widgetColor}
+                  onChange={e => setWidgetColor(e.target.value)}
+                  style={{ width: 32, height: 32, border: 'none', borderRadius: 6, cursor: 'pointer', background: 'transparent' }}
+                />
+                <input
+                  type="text"
+                  value={widgetColor}
+                  onChange={e => setWidgetColor(e.target.value)}
+                  style={{
+                    flex: 1, padding: '6px 10px', background: 'var(--paper)',
+                    border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--text)',
+                    fontSize: '0.8125rem', fontFamily: "'SF Mono', Consolas, monospace",
+                  }}
+                />
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4, color: 'var(--text-muted)' }}>Position</label>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {['left', 'right'].map(pos => (
+                  <button
+                    key={pos}
+                    onClick={() => setWidgetPosition(pos)}
+                    style={{
+                      flex: 1, padding: '6px 12px', borderRadius: 6, fontSize: '0.8125rem',
+                      border: '1px solid var(--rule)', cursor: 'pointer',
+                      background: widgetPosition === pos ? 'rgba(255,255,255,0.1)' : 'var(--paper)',
+                      color: widgetPosition === pos ? '#fff' : 'var(--text-muted)',
+                      fontWeight: widgetPosition === pos ? 600 : 400,
+                    }}
+                  >
+                    {pos.charAt(0).toUpperCase() + pos.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4, color: 'var(--text-muted)' }}>Greeting</label>
+              <input
+                type="text"
+                value={widgetGreeting}
+                onChange={e => setWidgetGreeting(e.target.value)}
+                placeholder="Hi! Ask me anything."
+                style={{
+                  width: '100%', padding: '6px 10px', background: 'var(--paper)',
+                  border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--text)',
+                  fontSize: '0.8125rem',
+                }}
+              />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4, color: 'var(--text-muted)' }}>Subtitle</label>
+              <input
+                type="text"
+                value={widgetSubtitle}
+                onChange={e => setWidgetSubtitle(e.target.value)}
+                placeholder="Powered by Cane"
+                style={{
+                  width: '100%', padding: '6px 10px', background: 'var(--paper)',
+                  border: '1px solid var(--rule)', borderRadius: 6, color: 'var(--text)',
+                  fontSize: '0.8125rem',
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Live preview bubble */}
+          <div style={{
+            display: 'flex', justifyContent: widgetPosition === 'right' ? 'flex-end' : 'flex-start',
+            marginTop: 8,
+          }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: '50%',
+              background: widgetColor, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
+            }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={widgetColor === '#ffffff' || widgetColor === '#fff' ? '#000' : '#fff'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Deploy card */}
       {readyDocs.length > 0 && (
         <div className="card" style={{ marginBottom: 24 }}>
@@ -567,10 +736,10 @@ export default function Demo() {
             {'  '}<span style={{ color: '#a6e3a1' }}>data-api-key</span>=<span style={{ color: '#f9e2af' }}>"{session?.api_key}"</span><br />
             {'  '}<span style={{ color: '#a6e3a1' }}>data-agent-name</span>=<span style={{ color: '#f9e2af' }}>"{agentName}"</span><br />
             {'  '}<span style={{ color: '#a6e3a1' }}>data-workspace-id</span>=<span style={{ color: '#f9e2af' }}>"{session?.workspace_id}"</span><br />
-            {'  '}<span style={{ color: '#a6e3a1' }}>data-color</span>=<span style={{ color: '#f9e2af' }}>"#ffffff"</span><br />
-            {'  '}<span style={{ color: '#a6e3a1' }}>data-greeting</span>=<span style={{ color: '#f9e2af' }}>"Hi! Ask me anything."</span><br />
-            {'  '}<span style={{ color: '#a6e3a1' }}>data-position</span>=<span style={{ color: '#f9e2af' }}>"right"</span><br />
-            {'  '}<span style={{ color: '#a6e3a1' }}>data-subtitle</span>=<span style={{ color: '#f9e2af' }}>"Powered by Cane"</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-color</span>=<span style={{ color: '#f9e2af' }}>"{widgetColor}"</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-greeting</span>=<span style={{ color: '#f9e2af' }}>"{widgetGreeting}"</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-position</span>=<span style={{ color: '#f9e2af' }}>"{widgetPosition}"</span><br />
+            {'  '}<span style={{ color: '#a6e3a1' }}>data-subtitle</span>=<span style={{ color: '#f9e2af' }}>"{widgetSubtitle}"</span><br />
             {'  '}<span style={{ color: '#a6e3a1' }}>data-placeholder</span>=<span style={{ color: '#f9e2af' }}>"Type a message..."</span><br />
             {'  '}<span style={{ color: '#a6e3a1' }}>data-border-radius</span>=<span style={{ color: '#f9e2af' }}>"16"</span><br />
             <span style={{ color: '#89b4fa' }}>&gt;&lt;/script&gt;</span>
@@ -588,6 +757,49 @@ export default function Demo() {
           </div>
         </div>
       )}
+
+      {/* Eval Engine teaser */}
+      <div className="card" style={{ marginBottom: 24, opacity: 0.5 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>Evaluation Engine</div>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                Write test cases, run automated LLM-as-Judge scoring, track accuracy over time
+              </div>
+            </div>
+          </div>
+          <Link to="/register" className="btn btn-outline" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+            Requires account
+          </Link>
+        </div>
+      </div>
+
+      {/* Analytics teaser */}
+      <div className="card" style={{ marginBottom: 24, opacity: 0.5 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="20" x2="18" y2="10" />
+              <line x1="12" y1="20" x2="12" y2="4" />
+              <line x1="6" y1="20" x2="6" y2="14" />
+            </svg>
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>Analytics Dashboard</div>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                Per-agent conversation tracking, response times, tool usage, satisfaction scores
+              </div>
+            </div>
+          </div>
+          <Link to="/register" className="btn btn-outline" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+            Requires account
+          </Link>
+        </div>
+      </div>
 
       {/* Rate limit CTA */}
       {rateLimited && (
@@ -607,8 +819,9 @@ export default function Demo() {
       {/* Bottom CTA */}
       {!rateLimited && (
         <div style={{ textAlign: 'center', padding: '24px 0', borderTop: '1px solid var(--rule)', marginTop: 24 }}>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 12 }}>
-            Want permanent agents, Google Drive sync, webhook tools, eval suites, and a public API?
+          <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.7 }}>
+            Unlock everything: permanent agents, Google Drive sync, webhook tools,
+            sub-agent orchestration, MCP connections, automated eval, analytics, and a public API.
           </div>
           <Link to="/register" className="btn btn-outline" style={{ fontSize: '0.82rem' }}>
             Create a free account
