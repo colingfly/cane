@@ -405,7 +405,7 @@ function LiveConnectorsTab() {
       <SectionBlock title="Connecting Google Drive">
         <QA
           q="How do I connect Google Drive?"
-          a='Go to your agent detail page and find the "Live Connectors" section. Click "Connect Google Drive." A popup window opens for Google sign-in. Authorize Cane to read your Drive files (read-only access). Once connected, you\'ll see your Google account email and can start picking folders to sync.'
+          a={"Go to your agent detail page and find the \"Live Connectors\" section. Click \"Connect Google Drive.\" A popup window opens for Google sign-in. Authorize Cane to read your Drive files (read-only access). Once connected, you'll see your Google account email and can start picking folders to sync."}
         />
         <QA
           q="What permissions does Cane need?"
@@ -420,7 +420,7 @@ function LiveConnectorsTab() {
       <SectionBlock title="Syncing Folders">
         <QA
           q="How do I sync a folder?"
-          a='After connecting Google Drive, use the folder search to find the folder you want. Select it and click "Start Sync." Cane downloads every supported file in that folder, processes it through the ingestion pipeline, and adds it to your agent\'s knowledge base.'
+          a={"After connecting Google Drive, use the folder search to find the folder you want. Select it and click \"Start Sync.\" Cane downloads every supported file in that folder, processes it through the ingestion pipeline, and adds it to your agent's knowledge base."}
         />
         <QA
           q="What file types are synced?"
