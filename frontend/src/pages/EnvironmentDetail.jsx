@@ -666,10 +666,10 @@ export default function EnvironmentDetail() {
           {running && (
             <div style={{
               marginBottom: 20, textAlign: 'center', padding: 24,
-              background: 'var(--cane-900)', borderRadius: 8, border: '1px solid var(--rule)',
+              background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--rule)',
               position: 'relative', overflow: 'hidden',
             }}>
-              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, var(--accent), var(--gold))' }} />
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'rgba(255,255,255,0.15)' }} />
               <div className="spinner" style={{ margin: '0 auto 12px', width: 24, height: 24, borderColor: 'var(--cane-800)', borderTopColor: 'var(--accent)' }} />
               <div style={{ fontWeight: 700, marginBottom: 4, color: 'var(--text-inverse)' }}>Evaluation running...</div>
               <div style={{ fontSize: '0.78rem', color: 'var(--cane-700)', marginBottom: 8 }}>
@@ -729,10 +729,10 @@ export default function EnvironmentDetail() {
                 <div style={{ display: 'flex', alignItems: 'stretch', marginBottom: 22, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--rule)', background: 'var(--bg-card)' }}>
                   {/* Big score — dark brown */}
                   <div style={{
-                    background: 'var(--cane-900)', padding: '22px 28px',
+                    background: 'rgba(255,255,255,0.04)', padding: '22px 28px',
                     minWidth: 160, position: 'relative',
                   }}>
-                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, var(--accent), var(--gold))' }} />
+                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'rgba(255,255,255,0.15)' }} />
                     <div style={{ fontSize: '0.58rem', color: 'var(--cane-700)', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>
                       Overall Score
                     </div>

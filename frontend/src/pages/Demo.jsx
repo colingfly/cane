@@ -6,18 +6,15 @@ const MAX_MESSAGES = 10
 
 export default function Demo() {
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: "This is a live AI agent running on Cane. Upload your own documents and ask questions — everything stays isolated to this session." },
+    { role: 'assistant', content: "Upload your documents and ask questions — everything stays isolated to this session." },
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [msgCount, setMsgCount] = useState(0)
-  const [pipelineData, setPipelineData] = useState(null)
-  const [pipelineLoading, setPipelineLoading] = useState(false)
-  const [lastMeta, setLastMeta] = useState(null)
   const [uploadedFiles, setUploadedFiles] = useState([])
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
-  const [session, setSession] = useState(null) // { workspace_id, api_key }
+  const [session, setSession] = useState(null)
   const [sessionLoading, setSessionLoading] = useState(true)
   const fileInputRef = useRef(null)
   const bottomRef = useRef(null)
@@ -86,8 +83,6 @@ export default function Demo() {
     }
     setUploadedFiles(prev => [...prev, ...newFiles])
     setUploading(false)
-
-    // Poll for processing completion
     pollDocuments()
   }
 
@@ -108,7 +103,6 @@ export default function Demo() {
         clearInterval(interval)
       }
     }, 2000)
-    // Stop polling after 60s max
     setTimeout(() => clearInterval(interval), 60000)
   }
 
@@ -124,7 +118,6 @@ export default function Demo() {
     if (!q || loading) return
     setInput('')
 
-    // Check if user has uploaded any docs
     const readyDocs = uploadedFiles.filter(f => f.status === 'ready')
     if (readyDocs.length === 0 && uploadedFiles.length === 0) {
       setMessages(prev => [...prev,
@@ -138,48 +131,26 @@ export default function Demo() {
     setMessages(prev => [...prev, { role: 'user', content: q }])
     setMsgCount(prev => prev + 1)
     setLoading(true)
-    setPipelineLoading(true)
-    setPipelineData(null)
-    setLastMeta(null)
-
-    const t0 = Date.now()
 
     try {
       const headers = { 'Authorization': `Bearer ${session.api_key}`, 'Content-Type': 'application/json' }
 
-      const [askRes, searchRes] = await Promise.all([
-        fetch(`${API_BASE}/v1/ask`, {
-          method: 'POST', headers,
-          body: JSON.stringify({ query: q, workspace_id: session.workspace_id, history }),
-        }),
-        fetch(`${API_BASE}/v1/search`, {
-          method: 'POST', headers,
-          body: JSON.stringify({ query: q, workspace_id: session.workspace_id, max_results: 5 }),
-        }),
-      ])
+      const askRes = await fetch(`${API_BASE}/v1/ask`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ query: q, workspace_id: session.workspace_id, history }),
+      })
 
       const askData = await askRes.json()
-      const searchData = await searchRes.json()
-      const elapsed = ((Date.now() - t0) / 1000).toFixed(1)
 
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: askData.answer || askData.error || 'No response.',
         sources: askData.sources || [],
       }])
-
-      setPipelineData(searchData)
-      setLastMeta({
-        model: askData.model || 'claude-3.5-sonnet',
-        chunksUsed: askData.chunks_used || 0,
-        sources: askData.sources || [],
-        elapsed,
-      })
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Connection error. Try again.' }])
     } finally {
       setLoading(false)
-      setPipelineLoading(false)
     }
   }
 
@@ -208,7 +179,6 @@ export default function Demo() {
       </div>
 
       <div className="demo-body">
-        {/* Left: tiles + chat + input */}
         <div className="demo-main">
           {/* Connector tiles */}
           <div className="demo-tiles">
@@ -310,7 +280,7 @@ export default function Demo() {
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={handleKey}
-                  placeholder="Ask anything..."
+                  placeholder="Ask anything about your documents..."
                   disabled={loading}
                 />
                 <button onClick={() => send()} disabled={loading || !input.trim()} className="demo-send">
@@ -327,69 +297,6 @@ export default function Demo() {
               Powered by <Link to="/">Cane</Link>
             </div>
           </div>
-        </div>
-
-        {/* Right: Pipeline panel */}
-        <div className="demo-pipeline">
-          <div className="demo-pipe-header">Pipeline</div>
-
-          {!pipelineData && !pipelineLoading && (
-            <div className="demo-pipe-empty">
-              <div className="demo-pipe-empty-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="8" />
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
-              </div>
-              <p>Ask a question to see the RAG pipeline in action</p>
-            </div>
-          )}
-
-          {pipelineLoading && (
-            <div className="demo-pipe-loading">
-              <div className="demo-pipe-loading-bar" />
-              <span>Retrieving chunks...</span>
-            </div>
-          )}
-
-          {pipelineData && (
-            <div className="demo-pipe-results">
-              <div className="demo-pipe-section">
-                <div className="demo-pipe-label">Retrieval</div>
-                {pipelineData.results?.map((chunk, i) => (
-                  <div className="demo-pipe-chunk" key={i}>
-                    <div className="demo-pipe-chunk-head">
-                      <span className={`demo-pipe-score${chunk.score >= 0.7 ? ' high' : chunk.score >= 0.4 ? ' mid' : ''}`}>
-                        {(chunk.score * 100).toFixed(0)}%
-                      </span>
-                      <span className="demo-pipe-file">{chunk.source_file}</span>
-                      {chunk.metadata?.page != null && (
-                        <span className="demo-pipe-page">p.{chunk.metadata.page + 1}</span>
-                      )}
-                    </div>
-                    <div className="demo-pipe-text">
-                      {chunk.text?.length > 180 ? chunk.text.slice(0, 180) + '...' : chunk.text}
-                    </div>
-                  </div>
-                ))}
-                {pipelineData.results?.length === 0 && (
-                  <div className="demo-pipe-none">No chunks retrieved</div>
-                )}
-              </div>
-
-              {lastMeta && (
-                <div className="demo-pipe-section">
-                  <div className="demo-pipe-label">Generation</div>
-                  <div className="demo-pipe-meta">
-                    <div><span>Model</span><span>{lastMeta.model}</span></div>
-                    <div><span>Chunks used</span><span>{lastMeta.chunksUsed}</span></div>
-                    <div><span>Sources</span><span>{lastMeta.sources.length}</span></div>
-                    <div><span>Latency</span><span>{lastMeta.elapsed}s</span></div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -429,17 +336,18 @@ const demoStyles = `
   color: rgba(255,255,255,0.2);
 }
 
-/* Body: chat + pipeline */
 .demo-body {
   flex: 1;
   display: flex;
   overflow: hidden;
+  justify-content: center;
 }
 
 .demo-main {
   flex: 1;
   display: flex;
   flex-direction: column;
+  max-width: 720px;
   min-width: 0;
 }
 
@@ -449,7 +357,6 @@ const demoStyles = `
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  max-width: 640px;
   flex-shrink: 0;
 }
 
@@ -477,9 +384,9 @@ const demoStyles = `
 
 .demo-tile svg { flex-shrink: 0; opacity: 0.4; }
 
-.demo-tile-text { display: flex; flex-direction: column; gap: 1px; flex: 1; }
+.demo-tile-text { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
 .demo-tile-title { font-size: 0.78rem; font-weight: 600; color: rgba(255,255,255,0.6); }
-.demo-tile-sub { font-size: 0.65rem; color: rgba(255,255,255,0.2); }
+.demo-tile-sub { font-size: 0.65rem; color: rgba(255,255,255,0.2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .demo-tile-badge {
   font-size: 0.55rem; color: rgba(255,255,255,0.2);
   padding: 2px 6px; border: 1px solid rgba(255,255,255,0.06);
@@ -493,7 +400,7 @@ const demoStyles = `
   padding: 20px 24px;
 }
 
-.demo-chat-inner { max-width: 640px; }
+.demo-chat-inner { }
 
 .demo-msg { margin-bottom: 20px; }
 .demo-msg-user { display: flex; justify-content: flex-end; }
@@ -541,7 +448,6 @@ const demoStyles = `
 }
 
 .demo-input-wrap {
-  max-width: 640px;
   display: flex;
   gap: 8px;
   background: rgba(255,255,255,0.04);
@@ -576,7 +482,6 @@ const demoStyles = `
 .demo-send:disabled { opacity: 0.3; cursor: default; }
 
 .demo-rate-limit {
-  max-width: 640px;
   text-align: center;
   display: flex; flex-direction: column; align-items: center; gap: 10px;
 }
@@ -599,191 +504,6 @@ const demoStyles = `
 
 .demo-footer a { color: rgba(255,255,255,0.25); text-decoration: none; }
 
-/* Pipeline panel */
-.demo-pipeline {
-  width: 320px;
-  border-left: 1px solid rgba(255,255,255,0.06);
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  flex-shrink: 0;
-}
-
-.demo-pipe-header {
-  padding: 14px 20px;
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: rgba(255,255,255,0.2);
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  flex-shrink: 0;
-}
-
-.demo-pipe-empty {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 40px 24px;
-}
-
-.demo-pipe-empty-icon { color: rgba(255,255,255,0.1); }
-
-.demo-pipe-empty p {
-  font-size: 0.72rem;
-  color: rgba(255,255,255,0.15);
-  text-align: center;
-  line-height: 1.5;
-}
-
-.demo-pipe-loading {
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.demo-pipe-loading span {
-  font-size: 0.68rem;
-  color: rgba(255,255,255,0.2);
-}
-
-.demo-pipe-loading-bar {
-  height: 2px;
-  background: rgba(255,255,255,0.06);
-  border-radius: 1px;
-  overflow: hidden;
-  position: relative;
-}
-
-.demo-pipe-loading-bar::after {
-  content: '';
-  position: absolute;
-  top: 0; left: 0;
-  height: 100%; width: 40%;
-  background: rgba(255,255,255,0.2);
-  border-radius: 1px;
-  animation: pipeSlide 1s ease infinite;
-}
-
-@keyframes pipeSlide {
-  0% { left: -40%; }
-  100% { left: 100%; }
-}
-
-.demo-pipe-results {
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.demo-pipe-section {}
-
-.demo-pipe-label {
-  font-size: 0.58rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: rgba(255,255,255,0.15);
-  margin-bottom: 10px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
-}
-
-.demo-pipe-chunk {
-  padding: 10px 12px;
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.05);
-  border-radius: 6px;
-  margin-bottom: 8px;
-}
-
-.demo-pipe-chunk-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-
-.demo-pipe-score {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.62rem;
-  font-weight: 600;
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: rgba(255,255,255,0.06);
-  color: rgba(255,255,255,0.3);
-}
-
-.demo-pipe-score.high {
-  background: rgba(74,222,128,0.1);
-  color: rgba(74,222,128,0.7);
-}
-
-.demo-pipe-score.mid {
-  background: rgba(251,191,36,0.1);
-  color: rgba(251,191,36,0.6);
-}
-
-.demo-pipe-file {
-  font-size: 0.62rem;
-  font-weight: 500;
-  color: rgba(255,255,255,0.35);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-}
-
-.demo-pipe-page {
-  font-size: 0.58rem;
-  color: rgba(255,255,255,0.15);
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.demo-pipe-text {
-  font-size: 0.62rem;
-  line-height: 1.55;
-  color: rgba(255,255,255,0.2);
-}
-
-.demo-pipe-none {
-  font-size: 0.68rem;
-  color: rgba(255,255,255,0.15);
-  padding: 12px 0;
-}
-
-.demo-pipe-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.demo-pipe-meta > div {
-  display: flex;
-  justify-content: space-between;
-  padding: 6px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
-}
-
-.demo-pipe-meta > div:last-child { border-bottom: none; }
-
-.demo-pipe-meta span:first-child {
-  font-size: 0.62rem;
-  color: rgba(255,255,255,0.2);
-}
-
-.demo-pipe-meta span:last-child {
-  font-size: 0.62rem;
-  color: rgba(255,255,255,0.4);
-  font-family: 'JetBrains Mono', monospace;
-}
-
 /* Typing indicator */
 .demo-typing { display: flex; gap: 4px; padding: 8px 0; }
 .demo-typing span {
@@ -800,7 +520,9 @@ const demoStyles = `
 
 /* Responsive */
 @media (max-width: 768px) {
-  .demo-pipeline { display: none; }
   .demo-tiles { grid-template-columns: 1fr; }
+  .demo-nav { padding: 0 16px; }
+  .demo-chat { padding: 16px; }
+  .demo-input-area { padding: 12px 16px 16px; }
 }
 `

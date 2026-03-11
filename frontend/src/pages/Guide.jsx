@@ -562,7 +562,7 @@ function WidgetTab() {
         <QA
           q="How do I embed the widget?"
           a='Copy the embed snippet from the agent detail page and paste it before the closing </body> tag on your website. The snippet includes all your customization settings as data attributes. You need an API key — generate one in Settings and scope it to the agent.'
-          code={'<script\n  src="https://cane.fyi/widget.js"\n  data-api-key="cane_your_key_here"\n  data-agent-name="My Support Agent"\n  data-workspace-id="your-agent-id"\n  data-color="#c8963e"\n  data-greeting="Hi! How can I help?"\n  data-logo-url="https://yoursite.com/logo.png"\n  data-auto-open="5"\n></script>'}
+          code={'<script\n  src="https://cane.fyi/widget.js"\n  data-api-key="cane_your_key_here"\n  data-agent-name="My Support Agent"\n  data-workspace-id="your-agent-id"\n  data-color="#ffffff"\n  data-greeting="Hi! How can I help?"\n  data-logo-url="https://yoursite.com/logo.png"\n  data-auto-open="5"\n></script>'}
         />
         <QA
           q="What data attributes are available?"
@@ -584,7 +584,7 @@ function DeployTab() {
         <QA
           q="How do I add the chat widget to my site?"
           a='Copy the embed snippet from your agent detail page and paste it before the closing </body> tag. The widget is self-contained — one script tag, no dependencies.'
-          code={'<script\n  src="https://cane.fyi/widget.js"\n  data-api-key="cane_your_key_here"\n  data-agent-name="Support Agent"\n  data-workspace-id="your-agent-id"\n  data-color="#c8963e"\n  data-greeting="Hi! How can I help?"\n></script>'}
+          code={'<script\n  src="https://cane.fyi/widget.js"\n  data-api-key="cane_your_key_here"\n  data-agent-name="Support Agent"\n  data-workspace-id="your-agent-id"\n  data-color="#ffffff"\n  data-greeting="Hi! How can I help?"\n></script>'}
         />
         <QA
           q="Can I customize the look?"
