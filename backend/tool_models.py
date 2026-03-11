@@ -49,3 +49,23 @@ class AgentTool(Base):
 
     def __repr__(self):
         return f"<AgentTool {self.name} type={self.tool_type}>"
+
+
+class AgentLink(Base):
+    """Links a parent agent to a child agent, exposing the child as a callable tool."""
+    __tablename__ = "agent_links"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    parent_workspace_id = Column(String(36), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    child_workspace_id = Column(String(36), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    tenant_id = Column(String(36), ForeignKey("tenants.id"), nullable=False)
+
+    tool_name = Column(String(64), nullable=False)        # e.g. "payroll_agent"
+    tool_description = Column(Text, nullable=False)        # Tells Claude when to delegate
+
+    is_enabled = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<AgentLink {self.parent_workspace_id} -> {self.child_workspace_id}>"

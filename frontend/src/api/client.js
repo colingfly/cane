@@ -384,6 +384,30 @@ export async function copyTools(sourceWorkspaceId, targetWorkspaceId) {
   return request(`/tools/copy?${qs.toString()}`, { method: 'POST' })
 }
 
+// ─── Agent Links (Sub-Agent Orchestration) ───
+
+export async function getAgentLinks(agentId) {
+  return request(`/agents/${agentId}/links`)
+}
+
+export async function createAgentLink(agentId, data) {
+  return request(`/agents/${agentId}/links`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function updateAgentLink(agentId, linkId, data) {
+  return request(`/agents/${agentId}/links/${linkId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteAgentLink(agentId, linkId) {
+  return request(`/agents/${agentId}/links/${linkId}`, { method: 'DELETE' })
+}
+
 // ─── MCP Servers ───
 
 export async function getMcpCatalog() {

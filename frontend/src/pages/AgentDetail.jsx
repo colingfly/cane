@@ -8,6 +8,7 @@ import {
   getMcpCatalog, getMcpServers, connectMcpServer, updateMcpServer, deleteMcpServer, syncMcpServer,
   getWidgetConfig, updateWidgetConfig,
   createApiKey, deleteApiKey, getApiKeys, getAgents,
+  getAgentLinks, createAgentLink, updateAgentLink, deleteAgentLink,
   getGdriveAuthUrl, getGdriveStatus, disconnectGdrive,
   listDriveFolders, listSyncs, createSync, getSync, triggerSync, updateSyncStatus, deleteSync,
 } from '../api/client'
@@ -128,6 +129,12 @@ export default function AgentDetail() {
   })
   const [replicaGenerating, setReplicaGenerating] = useState(false)
 
+  // Sub-Agent Links
+  const [agentLinks, setAgentLinks] = useState([])
+  const [showAddLink, setShowAddLink] = useState(false)
+  const [availableAgents, setAvailableAgents] = useState([])
+  const [newLink, setNewLink] = useState({ child_agent_id: '', tool_name: '', tool_description: '' })
+
   useEffect(() => { loadAgent() }, [agentId])
 
   const loadAgent = async () => {
@@ -154,6 +161,18 @@ export default function AgentDetail() {
         const mcpRes = await getMcpServers(agentId)
         setMcpServers(mcpRes.servers || [])
       } catch { setMcpServers([]) }
+
+      // Load sub-agent links
+      try {
+        const linksRes = await getAgentLinks(agentId)
+        setAgentLinks(linksRes.links || [])
+      } catch { setAgentLinks([]) }
+
+      // Load available agents for linking
+      try {
+        const allAgents = await getAgents()
+        setAvailableAgents((allAgents.agents || []).filter(a => a.id !== agentId))
+      } catch { setAvailableAgents([]) }
 
       // Load widget config
       try {
@@ -719,6 +738,37 @@ export default function AgentDetail() {
       setSyncFiles(prev => ({ ...prev, [syncId]: res.files || [] }))
     } catch { /* ignore */ }
   }
+
+  // Sub-Agent Link handlers
+  const handleAddLink = async () => {
+    if (!newLink.child_agent_id || !newLink.tool_name || !newLink.tool_description) return
+    try {
+      const res = await createAgentLink(agentId, newLink)
+      setAgentLinks(prev => [res, ...prev])
+      setNewLink({ child_agent_id: '', tool_name: '', tool_description: '' })
+      setShowAddLink(false)
+    } catch (e) {
+      alert(e.message)
+    }
+  }
+
+  const handleToggleLink = async (link) => {
+    try {
+      await updateAgentLink(agentId, link.id, { is_enabled: !link.is_enabled })
+      setAgentLinks(prev => prev.map(l => l.id === link.id ? { ...l, is_enabled: !l.is_enabled } : l))
+    } catch (e) { alert(e.message) }
+  }
+
+  const handleDeleteLink = async (linkId) => {
+    if (!confirm('Remove this sub-agent link?')) return
+    try {
+      await deleteAgentLink(agentId, linkId)
+      setAgentLinks(prev => prev.filter(l => l.id !== linkId))
+    } catch (e) { alert(e.message) }
+  }
+
+  const linkedAgentIds = new Set(agentLinks.map(l => l.child_agent_id))
+  const linkableAgents = availableAgents.filter(a => !linkedAgentIds.has(a.id))
 
   if (loading) return <div className="loading-center"><div className="spinner" /></div>
   if (!agent) return <div className="fade-in"><p>Agent not found.</p></div>
@@ -2104,6 +2154,130 @@ export default function AgentDetail() {
             </div>
           </div>
         ) : null}
+      </div>
+
+      {/* Sub-Agents (Orchestration) */}
+      <div className="card" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Zap size={16} /> Sub-Agents
+            {agentLinks.length > 0 && (
+              <span style={{
+                fontSize: '0.65rem', fontWeight: 700, background: 'var(--cane-100)',
+                color: 'var(--cane-700)', padding: '2px 8px', borderRadius: 10,
+              }}>{agentLinks.length}</span>
+            )}
+          </h3>
+          <button className="btn btn-ghost" onClick={() => setShowAddLink(!showAddLink)} style={{ fontSize: '0.82rem' }}>
+            {showAddLink ? <X size={14} /> : <Plus size={14} />} {showAddLink ? 'Cancel' : 'Link Agent'}
+          </button>
+        </div>
+
+        {showAddLink && (
+          <div style={{
+            background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)',
+            borderRadius: 10, padding: 16, marginBottom: 16,
+          }}>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: '0.78rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Agent</label>
+              <select
+                value={newLink.child_agent_id}
+                onChange={e => setNewLink(prev => ({ ...prev, child_agent_id: e.target.value }))}
+                style={{
+                  width: '100%', padding: '8px 12px', background: 'var(--bg-card)',
+                  border: '1px solid var(--border)', borderRadius: 8, color: '#fff', fontSize: '0.85rem',
+                }}
+              >
+                <option value="">Select an agent to link...</option>
+                {linkableAgents.map(a => (
+                  <option key={a.id} value={a.id}>{a.agent_icon || ''} {a.name}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: '0.78rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Tool Name</label>
+              <input
+                type="text" placeholder="e.g. payroll_agent" maxLength={64}
+                value={newLink.tool_name}
+                onChange={e => setNewLink(prev => ({ ...prev, tool_name: e.target.value }))}
+                style={{
+                  width: '100%', padding: '8px 12px', background: 'var(--bg-card)',
+                  border: '1px solid var(--border)', borderRadius: 8, color: '#fff', fontSize: '0.85rem',
+                }}
+              />
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                How Claude sees this agent in its tool list. Use snake_case.
+              </div>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: '0.78rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Description</label>
+              <textarea
+                placeholder="Describe when Claude should delegate to this agent..."
+                value={newLink.tool_description}
+                onChange={e => setNewLink(prev => ({ ...prev, tool_description: e.target.value }))}
+                rows={2}
+                style={{
+                  width: '100%', padding: '8px 12px', background: 'var(--bg-card)',
+                  border: '1px solid var(--border)', borderRadius: 8, color: '#fff', fontSize: '0.85rem',
+                  resize: 'vertical',
+                }}
+              />
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                Claude reads this to decide when to delegate. Be specific about what this sub-agent handles.
+              </div>
+            </div>
+            <button
+              className="btn btn-primary" onClick={handleAddLink}
+              disabled={!newLink.child_agent_id || !newLink.tool_name || !newLink.tool_description}
+              style={{ fontSize: '0.82rem' }}
+            >
+              <Plus size={14} /> Link Sub-Agent
+            </button>
+          </div>
+        )}
+
+        {agentLinks.map(link => (
+          <div key={link.id} style={{
+            display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0',
+            borderBottom: '1px solid var(--border)',
+          }}>
+            <AgentIcon icon={link.child_agent_icon} size={32} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff' }}>
+                {link.child_agent_name}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                <code style={{ background: 'rgba(255,255,255,0.06)', padding: '1px 6px', borderRadius: 4, fontSize: '0.72rem' }}>
+                  {link.tool_name}
+                </code>
+                {' '}{link.tool_description.length > 80 ? link.tool_description.slice(0, 80) + '...' : link.tool_description}
+              </div>
+            </div>
+            <button
+              onClick={() => handleToggleLink(link)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: link.is_enabled ? 'var(--accent)' : 'var(--text-muted)' }}
+              title={link.is_enabled ? 'Enabled' : 'Disabled'}
+            >
+              {link.is_enabled ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
+            </button>
+            <button
+              onClick={() => handleDeleteLink(link.id)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        ))}
+
+        {agentLinks.length === 0 && !showAddLink && (
+          <div style={{ textAlign: 'center', padding: '20px 16px', color: 'var(--text-muted)' }}>
+            <Zap size={24} style={{ marginBottom: 8, opacity: 0.4 }} />
+            <div style={{ fontSize: '0.84rem', fontWeight: 500 }}>No sub-agents linked</div>
+            <div style={{ fontSize: '0.78rem', marginTop: 4 }}>
+              Link other agents as tools so this agent can delegate questions to specialists.
+            </div>
+          </div>
+        )}
       </div>
 
       {/* API Keys */}

@@ -17,6 +17,7 @@ def run_all():
     _migrate_conversation_logs_table()
     _migrate_widget_config_columns()
     _migrate_connector_tables()
+    _migrate_agent_links_table()
 
 
 def _migrate_agent_columns():
@@ -357,3 +358,30 @@ def _migrate_connector_tables():
         print("  [DB] connector_files table created")
     else:
         print("  [DB] connector_files table already exists")
+
+
+def _migrate_agent_links_table():
+    """Create agent_links table for agent-as-tool orchestration."""
+    insp = inspect(engine)
+    if "agent_links" not in insp.get_table_names():
+        with engine.begin() as conn:
+            conn.execute(text("""
+                CREATE TABLE agent_links (
+                    id VARCHAR(36) PRIMARY KEY,
+                    parent_workspace_id VARCHAR(36) NOT NULL,
+                    child_workspace_id VARCHAR(36) NOT NULL,
+                    tenant_id VARCHAR(36) NOT NULL,
+                    tool_name VARCHAR(64) NOT NULL,
+                    tool_description TEXT NOT NULL,
+                    is_enabled TINYINT(1) DEFAULT 1,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (parent_workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+                    FOREIGN KEY (child_workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+                    FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+                    UNIQUE KEY uq_agent_link (parent_workspace_id, child_workspace_id)
+                )
+            """))
+        print("  [DB] agent_links table created")
+    else:
+        print("  [DB] agent_links table already exists")

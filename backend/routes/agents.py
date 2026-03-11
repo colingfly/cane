@@ -10,6 +10,7 @@ from sqlalchemy import text
 
 from database import get_db
 from db_models import Tenant, User, Workspace, Document, SearchLog, ApiKey
+from tool_models import AgentLink
 from auth import get_current_user
 from agent_prompts import get_template, list_templates, auto_generate_prompt, generate_replica_prompt
 from security import sanitize_form_field
@@ -199,6 +200,9 @@ def delete_agent(agent_id: str, user: User = Depends(get_current_user), db: Sess
         # ── 3. Tools (safe — table might not exist) ──
         _safe_delete(db, "DELETE FROM agent_tools WHERE workspace_id = :wid", {"wid": agent_id})
 
+        # ── 3b. Agent links (parent or child) ──
+        _safe_delete(db, "DELETE FROM agent_links WHERE parent_workspace_id = :wid OR child_workspace_id = :wid", {"wid": agent_id})
+
         # ── 4. MCP servers (safe) ──
         _safe_delete(db, "DELETE FROM mcp_servers WHERE workspace_id = :wid", {"wid": agent_id})
 
@@ -320,3 +324,177 @@ async def generate_replica_prompt_endpoint(
     ws.system_prompt = prompt
     db.commit()
     return {"system_prompt": prompt}
+
+
+# ─────────────────────────────────────────
+#  Agent Links (Sub-Agent Orchestration)
+# ─────────────────────────────────────────
+
+def _has_circular_ref(db: Session, parent_id: str, child_id: str, tenant_id: str, max_depth: int = 2) -> bool:
+    """Check if adding parent->child would create a cycle."""
+    if parent_id == child_id:
+        return True
+    visited = {parent_id}
+    frontier = [child_id]
+    for _ in range(max_depth):
+        if not frontier:
+            break
+        next_frontier = []
+        try:
+            links = db.query(AgentLink).filter(
+                AgentLink.parent_workspace_id.in_(frontier),
+                AgentLink.tenant_id == tenant_id,
+            ).all()
+        except Exception:
+            break
+        for link in links:
+            if link.child_workspace_id in visited:
+                return True
+            visited.add(link.child_workspace_id)
+            next_frontier.append(link.child_workspace_id)
+        frontier = next_frontier
+    return False
+
+
+@router.get("/{agent_id}/links")
+def list_agent_links(agent_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """List sub-agent links for an agent."""
+    try:
+        links = db.query(AgentLink).filter(
+            AgentLink.parent_workspace_id == agent_id,
+            AgentLink.tenant_id == user.tenant_id,
+        ).order_by(AgentLink.created_at.desc()).all()
+    except Exception:
+        return {"links": []}
+
+    result = []
+    for link in links:
+        child = db.query(Workspace).filter(Workspace.id == link.child_workspace_id).first()
+        result.append({
+            "id": link.id,
+            "child_agent_id": link.child_workspace_id,
+            "child_agent_name": child.name if child else "Unknown",
+            "child_agent_icon": (child.agent_icon or "") if child else "",
+            "tool_name": link.tool_name,
+            "tool_description": link.tool_description,
+            "is_enabled": link.is_enabled,
+            "created_at": link.created_at.isoformat() if link.created_at else "",
+        })
+    return {"links": result}
+
+
+@router.post("/{agent_id}/links")
+async def create_agent_link(
+    agent_id: str, request: Request,
+    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """Link a sub-agent to this agent."""
+    body = await request.json()
+    child_agent_id = body.get("child_agent_id", "")
+    tool_name = body.get("tool_name", "").strip()
+    tool_description = body.get("tool_description", "").strip()
+
+    if not child_agent_id or not tool_name or not tool_description:
+        return JSONResponse({"error": "child_agent_id, tool_name, and tool_description are required"}, status_code=400)
+
+    if len(tool_name) > 64:
+        return JSONResponse({"error": "tool_name must be 64 characters or less"}, status_code=400)
+
+    # Verify parent exists and belongs to tenant
+    parent = db.query(Workspace).filter(
+        Workspace.id == agent_id, Workspace.tenant_id == user.tenant_id,
+        Workspace.agent_type.isnot(None),
+    ).first()
+    if not parent:
+        return JSONResponse({"error": "Agent not found"}, status_code=404)
+
+    # Verify child exists and belongs to same tenant
+    child = db.query(Workspace).filter(
+        Workspace.id == child_agent_id, Workspace.tenant_id == user.tenant_id,
+        Workspace.agent_type.isnot(None),
+    ).first()
+    if not child:
+        return JSONResponse({"error": "Sub-agent not found"}, status_code=404)
+
+    # Prevent self-link and circular references
+    if _has_circular_ref(db, agent_id, child_agent_id, user.tenant_id):
+        return JSONResponse({"error": "Cannot create circular agent references"}, status_code=400)
+
+    # Check for existing link
+    existing = db.query(AgentLink).filter(
+        AgentLink.parent_workspace_id == agent_id,
+        AgentLink.child_workspace_id == child_agent_id,
+    ).first()
+    if existing:
+        return JSONResponse({"error": "This sub-agent is already linked"}, status_code=400)
+
+    link = AgentLink(
+        parent_workspace_id=agent_id,
+        child_workspace_id=child_agent_id,
+        tenant_id=user.tenant_id,
+        tool_name=tool_name,
+        tool_description=tool_description,
+    )
+    db.add(link)
+    db.commit()
+    db.refresh(link)
+
+    return {
+        "id": link.id,
+        "child_agent_id": link.child_workspace_id,
+        "child_agent_name": child.name,
+        "child_agent_icon": child.agent_icon or "",
+        "tool_name": link.tool_name,
+        "tool_description": link.tool_description,
+        "is_enabled": link.is_enabled,
+    }
+
+
+@router.put("/{agent_id}/links/{link_id}")
+async def update_agent_link(
+    agent_id: str, link_id: str, request: Request,
+    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """Update a sub-agent link."""
+    link = db.query(AgentLink).filter(
+        AgentLink.id == link_id,
+        AgentLink.parent_workspace_id == agent_id,
+        AgentLink.tenant_id == user.tenant_id,
+    ).first()
+    if not link:
+        return JSONResponse({"error": "Link not found"}, status_code=404)
+
+    body = await request.json()
+    if "tool_name" in body:
+        link.tool_name = body["tool_name"].strip()[:64]
+    if "tool_description" in body:
+        link.tool_description = body["tool_description"].strip()
+    if "is_enabled" in body:
+        link.is_enabled = bool(body["is_enabled"])
+
+    db.commit()
+    return {
+        "id": link.id,
+        "tool_name": link.tool_name,
+        "tool_description": link.tool_description,
+        "is_enabled": link.is_enabled,
+    }
+
+
+@router.delete("/{agent_id}/links/{link_id}")
+def delete_agent_link(
+    agent_id: str, link_id: str,
+    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """Remove a sub-agent link."""
+    link = db.query(AgentLink).filter(
+        AgentLink.id == link_id,
+        AgentLink.parent_workspace_id == agent_id,
+        AgentLink.tenant_id == user.tenant_id,
+    ).first()
+    if not link:
+        return JSONResponse({"error": "Link not found"}, status_code=404)
+
+    db.delete(link)
+    db.commit()
+    return {"status": "deleted"}
