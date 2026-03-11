@@ -30,4 +30,7 @@ def get_db():
 
 def init_db():
     """Create all tables. Safe to call repeatedly."""
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception:
+        pass  # table-exists race between gunicorn workers
