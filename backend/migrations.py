@@ -19,6 +19,7 @@ def run_all():
     _migrate_connector_tables()
     _migrate_agent_links_table()
     _migrate_agent_schedules_table()
+    _migrate_agent_memories_table()
 
 
 def _migrate_agent_columns():
@@ -443,3 +444,31 @@ def _migrate_agent_schedules_table():
         print("  [DB] agent_schedule_runs table created")
     else:
         print("  [DB] agent_schedule_runs table already exists")
+
+
+def _migrate_agent_memories_table():
+    """Create agent_memories table for persistent agent memory."""
+    insp = inspect(engine)
+    if "agent_memories" not in insp.get_table_names():
+        with engine.begin() as conn:
+            conn.execute(text("""
+                CREATE TABLE agent_memories (
+                    id VARCHAR(36) PRIMARY KEY,
+                    workspace_id VARCHAR(36) NOT NULL,
+                    tenant_id VARCHAR(36) NOT NULL,
+                    user_id VARCHAR(36) NULL,
+                    memory_type VARCHAR(50) DEFAULT 'fact',
+                    content TEXT NOT NULL,
+                    source_query TEXT DEFAULT '',
+                    confidence FLOAT DEFAULT 1.0,
+                    is_active TINYINT(1) DEFAULT 1,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+                    FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+                    INDEX idx_memories_workspace_user (workspace_id, user_id, is_active)
+                )
+            """))
+        print("  [DB] agent_memories table created")
+    else:
+        print("  [DB] agent_memories table already exists")

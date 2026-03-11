@@ -1,7 +1,8 @@
 """
-routes/ask.py — RAG ask endpoints (sync and streaming).
+routes/ask.py -- RAG ask endpoints (sync and streaming).
 
-Uses services.rag for shared context building — no more duplication.
+Uses services.rag for shared context building.
+Integrates agent memory: loads memories before calls, extracts after.
 """
 import json
 
@@ -18,6 +19,7 @@ from services.limits import check_search_limit
 from services.rag import build_context, build_system_prompt, call_claude
 from streaming import stream_claude, get_conversation_history, save_conversation_turn, _sse
 from services.analytics import log_conversation
+from services.memory import get_memories, format_memories_for_prompt, extract_memories_background
 import time
 
 router = APIRouter(prefix="/api", tags=["ask"])
@@ -59,7 +61,13 @@ def ask(
         if ws and ws.system_prompt:
             agent_prompt = ws.system_prompt
 
-    system_prompt = build_system_prompt(agent_prompt)
+    # Load memories and inject into system prompt
+    memory_context = ""
+    if workspace_id:
+        memories = get_memories(workspace_id, user.id, db)
+        memory_context = format_memories_for_prompt(memories)
+
+    system_prompt = build_system_prompt(agent_prompt, memory_context)
     user_prompt = f"Question: {q}\n\nDocument Excerpts:\n{ctx.context}\n\nProvide a clear answer based on the above."
 
     try:
@@ -79,6 +87,10 @@ def ask(
         else:
             summary = call_claude(user_prompt, system=system_prompt)
         elapsed_ms = int((time.time() - t0) * 1000)
+
+        # Extract memories in background
+        if workspace_id and summary:
+            extract_memories_background(q, summary, workspace_id, user.tenant_id, user.id)
 
         # Log
         log = SearchLog(
@@ -141,7 +153,13 @@ def ask_stream(
         if ws and ws.system_prompt:
             agent_prompt = ws.system_prompt
 
-    system_prompt = build_system_prompt(agent_prompt)
+    # Load memories and inject into system prompt
+    memory_context = ""
+    if workspace_id:
+        memories = get_memories(workspace_id, user.id, db)
+        memory_context = format_memories_for_prompt(memories)
+
+    system_prompt = build_system_prompt(agent_prompt, memory_context)
 
     # Build messages with conversation history
     messages = get_conversation_history(session_id)
@@ -157,12 +175,16 @@ def ask_stream(
     claude_tools, tool_lookup = get_all_tools(workspace_id, user.tenant_id, db) if workspace_id else ([], {})
     has_tools = len(claude_tools) > 0
 
-    def generate():
-        yield _sse({"type": "meta", "sources": ctx.sources, "images": ctx.images,
-                     "chunks_used": ctx.chunks_used})
+    # Capture user context for memory extraction
+    _user_id = user.id
+    _tenant_id = user.tenant_id
+    _workspace_id = workspace_id
 
+    def generate():
         if has_tools:
             try:
+                yield _sse({"type": "meta", "sources": ctx.sources, "images": ctx.images,
+                             "chunks_used": ctx.chunks_used})
                 yield _sse({"type": "tool_status", "message": "Checking tools..."})
 
                 from database import SessionLocal
@@ -179,9 +201,16 @@ def ask_stream(
                 for i in range(0, len(full_response), chunk_size):
                     yield _sse({"type": "text", "text": full_response[i:i+chunk_size]})
                 save_conversation_turn(session_id, q, full_response)
+
+                # Extract memories in background
+                if _workspace_id and full_response:
+                    extract_memories_background(q, full_response, _workspace_id, _tenant_id, _user_id)
+
             except Exception as e:
                 yield _sse({"type": "error", "error": f"Tool execution failed: {str(e)}"})
         else:
+            yield _sse({"type": "meta", "sources": ctx.sources, "images": ctx.images,
+                         "chunks_used": ctx.chunks_used})
             full_text = []
             for chunk in stream_claude("", system=system_prompt, messages=messages):
                 yield chunk
@@ -192,7 +221,12 @@ def ask_stream(
                             full_text.append(d["text"])
                     except Exception:
                         pass
-            save_conversation_turn(session_id, q, "".join(full_text))
+            full_response = "".join(full_text)
+            save_conversation_turn(session_id, q, full_response)
+
+            # Extract memories in background
+            if _workspace_id and full_response:
+                extract_memories_background(q, full_response, _workspace_id, _tenant_id, _user_id)
 
         yield _sse({"type": "done"})
 

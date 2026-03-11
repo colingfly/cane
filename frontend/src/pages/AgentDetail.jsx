@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Upload, Trash2, FileText, Sparkles, Save, ToggleLeft, ToggleRight, MessageSquare, Store, Wrench, Zap, Play, Plus, ChevronDown, ChevronUp, RefreshCw, Link2, Globe, X, BarChart3, Palette, Key, Pencil, Copy, Check, Cloud, FolderOpen, Search, Pause, Unplug, Clock } from 'lucide-react'
+import { ArrowLeft, Upload, Trash2, FileText, Sparkles, Save, ToggleLeft, ToggleRight, MessageSquare, Store, Wrench, Zap, Play, Plus, ChevronDown, ChevronUp, RefreshCw, Link2, Globe, X, BarChart3, Palette, Key, Pencil, Copy, Check, Cloud, FolderOpen, Search, Pause, Unplug, Clock, Brain } from 'lucide-react'
 import {
   getAgent, updateAgent, generateAgentPrompt, generateReplicaPrompt,
   getDocuments, uploadDocument, deleteDocument, getDocumentStatus,
@@ -10,6 +10,7 @@ import {
   createApiKey, deleteApiKey, getApiKeys, getAgents,
   getAgentLinks, createAgentLink, updateAgentLink, deleteAgentLink,
   getSchedules, createSchedule, updateSchedule, deleteSchedule, getScheduleRuns, triggerSchedule,
+  getMemories, addMemory, updateMemory, deleteMemory, clearMemories,
   getGdriveAuthUrl, getGdriveStatus, disconnectGdrive,
   listDriveFolders, listSyncs, createSync, getSync, triggerSync, updateSyncStatus, deleteSync,
 } from '../api/client'
@@ -148,6 +149,16 @@ export default function AgentDetail() {
     prompt: '', schedule_type: 'interval', interval_minutes: 60, daily_time: '09:00',
   })
 
+  // Agent Memory
+  const [memories, setMemories] = useState([])
+  const [showAddMemory, setShowAddMemory] = useState(false)
+  const [memorySaving, setMemorySaving] = useState(false)
+  const [memoryClearing, setMemoryClearing] = useState(false)
+  const [editingMemory, setEditingMemory] = useState(null)
+  const [editMemoryContent, setEditMemoryContent] = useState('')
+  const [editMemoryType, setEditMemoryType] = useState('fact')
+  const [newMemory, setNewMemory] = useState({ content: '', memory_type: 'fact' })
+
   useEffect(() => { loadAgent() }, [agentId])
 
   const loadAgent = async () => {
@@ -212,6 +223,12 @@ export default function AgentDetail() {
           setScheduleRuns(runsRes.runs || [])
         }
       } catch { setSchedule(null) }
+
+      // Load memories
+      try {
+        const memRes = await getMemories(agentId)
+        setMemories(memRes.memories || [])
+      } catch { setMemories([]) }
 
       // Load Google Drive connector status + syncs
       loadConnectorStatus()
@@ -2584,6 +2601,224 @@ export default function AgentDetail() {
             <div style={{ fontSize: '0.84rem', fontWeight: 500 }}>No schedule configured</div>
             <div style={{ fontSize: '0.78rem', marginTop: 4 }}>
               Set up a schedule to run this agent automatically. Great for daily briefings, automated reports, or periodic data pulls.
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Agent Memory */}
+      <div className="card" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Brain size={16} /> Agent Memory
+            {memories.length > 0 && (
+              <span style={{
+                fontSize: '0.7rem', background: 'rgba(168,85,247,0.15)', color: '#a855f7',
+                padding: '2px 8px', borderRadius: 10, fontWeight: 600,
+              }}>{memories.length}</span>
+            )}
+          </h3>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {memories.length > 0 && (
+              <button
+                className="btn btn-ghost"
+                style={{ fontSize: '0.78rem', color: '#ef4444' }}
+                disabled={memoryClearing}
+                onClick={async () => {
+                  if (!confirm('Clear all memories for this agent? This cannot be undone.')) return
+                  setMemoryClearing(true)
+                  try {
+                    await clearMemories(agentId)
+                    setMemories([])
+                  } catch (e) { console.error(e) }
+                  setMemoryClearing(false)
+                }}
+              >
+                <Trash2 size={13} /> {memoryClearing ? 'Clearing...' : 'Clear All'}
+              </button>
+            )}
+            <button className="btn btn-ghost" onClick={() => setShowAddMemory(!showAddMemory)} style={{ fontSize: '0.82rem' }}>
+              <Plus size={14} /> Add Memory
+            </button>
+          </div>
+        </div>
+
+        {/* Add memory form */}
+        {showAddMemory && (
+          <div style={{
+            marginBottom: 16, padding: '14px 16px', borderRadius: 'var(--radius-sm)',
+            background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+          }}>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+              <select
+                value={newMemory.memory_type}
+                onChange={e => setNewMemory(p => ({ ...p, memory_type: e.target.value }))}
+                style={{
+                  background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: 'var(--radius-sm)', color: '#fff', padding: '6px 10px',
+                  fontSize: '0.82rem',
+                }}
+              >
+                <option value="fact">Fact</option>
+                <option value="preference">Preference</option>
+                <option value="instruction">Instruction</option>
+                <option value="context">Context</option>
+              </select>
+            </div>
+            <textarea
+              value={newMemory.content}
+              onChange={e => setNewMemory(p => ({ ...p, content: e.target.value }))}
+              placeholder="What should this agent remember? e.g. 'User prefers bullet point responses' or 'Company uses React and Python'"
+              rows={3}
+              style={{
+                width: '100%', resize: 'vertical', background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.1)', borderRadius: 'var(--radius-sm)',
+                color: '#fff', padding: '8px 12px', fontSize: '0.84rem', marginBottom: 10,
+              }}
+            />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost" onClick={() => { setShowAddMemory(false); setNewMemory({ content: '', memory_type: 'fact' }) }}>Cancel</button>
+              <button
+                className="btn"
+                disabled={!newMemory.content.trim() || memorySaving}
+                onClick={async () => {
+                  setMemorySaving(true)
+                  try {
+                    const res = await addMemory(agentId, newMemory)
+                    setMemories(prev => [{ ...res, source_query: 'manual entry', created_at: new Date().toISOString() }, ...prev])
+                    setNewMemory({ content: '', memory_type: 'fact' })
+                    setShowAddMemory(false)
+                  } catch (e) { console.error(e) }
+                  setMemorySaving(false)
+                }}
+              >
+                {memorySaving ? 'Saving...' : 'Save Memory'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Memory list */}
+        {memories.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {memories.map(m => {
+              const typeColors = {
+                fact: { bg: 'rgba(59,130,246,0.12)', color: '#60a5fa' },
+                preference: { bg: 'rgba(168,85,247,0.12)', color: '#a855f7' },
+                instruction: { bg: 'rgba(245,158,11,0.12)', color: '#f59e0b' },
+                context: { bg: 'rgba(34,197,94,0.12)', color: '#22c55e' },
+              }
+              const tc = typeColors[m.memory_type] || typeColors.fact
+              const isEditing = editingMemory === m.id
+
+              return (
+                <div key={m.id} style={{
+                  padding: '10px 14px', borderRadius: 'var(--radius-sm)',
+                  background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+                }}>
+                  {isEditing ? (
+                    <div>
+                      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                        <select
+                          value={editMemoryType}
+                          onChange={e => setEditMemoryType(e.target.value)}
+                          style={{
+                            background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: 'var(--radius-sm)', color: '#fff', padding: '4px 8px', fontSize: '0.78rem',
+                          }}
+                        >
+                          <option value="fact">Fact</option>
+                          <option value="preference">Preference</option>
+                          <option value="instruction">Instruction</option>
+                          <option value="context">Context</option>
+                        </select>
+                      </div>
+                      <textarea
+                        value={editMemoryContent}
+                        onChange={e => setEditMemoryContent(e.target.value)}
+                        rows={2}
+                        style={{
+                          width: '100%', resize: 'vertical', background: 'rgba(255,255,255,0.06)',
+                          border: '1px solid rgba(255,255,255,0.1)', borderRadius: 'var(--radius-sm)',
+                          color: '#fff', padding: '6px 10px', fontSize: '0.82rem', marginBottom: 8,
+                        }}
+                      />
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                        <button className="btn btn-ghost" style={{ fontSize: '0.78rem' }} onClick={() => setEditingMemory(null)}>Cancel</button>
+                        <button
+                          className="btn" style={{ fontSize: '0.78rem' }}
+                          onClick={async () => {
+                            try {
+                              await updateMemory(agentId, m.id, { content: editMemoryContent, memory_type: editMemoryType })
+                              setMemories(prev => prev.map(x => x.id === m.id ? { ...x, content: editMemoryContent, memory_type: editMemoryType } : x))
+                              setEditingMemory(null)
+                            } catch (e) { console.error(e) }
+                          }}
+                        >Save</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <span style={{
+                            fontSize: '0.68rem', fontWeight: 600, textTransform: 'uppercase',
+                            padding: '2px 7px', borderRadius: 6, background: tc.bg, color: tc.color,
+                            letterSpacing: '0.03em',
+                          }}>{m.memory_type}</span>
+                          {m.source_query && m.source_query !== 'manual entry' && (
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>auto-extracted</span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '0.84rem', color: '#fff', lineHeight: 1.45 }}>{m.content}</div>
+                        {m.created_at && (
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 4 }}>
+                            {new Date(m.created_at).toLocaleDateString()} {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                        <button
+                          className="btn btn-ghost"
+                          style={{ padding: '4px 6px' }}
+                          onClick={() => {
+                            setEditingMemory(m.id)
+                            setEditMemoryContent(m.content)
+                            setEditMemoryType(m.memory_type)
+                          }}
+                          title="Edit"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          className="btn btn-ghost"
+                          style={{ padding: '4px 6px', color: '#ef4444' }}
+                          onClick={async () => {
+                            try {
+                              await deleteMemory(agentId, m.id)
+                              setMemories(prev => prev.filter(x => x.id !== m.id))
+                            } catch (e) { console.error(e) }
+                          }}
+                          title="Delete"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Empty state */}
+        {memories.length === 0 && !showAddMemory && (
+          <div style={{ textAlign: 'center', padding: '20px 16px', color: 'var(--text-muted)' }}>
+            <Brain size={24} style={{ marginBottom: 8, opacity: 0.4 }} />
+            <div style={{ fontSize: '0.84rem', fontWeight: 500 }}>No memories yet</div>
+            <div style={{ fontSize: '0.78rem', marginTop: 4 }}>
+              This agent will automatically learn from conversations. You can also add memories manually to teach it facts, preferences, or instructions.
             </div>
           </div>
         )}

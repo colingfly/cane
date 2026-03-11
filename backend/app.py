@@ -128,6 +128,7 @@ from prospect_routes import router as prospect_router
 from connector_routes import router as connector_router
 from routes.demo import router as demo_router
 from schedule_routes import router as schedule_router
+from routes.memory_routes import router as memory_router
 
 app.include_router(auth_router)
 app.include_router(documents_router)
@@ -151,6 +152,7 @@ app.include_router(prospect_router)
 app.include_router(connector_router)
 app.include_router(demo_router)
 app.include_router(schedule_router)
+app.include_router(memory_router)
 
 
 # ── Background sync loop for Live Connectors ──

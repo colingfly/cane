@@ -188,3 +188,4 @@ from connector_models import (                                         # noqa: E
     ConnectorCredential, ConnectorSync, ConnectorFile,
 )
 from schedule_models import AgentSchedule, AgentScheduleRun            # noqa: E402, F401
+from memory_models import AgentMemory                                  # noqa: E402, F401

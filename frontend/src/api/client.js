@@ -440,6 +440,35 @@ export async function triggerSchedule(agentId, scheduleId) {
   return request(`/agents/${agentId}/schedules/${scheduleId}/trigger`, { method: 'POST' })
 }
 
+// ─── Agent Memories ───
+
+export async function getMemories(agentId, userId = '') {
+  const params = userId ? `?user_id=${userId}` : ''
+  return request(`/agents/${agentId}/memories${params}`)
+}
+
+export async function addMemory(agentId, data) {
+  return request(`/agents/${agentId}/memories`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function updateMemory(agentId, memoryId, data) {
+  return request(`/agents/${agentId}/memories/${memoryId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteMemory(agentId, memoryId) {
+  return request(`/agents/${agentId}/memories/${memoryId}`, { method: 'DELETE' })
+}
+
+export async function clearMemories(agentId) {
+  return request(`/agents/${agentId}/memories`, { method: 'DELETE' })
+}
+
 // ─── MCP Servers ───
 
 export async function getMcpCatalog() {

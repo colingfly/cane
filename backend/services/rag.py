@@ -182,11 +182,10 @@ def _extract_images(visual_hits: list) -> list[dict]:
     return sorted(filtered.values(), key=lambda x: x["score"], reverse=True)[:4]
 
 
-def build_system_prompt(agent_prompt: str = "") -> str:
-    """Build the system prompt with RAG base rules."""
-    if agent_prompt:
-        return agent_prompt + "\n\nAdditional retrieval rules:" + RAG_BASE_RULES
-    return "You are a helpful assistant. Answer the question using ONLY the provided document excerpts." + RAG_BASE_RULES
+def build_system_prompt(agent_prompt: str = "", memory_context: str = "") -> str:
+    """Build the system prompt with RAG base rules and optional memories."""
+    base = agent_prompt if agent_prompt else "You are a helpful assistant. Answer the question using ONLY the provided document excerpts."
+    return base + memory_context + "\n\nAdditional retrieval rules:" + RAG_BASE_RULES
 
 
 def call_claude(user_prompt: str, system: str = "") -> str:

@@ -207,6 +207,9 @@ def delete_agent(agent_id: str, user: User = Depends(get_current_user), db: Sess
         _safe_delete(db, "DELETE FROM agent_schedule_runs WHERE workspace_id = :wid", {"wid": agent_id})
         _safe_delete(db, "DELETE FROM agent_schedules WHERE workspace_id = :wid", {"wid": agent_id})
 
+        # ── 3d. Agent memories ──
+        _safe_delete(db, "DELETE FROM agent_memories WHERE workspace_id = :wid", {"wid": agent_id})
+
         # ── 4. MCP servers (safe) ──
         _safe_delete(db, "DELETE FROM mcp_servers WHERE workspace_id = :wid", {"wid": agent_id})
 
