@@ -45,9 +45,27 @@ export default function Landing() {
       <nav className="lp-nav">
         <Link to="/" className="lp-logo">Cane</Link>
         <div className="lp-nav-links">
-          <a href="#architecture">Architecture</a>
-          <a href="#network">Network</a>
-          <a href="#capabilities">Capabilities</a>
+          <div className="lp-dropdown">
+            <span className="lp-dropdown-trigger">Products <span className="lp-chevron">&#9662;</span></span>
+            <div className="lp-dropdown-menu">
+              <a href="#rag" className="lp-dropdown-item">
+                <span className="lp-dropdown-title">Cane RAG</span>
+                <span className="lp-dropdown-desc">Build agents on your documents</span>
+              </a>
+              <a href="#orchestrate" className="lp-dropdown-item">
+                <span className="lp-dropdown-title">Cane Orchestrate</span>
+                <span className="lp-dropdown-desc">Connect and route agents</span>
+              </a>
+              <a href="#observe" className="lp-dropdown-item">
+                <span className="lp-dropdown-title">Cane Observe</span>
+                <span className="lp-dropdown-desc">See everything your agents do</span>
+              </a>
+              <a href="#eval" className="lp-dropdown-item">
+                <span className="lp-dropdown-title">Cane Eval</span>
+                <span className="lp-dropdown-desc">Test and verify agent accuracy</span>
+              </a>
+            </div>
+          </div>
           <Link to="/demo">Demo</Link>
           <Link to="/guide">Docs</Link>
           <Link to="/login" className="lp-nav-cta">Sign in</Link>
@@ -64,7 +82,7 @@ export default function Landing() {
         </p>
         <div className="lp-hero-actions lp-reveal">
           <Link to="/demo" className="lp-btn-fill">Try the live demo</Link>
-          <a href="#network" className="lp-btn-ghost">See the agent network</a>
+          <a href="#orchestrate" className="lp-btn-ghost">See the agent network</a>
         </div>
       </section>
 
@@ -72,10 +90,10 @@ export default function Landing() {
       <section className="lp-stats lp-reveal">
         <div className="lp-stats-inner">
           {[
-            ['Agent Network', 'Agents discover, call, and delegate to other agents autonomously'],
-            ['Live Web Tools', 'Self-hosted search and scrape. No API keys. Agents browse the web on their own'],
-            ['Orchestrator Mode', 'Auto-routes queries to the right specialist. Zero manual config'],
-            ['Full Audit Trail', 'Every inter-agent call logged with timing, input, output, and chain depth'],
+            ['Cane RAG', 'Hybrid retrieval with re-ranking. Not just embeddings'],
+            ['Cane Orchestrate', 'Agents discover, call, and delegate to each other'],
+            ['Cane Observe', 'Every call logged. Full audit trail. Live graph'],
+            ['Cane Eval', 'LLM judge scores accuracy, completeness, relevance'],
           ].map(([title, desc], i) => (
             <div key={i} className="lp-stat">
               <div className="lp-stat-title">{title}</div>
@@ -85,56 +103,26 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Architecture */}
-      <section id="architecture" className="lp-section">
+      {/* Cane RAG */}
+      <section id="rag" className="lp-section">
         <div className="lp-contain">
           <div className="lp-section-head lp-reveal">
-            <h2>Architecture</h2>
-            <p>Seven layers. Each one built, not imported.</p>
+            <div className="lp-product-label">Cane RAG</div>
+            <h2>Build agents on your documents.</h2>
+            <p>Upload files or sync Google Drive. Cane handles ingestion, retrieval, and deployment.</p>
           </div>
-          <div className="lp-arch-grid">
+          <div className="lp-product-grid">
             {[
-              {
-                n: '01', title: 'Ingestion',
-                body: 'Upload files or connect Google Drive via OAuth. Text extraction for PDFs and DOCX, OCR for images, Whisper transcription for audio and video. Content is chunked and embedded with BGE for vector search.',
-                stack: 'FastAPI, Tesseract, Whisper, Google Drive API, Fernet encryption',
-              },
-              {
-                n: '02', title: 'Retrieval',
-                body: 'Hybrid search combining dense vector similarity and sparse BM25 keyword matching. Results merged with Reciprocal Rank Fusion, then re-ranked by a cross-encoder. Final chunks and persistent memories sent to Claude for context-aware answers.',
-                stack: 'ChromaDB, BGE-base-en, BM25, ms-marco MiniLM cross-encoder',
-              },
-              {
-                n: '03', title: 'Agent Network',
-                body: 'Agents call other agents as tools. A Tweet Generator delegates to AI News for live research. A Cold Outreach agent chains Lead Researcher and AI News to build context before writing. Every delegation is logged with full input/output audit trails.',
-                stack: 'Agent-as-tool protocol, communication logger, depth-limited recursion, force-directed graph',
-              },
-              {
-                n: '04', title: 'Orchestration',
-                body: 'Orchestrator Mode auto-discovers every agent in your workspace and routes incoming queries to the right specialist. No manual configuration. The orchestrator reads agent descriptions, picks the best match, delegates, and returns a unified answer.',
-                stack: 'Auto-discovery, description-based routing, unified response synthesis, fallback handling',
-              },
-              {
-                n: '05', title: 'Web Tools',
-                body: 'Self-hosted DuckDuckGo search and page scraping. Agents query the live web, extract content from any URL, and use the results as context. No external API keys required. Runs on your infrastructure.',
-                stack: 'DuckDuckGo HTML parser, urllib scraper, plain-text extraction, webhook tool interface',
-              },
-              {
-                n: '06', title: 'Memory & Scheduling',
-                body: 'Agents extract facts, preferences, and instructions from every conversation. Memories persist across sessions and are injected into future prompts. Scheduled runs execute agents autonomously on intervals or daily triggers.',
-                stack: 'Background extraction, deduplication, daemon threads, cron-style scheduler',
-              },
-              {
-                n: '07', title: 'Evaluation',
-                body: 'Automated test suites scored by an LLM judge. Four criteria: accuracy, completeness, relevance, and faithfulness. Configurable weights and custom rules. Score history tracks improvement across runs.',
-                stack: 'LLM-as-Judge, weighted criteria, custom rules, regression tracking',
-              },
-            ].map((item, i) => (
-              <div key={i} className="lp-arch-item lp-reveal">
-                <div className="lp-arch-n">{item.n}</div>
-                <h3>{item.title}</h3>
-                <p>{item.body}</p>
-                <div className="lp-arch-stack">{item.stack}</div>
+              ['Hybrid Retrieval', 'Vector search, BM25 keyword matching, Reciprocal Rank Fusion, and cross-encoder re-ranking in a single pass. Four stages of relevance filtering before anything reaches the LLM.'],
+              ['Google Drive Sync', 'OAuth popup, folder picker, incremental sync via the Changes API. Google Docs and Sheets auto-export to text. Encrypted credential storage. Files stay in sync automatically.'],
+              ['Agent Memory', 'Agents extract facts, preferences, and instructions from conversations automatically. Memories persist across sessions and are injected into future prompts. Agents get smarter over time.'],
+              ['Scheduled Runs', 'Configure agents to run autonomously on intervals or daily triggers. Background execution with run history, status tracking, and manual trigger support.'],
+              ['Widget Deployment', 'Embeddable chat widget with full customization. One script tag to deploy on any website. REST API with key-scoped auth and streaming responses.'],
+              ['Agent Marketplace', 'Publish agents with eval scores attached. Others can clone your agent and independently verify accuracy by re-running the test suite on their copy.'],
+            ].map(([title, desc], i) => (
+              <div key={i} className="lp-product-card lp-reveal">
+                <h3>{title}</h3>
+                <p>{desc}</p>
               </div>
             ))}
           </div>
@@ -144,12 +132,13 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Live Agent Network */}
-      <section id="network" className="lp-section">
+      {/* Cane Orchestrate */}
+      <section id="orchestrate" className="lp-section">
         <div className="lp-contain">
           <div className="lp-section-head lp-reveal">
-            <h2>Live Agent Network</h2>
-            <p>Four autonomous agents. Running now.</p>
+            <div className="lp-product-label">Cane Orchestrate</div>
+            <h2>Connect and route agents.</h2>
+            <p>Agent-to-agent delegation, automatic routing, and live web tools. Four autonomous agents are running on this platform right now.</p>
           </div>
 
           {/* Network SVG */}
@@ -216,37 +205,66 @@ export default function Landing() {
             ))}
           </div>
 
+          <div className="lp-product-grid" style={{ marginTop: 48 }}>
+            {[
+              ['Agent-to-Agent Delegation', 'Link any agent as a callable tool for another agent. A supervisor delegates questions to specialists and combines their answers. Depth-limited recursion prevents runaway chains.'],
+              ['Orchestrator Mode', 'Flip one toggle and an agent becomes a router. It auto-discovers every other agent in your workspace, reads their descriptions, and routes incoming queries to the right specialist.'],
+              ['Live Web Scraping', 'Self-hosted DuckDuckGo search and page scraping. Agents query the web, extract content from URLs, and use the results as context. No external API keys. Runs on your infrastructure.'],
+              ['Webhook Tools & MCP', 'HTTP actions triggered by agent reasoning. Model Context Protocol for connecting agents to Slack, Google Calendar, HubSpot, and more. Pre-built catalog plus custom server support.'],
+            ].map(([title, desc], i) => (
+              <div key={i} className="lp-product-card lp-reveal">
+                <h3>{title}</h3>
+                <p>{desc}</p>
+              </div>
+            ))}
+          </div>
+
           <div className="lp-arch-link lp-reveal">
             <Link to="/agents/network">See the live network &rarr;</Link>
           </div>
         </div>
       </section>
 
-      {/* Capabilities */}
-      <section id="capabilities" className="lp-section">
+      {/* Cane Observe */}
+      <section id="observe" className="lp-section">
         <div className="lp-contain">
           <div className="lp-section-head lp-reveal">
-            <h2>Capabilities</h2>
-            <p>What the platform does, end to end.</p>
+            <div className="lp-product-label">Cane Observe</div>
+            <h2>See everything your agents do.</h2>
+            <p>Full visibility into every inter-agent call, delegation chain, and response time.</p>
           </div>
-          <div className="lp-cap-list">
+          <div className="lp-product-grid">
             {[
-              ['Agent-to-Agent Delegation', 'Link any agent as a callable tool for another agent. A supervisor delegates questions to specialists and combines their answers. Depth-limited recursion prevents runaway chains. Full audit trail for every delegation call.'],
-              ['Orchestrator Mode', 'Flip one toggle and an agent becomes an orchestrator. It auto-discovers every other agent in your workspace, reads their descriptions, routes incoming queries to the right specialist, and returns a unified answer. No manual linking needed.'],
-              ['Live Web Scraping', 'Self-hosted DuckDuckGo search and page scraping built into the platform. Agents query the web, extract content from URLs, and use the results as context for their answers. No external API keys. Runs on your infrastructure.'],
-              ['Agent Communication Logs', 'Every inter-agent call is logged with full input, output, timing, and the delegation chain. Visualize your agent network as a force-directed graph showing connections, call frequency, and response times.'],
-              ['Hybrid RAG Pipeline', 'Vector search, BM25 keyword matching, Reciprocal Rank Fusion, and cross-encoder re-ranking in a single retrieval pass. Not just embeddings.'],
-              ['Agent Memory', 'Agents extract facts, preferences, and instructions from conversations automatically. Memories persist across sessions and are injected into future prompts so agents get smarter over time.'],
-              ['Scheduled Agent Runs', 'Configure agents to run autonomously on intervals or daily triggers. Background execution with run history, status tracking, and manual trigger support. Built for daily briefings and automated workflows.'],
-              ['Google Drive Sync', 'OAuth popup, folder picker, incremental sync via the Changes API. Google Docs and Sheets auto-export to text. Encrypted credential storage.'],
-              ['MCP Connections', 'Model Context Protocol for connecting agents to Slack, Google Calendar, HubSpot, and more. Pre-built connector catalog plus custom server support.'],
-              ['Webhook Tools', 'HTTP actions triggered by agent reasoning. Fire-and-forget for notifications, wait-for-response for live data lookups. Custom headers and payload templates.'],
-              ['Evaluation Engine', 'Write test cases with expected answers. Run automated scoring with configurable criteria weights and custom rules. Track scores across runs to catch regressions.'],
-              ['Analytics Dashboard', 'Per-agent conversation tracking. Volume, response times, channel breakdown, tool usage, and satisfaction scores from user feedback.'],
-              ['Widget & API Deployment', 'Embeddable chat widget with full customization. REST API with key-scoped auth and streaming responses. One script tag to deploy on any website.'],
-              ['Agent Marketplace', 'Publish agents with eval scores attached. Others can clone your agent and independently verify accuracy by re-running the test suite on their copy.'],
+              ['Network Graph', 'Live force-directed visualization of your entire agent network. Nodes are agents, edges are delegation links. The graph updates in real time as agents communicate. See connections, call frequency, and routing patterns at a glance.'],
+              ['Communication Logs', 'Every inter-agent call is logged with full input, output, timing, and the delegation chain. Filter by agent pair, time range, or status. Drill into any call to see the complete request and response.'],
+              ['Audit Trails', 'Chain depth tracking, caller/callee recording, millisecond timing on every hop. Built for compliance teams that need to prove what happened, when, and why. Exportable logs with full provenance.'],
+              ['Analytics Dashboard', 'Per-agent conversation tracking. Volume, response times, channel breakdown, tool usage, and satisfaction scores from user feedback. Spot trends and catch regressions before users notice.'],
             ].map(([title, desc], i) => (
-              <div key={i} className="lp-cap-row lp-reveal">
+              <div key={i} className="lp-product-card lp-reveal">
+                <h3>{title}</h3>
+                <p>{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Cane Eval */}
+      <section id="eval" className="lp-section">
+        <div className="lp-contain">
+          <div className="lp-section-head lp-reveal">
+            <div className="lp-product-label">Cane Eval</div>
+            <h2>Test and verify agent accuracy.</h2>
+            <p>Automated test suites scored by an LLM judge. Know exactly how good your agents are.</p>
+          </div>
+          <div className="lp-product-grid">
+            {[
+              ['LLM-as-Judge', 'Write test cases with expected answers. Cane runs every question through your agent, then uses an LLM judge to score each response. Four criteria: accuracy, completeness, relevance, and faithfulness.'],
+              ['Custom Weights & Rules', 'Adjust criteria weights to match your priorities. A compliance agent can weight accuracy at 40% and faithfulness at 35%. Add natural-language rules: "Deduct points if the response gives legal advice."'],
+              ['Score Tracking', 'Track scores across runs to catch regressions. You tweak the prompt, re-run, and see exactly how the numbers moved. Pass/warn/fail verdicts on every test case.'],
+              ['Marketplace Verification', 'Publish agents with eval scores attached. Others can clone your agent and independently verify accuracy by re-running the test suite on their copy. Trust through transparency.'],
+            ].map(([title, desc], i) => (
+              <div key={i} className="lp-product-card lp-reveal">
                 <h3>{title}</h3>
                 <p>{desc}</p>
               </div>
@@ -300,10 +318,12 @@ export default function Landing() {
           <span className="lp-footer-copy">Built by Colin</span>
         </div>
         <div className="lp-footer-links">
+          <a href="#rag">RAG</a>
+          <a href="#orchestrate">Orchestrate</a>
+          <a href="#observe">Observe</a>
+          <a href="#eval">Eval</a>
           <Link to="/demo">Demo</Link>
           <Link to="/guide">Docs</Link>
-          <Link to="/architecture">Architecture</Link>
-          <Link to="/agents/network">Network</Link>
           <Link to="/marketplace">Marketplace</Link>
           <a href="mailto:hello@cane.fyi">Contact</a>
         </div>
@@ -348,15 +368,16 @@ const landingStyles = `
 
 .lp-nav-links { display: flex; gap: 32px; align-items: center; }
 
-.lp-nav-links a {
+.lp-nav-links a, .lp-dropdown-trigger {
   color: rgba(255,255,255,0.4);
   text-decoration: none;
   font-size: 0.82rem;
   font-weight: 500;
   transition: color 0.15s;
+  cursor: pointer;
 }
 
-.lp-nav-links a:hover { color: #fff; }
+.lp-nav-links a:hover, .lp-dropdown:hover .lp-dropdown-trigger { color: #fff; }
 
 .lp-nav-cta {
   color: #fff !important;
@@ -367,6 +388,78 @@ const landingStyles = `
 }
 
 .lp-nav-cta:hover { background: rgba(255,255,255,0.14) !important; }
+
+/* Dropdown */
+.lp-dropdown {
+  position: relative;
+}
+
+.lp-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+}
+
+.lp-chevron {
+  font-size: 0.6rem;
+  transition: transform 0.2s;
+}
+
+.lp-dropdown:hover .lp-chevron {
+  transform: rotate(180deg);
+}
+
+.lp-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 280px;
+  background: rgba(10,10,10,0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s, transform 0.15s;
+  transform: translateX(-50%) translateY(4px);
+}
+
+.lp-dropdown:hover .lp-dropdown-menu {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+
+.lp-dropdown-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  text-decoration: none !important;
+  transition: background 0.1s;
+}
+
+.lp-dropdown-item:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.lp-dropdown-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #fff !important;
+  letter-spacing: -0.01em;
+}
+
+.lp-dropdown-desc {
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.35) !important;
+  line-height: 1.4;
+}
 
 /* Hero */
 .lp-hero {
@@ -490,8 +583,19 @@ const landingStyles = `
   color: rgba(255,255,255,0.35);
 }
 
-/* Architecture grid */
-.lp-arch-grid {
+/* Product label */
+.lp-product-label {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.25);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 12px;
+}
+
+/* Product card grid */
+.lp-product-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1px;
@@ -499,56 +603,25 @@ const landingStyles = `
   border: 1px solid rgba(255,255,255,0.06);
 }
 
-.lp-arch-item {
-  padding: 40px 36px;
+.lp-product-card {
+  padding: 36px 32px;
   background: #000;
 }
 
-.lp-arch-n {
+.lp-product-card h3 {
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: rgba(255,255,255,0.15);
-  margin-bottom: 16px;
-  letter-spacing: 0.02em;
-}
-
-.lp-arch-item h3 {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #fff;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   letter-spacing: -0.01em;
 }
 
-.lp-arch-item p {
-  font-size: 0.85rem;
+.lp-product-card p {
+  font-size: 0.84rem;
   color: rgba(255,255,255,0.4);
   line-height: 1.7;
-  margin-bottom: 16px;
 }
-
-.lp-arch-stack {
-  font-size: 0.72rem;
-  color: rgba(255,255,255,0.2);
-  line-height: 1.6;
-}
-
-.lp-arch-link {
-  margin-top: 32px;
-  text-align: center;
-}
-
-.lp-arch-link a {
-  color: rgba(255,255,255,0.35);
-  text-decoration: none;
-  font-size: 0.85rem;
-  font-weight: 500;
-  transition: color 0.15s;
-}
-
-.lp-arch-link a:hover { color: rgba(255,255,255,0.7); }
 
 /* Network visualization */
 .lp-network-svg {
@@ -589,36 +662,20 @@ const landingStyles = `
   line-height: 1.6;
 }
 
-/* Capabilities list */
-.lp-cap-list {
-  display: flex;
-  flex-direction: column;
+.lp-arch-link {
+  margin-top: 32px;
+  text-align: center;
 }
 
-.lp-cap-row {
-  padding: 28px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  display: grid;
-  grid-template-columns: 240px 1fr;
-  gap: 40px;
-  align-items: baseline;
-}
-
-.lp-cap-row:last-child { border-bottom: none; }
-
-.lp-cap-row h3 {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 0.92rem;
-  font-weight: 600;
-  color: #fff;
-  letter-spacing: -0.01em;
-}
-
-.lp-cap-row p {
+.lp-arch-link a {
+  color: rgba(255,255,255,0.35);
+  text-decoration: none;
   font-size: 0.85rem;
-  color: rgba(255,255,255,0.4);
-  line-height: 1.7;
+  font-weight: 500;
+  transition: color 0.15s;
 }
+
+.lp-arch-link a:hover { color: rgba(255,255,255,0.7); }
 
 /* Stack */
 .lp-stack-row {
@@ -716,17 +773,17 @@ const landingStyles = `
 /* Responsive */
 @media (max-width: 768px) {
   .lp-nav { padding: 0 24px; }
-  .lp-nav-links a:not(.lp-nav-cta) { display: none; }
+  .lp-nav-links a:not(.lp-nav-cta), .lp-dropdown { display: none; }
   .lp-hero { padding: 140px 24px 80px; }
   .lp-hero h1 { font-size: 2.2rem; }
   .lp-section { padding: 64px 24px; }
   .lp-stats-inner { grid-template-columns: 1fr 1fr; }
   .lp-stat { padding: 24px 0; }
-  .lp-arch-grid { grid-template-columns: 1fr; }
+  .lp-product-grid { grid-template-columns: 1fr; }
   .lp-network-grid { grid-template-columns: 1fr 1fr; }
-  .lp-cap-row { grid-template-columns: 1fr; gap: 8px; }
   .lp-stack-item { flex: 1 1 100%; }
   .lp-footer { flex-direction: column; gap: 20px; text-align: center; }
   .lp-footer-left { flex-direction: column; gap: 4px; align-items: center; }
+  .lp-footer-links { flex-wrap: wrap; justify-content: center; }
 }
 `
