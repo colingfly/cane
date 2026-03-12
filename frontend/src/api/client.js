@@ -585,8 +585,8 @@ export async function listSyncs(workspaceId) {
   return request(`/connectors/syncs?workspace_id=${workspaceId}`)
 }
 
-export async function createSync(workspaceId, folderId, folderName) {
-  const qs = new URLSearchParams({ workspace_id: workspaceId, folder_id: folderId, folder_name: folderName })
+export async function createSync(workspaceId, folderId, folderName, provider = 'google_drive') {
+  const qs = new URLSearchParams({ workspace_id: workspaceId, folder_id: folderId, folder_name: folderName, provider })
   return request(`/connectors/syncs?${qs.toString()}`, { method: 'POST' })
 }
 
@@ -604,4 +604,35 @@ export async function updateSyncStatus(syncId, status) {
 
 export async function deleteSync(syncId) {
   return request(`/connectors/syncs/${syncId}`, { method: 'DELETE' })
+}
+
+// --- Live Connectors (S3-Compatible Storage) ---
+
+export async function testS3Connection(config) {
+  return request('/connectors/s3/test', {
+    method: 'POST',
+    body: JSON.stringify(config),
+  })
+}
+
+export async function connectS3(config) {
+  return request('/connectors/s3/connect', {
+    method: 'POST',
+    body: JSON.stringify(config),
+  })
+}
+
+export async function getS3Status() {
+  return request('/connectors/s3/status')
+}
+
+export async function disconnectS3() {
+  return request('/connectors/s3', { method: 'DELETE' })
+}
+
+export async function browseS3(bucket = '', prefix = '') {
+  const params = new URLSearchParams()
+  if (bucket) params.set('bucket', bucket)
+  if (prefix) params.set('prefix', prefix)
+  return request(`/connectors/s3/browse?${params.toString()}`)
 }

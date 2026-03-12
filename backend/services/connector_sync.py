@@ -17,6 +17,7 @@ from database import SessionLocal
 from db_models import Document
 from connector_models import ConnectorCredential, ConnectorSync, ConnectorFile
 from services import gdrive
+from services import s3 as s3_service
 
 
 # Simple lock to prevent concurrent syncs of the same sync_id
@@ -59,10 +60,16 @@ def run_sync(sync_id: str):
             sync.last_sync_status = "running"
             db.commit()
 
-            if sync.last_change_token:
-                _run_incremental_sync(sync, cred, db)
+            if sync.provider == "s3":
+                if sync.last_sync_at:
+                    _run_incremental_sync_s3(sync, cred, db)
+                else:
+                    _run_initial_sync_s3(sync, cred, db)
             else:
-                _run_initial_sync(sync, cred, db)
+                if sync.last_change_token:
+                    _run_incremental_sync(sync, cred, db)
+                else:
+                    _run_initial_sync(sync, cred, db)
 
         except Exception as e:
             traceback.print_exc()
@@ -211,24 +218,20 @@ def _run_incremental_sync(sync: ConnectorSync, cred: ConnectorCredential, db):
     print(f"  [Sync] Incremental sync complete: {', '.join(parts)}")
 
 
-def _download_and_ingest_file(
+def _prepare_connector_file(
     sync: ConnectorSync,
-    cred: ConnectorCredential,
-    file_meta: dict,
+    file_id: str,
+    name: str,
+    mime: str,
+    modified_str: str,
+    size: int,
+    ext: str,
     db,
-):
-    """Download one file from Drive and run it through the ingestor."""
-    file_id = file_meta["id"]
-    name = file_meta.get("name", "unknown")
-    mime = file_meta.get("mimeType", "")
-    modified_str = file_meta.get("modifiedTime", "")
-    size = int(file_meta.get("size", 0) or 0)
-
-    ext = gdrive.get_file_extension(mime)
-    if not ext:
-        raise ValueError(f"Unsupported MIME type: {mime}")
-
-    # Determine local filename (use Drive name + correct extension)
+) -> tuple:
+    """
+    Create the ConnectorFile record and determine local path.
+    Returns (cf, dest_path) tuple.
+    """
     base_name = Path(name).stem
     local_name = f"{base_name}{ext}"
 
@@ -243,7 +246,6 @@ def _download_and_ingest_file(
         dest_path = sync_dir / f"{base_name}_{counter}{ext}"
         counter += 1
 
-    # Create ConnectorFile record
     cf = ConnectorFile(
         sync_id=sync.id,
         tenant_id=sync.tenant_id,
@@ -263,76 +265,138 @@ def _download_and_ingest_file(
     db.commit()
     db.refresh(cf)
 
+    return cf, dest_path
+
+
+def _ingest_downloaded_file(sync: ConnectorSync, cf: ConnectorFile, dest_path: Path, ext: str, name: str, db):
+    """
+    Run a downloaded file through the ingestor pipeline.
+    Shared between Google Drive and S3 sync paths.
+    """
+    cf.status = "ingesting"
+    db.commit()
+
+    from config import EXT_MAP
+    file_type = EXT_MAP.get(ext, "")
+    file_size = dest_path.stat().st_size if dest_path.exists() else cf.remote_size_bytes
+
+    doc = Document(
+        tenant_id=sync.tenant_id,
+        workspace_id=sync.workspace_id,
+        uploaded_by=None,
+        filename=dest_path.name,
+        file_type=file_type,
+        file_size_bytes=file_size,
+        status="processing",
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
+    cf.document_id = doc.id
+    db.commit()
+
+    from db_models import Workspace, Tenant
+    ws = db.query(Workspace).filter(Workspace.id == sync.workspace_id).first()
+    ws_name = ws.name if ws else ""
+    tenant = db.query(Tenant).filter(Tenant.id == sync.tenant_id).first()
+    tenant_name = tenant.name if tenant else ""
+
+    from ingestor import Ingestor
+    ing = Ingestor()
+    result = ing.ingest(
+        filepath=str(dest_path),
+        tenant_id=sync.tenant_id,
+        workspace_id=sync.workspace_id,
+        document_id=doc.id,
+        company_name=tenant_name,
+        workspace_name=ws_name,
+        force=True,
+    )
+
+    if result.ok:
+        doc.status = "ready"
+        doc.chunk_count = len(result.chunks)
+        doc.image_count = len(result.images)
+        doc.processed_at = datetime.utcnow()
+        cf.status = "ready"
+        try:
+            from hybrid_search import invalidate_index
+            invalidate_index(sync.tenant_id, sync.workspace_id)
+        except Exception:
+            pass
+    else:
+        doc.status = "error"
+        doc.error_message = result.error
+        cf.status = "error"
+        cf.error_message = result.error or "Ingestion failed"
+
+    db.commit()
+    print(f"  [Sync] Ingested '{name}' - {doc.chunk_count} chunks, {doc.image_count} images")
+
+
+def _download_and_ingest_file(
+    sync: ConnectorSync,
+    cred: ConnectorCredential,
+    file_meta: dict,
+    db,
+):
+    """Download one file from Drive and run it through the ingestor."""
+    file_id = file_meta["id"]
+    name = file_meta.get("name", "unknown")
+    mime = file_meta.get("mimeType", "")
+    modified_str = file_meta.get("modifiedTime", "")
+    size = int(file_meta.get("size", 0) or 0)
+
+    ext = gdrive.get_file_extension(mime)
+    if not ext:
+        raise ValueError(f"Unsupported MIME type: {mime}")
+
+    cf, dest_path = _prepare_connector_file(
+        sync, file_id, name, mime, modified_str, size, ext, db,
+    )
+
     try:
-        # Download
+        # Download from Google Drive
         gdrive.download_file(cred, file_id, mime, str(dest_path))
         db.commit()  # persist token refresh
 
-        cf.status = "ingesting"
+        _ingest_downloaded_file(sync, cf, dest_path, ext, name, db)
+
+    except Exception as e:
+        cf.status = "error"
+        cf.error_message = str(e)[:500]
         db.commit()
+        raise
 
-        # Create Document record
-        from config import EXT_MAP
-        file_type = EXT_MAP.get(ext, "")
-        file_size = dest_path.stat().st_size if dest_path.exists() else size
 
-        doc = Document(
-            tenant_id=sync.tenant_id,
-            workspace_id=sync.workspace_id,
-            uploaded_by=None,  # synced, not uploaded by a user
-            filename=dest_path.name,
-            file_type=file_type,
-            file_size_bytes=file_size,
-            status="processing",
-        )
-        db.add(doc)
-        db.commit()
-        db.refresh(doc)
+def _download_and_ingest_s3_file(
+    sync: ConnectorSync,
+    cred: ConnectorCredential,
+    file_meta: dict,
+    bucket: str,
+    db,
+):
+    """Download one file from S3 and run it through the ingestor."""
+    key = file_meta["key"]
+    name = file_meta.get("name", key.rsplit("/", 1)[-1])
+    mime = file_meta.get("mimeType", "")
+    modified_str = file_meta.get("modifiedTime", "")
+    size = int(file_meta.get("size", 0) or 0)
 
-        cf.document_id = doc.id
-        db.commit()
+    ext = s3_service.get_file_extension(key)
+    if not ext:
+        raise ValueError(f"Unsupported file type: {key}")
 
-        # Get workspace name for enrichment
-        from db_models import Workspace
-        ws = db.query(Workspace).filter(Workspace.id == sync.workspace_id).first()
-        ws_name = ws.name if ws else ""
+    cf, dest_path = _prepare_connector_file(
+        sync, key, name, mime, modified_str, size, ext, db,
+    )
 
-        from db_models import Tenant
-        tenant = db.query(Tenant).filter(Tenant.id == sync.tenant_id).first()
-        tenant_name = tenant.name if tenant else ""
+    try:
+        # Download from S3
+        s3_service.download_object(cred, bucket, key, str(dest_path))
 
-        # Run through the existing ingestor pipeline
-        from ingestor import Ingestor
-        ing = Ingestor()
-        result = ing.ingest(
-            filepath=str(dest_path),
-            tenant_id=sync.tenant_id,
-            workspace_id=sync.workspace_id,
-            document_id=doc.id,
-            company_name=tenant_name,
-            workspace_name=ws_name,
-            force=True,
-        )
-
-        if result.ok:
-            doc.status = "ready"
-            doc.chunk_count = len(result.chunks)
-            doc.image_count = len(result.images)
-            doc.processed_at = datetime.utcnow()
-            cf.status = "ready"
-            try:
-                from hybrid_search import invalidate_index
-                invalidate_index(sync.tenant_id, sync.workspace_id)
-            except Exception:
-                pass
-        else:
-            doc.status = "error"
-            doc.error_message = result.error
-            cf.status = "error"
-            cf.error_message = result.error or "Ingestion failed"
-
-        db.commit()
-        print(f"  [Sync] Ingested '{name}' → {doc.chunk_count} chunks, {doc.image_count} images")
+        _ingest_downloaded_file(sync, cf, dest_path, ext, name, db)
 
     except Exception as e:
         cf.status = "error"
@@ -385,6 +449,126 @@ def _remove_synced_file(sync: ConnectorSync, remote_file_id: str, db):
         invalidate_index(sync.tenant_id, sync.workspace_id)
     except Exception:
         pass
+
+
+# ══════════════════════════════════════════
+#  S3 Sync Functions
+# ══════════════════════════════════════════
+
+def _run_initial_sync_s3(sync: ConnectorSync, cred: ConnectorCredential, db):
+    """Download all supported files from the S3 bucket/prefix and ingest them."""
+    bucket, prefix = s3_service.parse_bucket_prefix(sync.remote_folder_id)
+    print(f"  [Sync] S3 initial sync for '{bucket}/{prefix}'")
+
+    files = s3_service.list_objects(cred, bucket, prefix)
+    synced_count = 0
+    errors = []
+
+    for file_meta in files:
+        try:
+            _download_and_ingest_s3_file(sync, cred, file_meta, bucket, db)
+            synced_count += 1
+        except Exception as e:
+            traceback.print_exc()
+            errors.append(f"{file_meta.get('name', '?')}: {str(e)[:100]}")
+
+    sync.last_sync_at = datetime.utcnow()
+    sync.files_synced = synced_count
+    if errors:
+        sync.last_sync_status = "error" if synced_count == 0 else "success"
+        sync.last_sync_message = f"Synced {synced_count}/{len(files)} files. Errors: {'; '.join(errors[:3])}"
+    else:
+        sync.last_sync_status = "success"
+        sync.last_sync_message = f"Synced {synced_count} files"
+    db.commit()
+
+    print(f"  [Sync] S3 initial sync complete: {synced_count}/{len(files)} files")
+
+
+def _run_incremental_sync_s3(sync: ConnectorSync, cred: ConnectorCredential, db):
+    """Compare S3 objects against stored files and process changes."""
+    bucket, prefix = s3_service.parse_bucket_prefix(sync.remote_folder_id)
+    print(f"  [Sync] S3 incremental sync for '{bucket}/{prefix}'")
+
+    # Get current state from S3
+    current_objects = s3_service.list_objects(cred, bucket, prefix)
+    current_keys = {obj["key"]: obj for obj in current_objects}
+
+    # Get stored state from DB
+    existing_files = db.query(ConnectorFile).filter(
+        ConnectorFile.sync_id == sync.id,
+        ConnectorFile.status != "deleted",
+    ).all()
+    existing_keys = {cf.remote_file_id: cf for cf in existing_files}
+
+    added = 0
+    updated = 0
+    removed = 0
+    errors = []
+
+    # Find new and modified files
+    for key, obj in current_keys.items():
+        try:
+            if key not in existing_keys:
+                # New file
+                _download_and_ingest_s3_file(sync, cred, obj, bucket, db)
+                added += 1
+            else:
+                # Check if modified (compare LastModified)
+                cf = existing_keys[key]
+                if cf.remote_modified_at and obj.get("modifiedTime"):
+                    try:
+                        remote_modified = datetime.fromisoformat(
+                            obj["modifiedTime"].replace("Z", "+00:00")
+                        )
+                        # Compare as naive UTC (strip timezone info for comparison)
+                        remote_naive = remote_modified.replace(tzinfo=None)
+                        if remote_naive > cf.remote_modified_at:
+                            # File was modified - remove old, re-ingest
+                            _remove_synced_file(sync, key, db)
+                            _download_and_ingest_s3_file(sync, cred, obj, bucket, db)
+                            updated += 1
+                    except Exception:
+                        pass  # Skip comparison on parse errors
+        except Exception as e:
+            traceback.print_exc()
+            errors.append(f"{obj.get('name', key[:20])}: {str(e)[:100]}")
+
+    # Find deleted files (in DB but not in S3)
+    for key in existing_keys:
+        if key not in current_keys:
+            try:
+                _remove_synced_file(sync, key, db)
+                removed += 1
+            except Exception as e:
+                errors.append(f"Remove {key[:20]}: {str(e)[:100]}")
+
+    # Update sync status
+    sync.last_sync_at = datetime.utcnow()
+
+    file_count = db.query(ConnectorFile).filter(
+        ConnectorFile.sync_id == sync.id,
+        ConnectorFile.status == "ready",
+    ).count()
+    sync.files_synced = file_count
+
+    parts = []
+    if added:
+        parts.append(f"{added} added")
+    if updated:
+        parts.append(f"{updated} updated")
+    if removed:
+        parts.append(f"{removed} removed")
+    if not parts:
+        parts.append("No changes")
+    if errors:
+        parts.append(f"{len(errors)} errors")
+
+    sync.last_sync_status = "error" if errors and not (added or updated or removed) else "success"
+    sync.last_sync_message = ", ".join(parts)
+    db.commit()
+
+    print(f"  [Sync] S3 incremental sync complete: {', '.join(parts)}")
 
 
 # ══════════════════════════════════════════

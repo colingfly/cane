@@ -13,6 +13,7 @@ import {
   getMemories, addMemory, updateMemory, deleteMemory, clearMemories,
   getGdriveAuthUrl, getGdriveStatus, disconnectGdrive,
   listDriveFolders, listSyncs, createSync, getSync, triggerSync, updateSyncStatus, deleteSync,
+  testS3Connection, connectS3, getS3Status, disconnectS3, browseS3,
 } from '../api/client'
 import { getEnvironments, getRuns } from '../api/eval'
 
@@ -123,6 +124,25 @@ export default function AgentDetail() {
   const [syncCreating, setSyncCreating] = useState(false)
   const [expandedSync, setExpandedSync] = useState(null)
   const [syncFiles, setSyncFiles] = useState({})
+
+  // Live Connectors (S3)
+  const [s3Connected, setS3Connected] = useState(false)
+  const [s3Label, setS3Label] = useState('')
+  const [s3Loading, setS3Loading] = useState(true)
+  const [s3ShowForm, setS3ShowForm] = useState(false)
+  const [s3Form, setS3Form] = useState({
+    endpoint_url: '', access_key: '', secret_key: '', region: 'us-east-1',
+  })
+  const [s3Testing, setS3Testing] = useState(false)
+  const [s3TestResult, setS3TestResult] = useState(null)
+  const [s3Connecting, setS3Connecting] = useState(false)
+  const [s3Buckets, setS3Buckets] = useState([])
+  const [s3BrowseBucket, setS3BrowseBucket] = useState('')
+  const [s3BrowsePrefix, setS3BrowsePrefix] = useState('')
+  const [s3BrowseResults, setS3BrowseResults] = useState({ prefixes: [], files: [] })
+  const [s3Browsing, setS3Browsing] = useState(false)
+  const [s3SelectedPath, setS3SelectedPath] = useState(null)
+  const [s3SyncCreating, setS3SyncCreating] = useState(false)
 
   // Widget config
   const [widgetConfig, setWidgetConfig] = useState({
@@ -252,16 +272,30 @@ export default function AgentDetail() {
 
   const loadConnectorStatus = async () => {
     setGdriveLoading(true)
+    setS3Loading(true)
     try {
       const status = await getGdriveStatus()
       setGdriveConnected(status.connected)
       setGdriveEmail(status.account_email || '')
-      if (status.connected) {
-        const syncsRes = await listSyncs(agentId)
-        setSyncs(syncsRes.syncs || [])
+    } catch { /* ignore */ }
+    try {
+      const s3Status = await getS3Status()
+      setS3Connected(s3Status.connected)
+      setS3Label(s3Status.display_label || '')
+      if (s3Status.connected) {
+        try {
+          const browse = await browseS3()
+          setS3Buckets(browse.buckets || [])
+        } catch { /* ignore */ }
       }
     } catch { /* ignore */ }
+    // Load syncs (both providers share the same list)
+    try {
+      const syncsRes = await listSyncs(agentId)
+      setSyncs(syncsRes.syncs || [])
+    } catch { /* ignore */ }
     setGdriveLoading(false)
+    setS3Loading(false)
   }
 
   // Poll running syncs for status updates
@@ -789,6 +823,87 @@ export default function AgentDetail() {
       const res = await getSync(syncId)
       setSyncFiles(prev => ({ ...prev, [syncId]: res.files || [] }))
     } catch { /* ignore */ }
+  }
+
+  // ── S3 Connector handlers ──
+  const handleTestS3 = async () => {
+    setS3Testing(true)
+    setS3TestResult(null)
+    try {
+      const res = await testS3Connection(s3Form)
+      setS3TestResult({ ok: true, message: `Connected - ${res.buckets?.length || 0} buckets found` })
+      setS3Buckets(res.buckets || [])
+    } catch (e) {
+      setS3TestResult({ ok: false, message: e.message || 'Connection failed' })
+    }
+    setS3Testing(false)
+  }
+
+  const handleConnectS3 = async () => {
+    setS3Connecting(true)
+    try {
+      const res = await connectS3(s3Form)
+      setS3Connected(true)
+      setS3Label(res.display_label || 'S3')
+      setS3ShowForm(false)
+      setS3Form({ endpoint_url: '', access_key: '', secret_key: '', region: 'us-east-1' })
+      setS3TestResult(null)
+      // Load buckets for browsing
+      try {
+        const browse = await browseS3()
+        setS3Buckets(browse.buckets || [])
+      } catch { /* ignore */ }
+    } catch (e) {
+      alert('Failed to connect S3: ' + e.message)
+    }
+    setS3Connecting(false)
+  }
+
+  const handleDisconnectS3 = async () => {
+    if (!confirm('Disconnect S3? All synced documents from S3 will be removed.')) return
+    try {
+      await disconnectS3()
+      setS3Connected(false)
+      setS3Label('')
+      setS3Buckets([])
+      setS3BrowseBucket('')
+      setS3BrowsePrefix('')
+      setS3BrowseResults({ prefixes: [], files: [] })
+      setSyncs(prev => prev.filter(s => s.provider !== 's3'))
+      const docsRes = await getDocuments(agentId)
+      setDocuments(docsRes.documents || [])
+    } catch (e) {
+      alert('Failed to disconnect: ' + e.message)
+    }
+  }
+
+  const handleBrowseS3 = async (bucket, prefix = '') => {
+    setS3Browsing(true)
+    setS3BrowseBucket(bucket)
+    setS3BrowsePrefix(prefix)
+    setS3SelectedPath(null)
+    try {
+      const res = await browseS3(bucket, prefix)
+      setS3BrowseResults({ prefixes: res.prefixes || [], files: res.files || [] })
+    } catch (e) {
+      alert('Failed to browse S3: ' + e.message)
+    }
+    setS3Browsing(false)
+  }
+
+  const handleCreateS3Sync = async () => {
+    if (!s3BrowseBucket) return
+    setS3SyncCreating(true)
+    const folderId = s3BrowsePrefix ? `${s3BrowseBucket}/${s3BrowsePrefix}` : s3BrowseBucket
+    const folderName = s3BrowsePrefix ? `${s3BrowseBucket}/${s3BrowsePrefix}` : s3BrowseBucket
+    try {
+      await createSync(agentId, folderId, folderName, 's3')
+      setS3SelectedPath(null)
+      loadConnectorStatus()
+    } catch (e) {
+      alert('Failed to create sync: ' + e.message)
+    }
+    setS3SyncCreating(false)
   }
 
   // Sub-Agent Link handlers
@@ -1682,7 +1797,7 @@ export default function AgentDetail() {
       </div>
       )}
 
-      {/* ════════════ Live Connectors (Google Drive) ════════════ */}
+      {/* ════════════ Live Connectors ════════════ */}
       {tab === 'knowledge' && (
       <div className="card" style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -1695,145 +1810,423 @@ export default function AgentDetail() {
               }}>{syncs.reduce((sum, s) => sum + (s.files_synced || 0), 0)} files synced</span>
             )}
           </h3>
-          {gdriveConnected && (
-            <button className="btn btn-ghost" onClick={handleDisconnectGdrive} style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              <Unplug size={12} /> Disconnect
-            </button>
-          )}
         </div>
 
-        {gdriveLoading ? (
+        {(gdriveLoading || s3Loading) ? (
           <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.84rem' }}>
             <span className="spinner" style={{ width: 14, height: 14, marginRight: 6 }} /> Loading...
           </div>
-        ) : !gdriveConnected ? (
-          /* ── State A: Not connected ── */
-          <div style={{ textAlign: 'center', padding: '32px 20px' }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>
-              <svg width="40" height="40" viewBox="0 0 87.3 78" style={{ display: 'inline-block' }}>
-                <path d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H1c0 1.55.4 3.1 1.2 4.5z" fill="#0066DA"/>
-                <path d="M43.65 25L29.9 1.2c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0-1.2 4.5h27.5z" fill="#00AC47"/>
-                <path d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.8l5.95 10.3z" fill="#EA4335"/>
-                <path d="M43.65 25L57.4 1.2C56.05.4 54.5 0 52.9 0H34.4c-1.6 0-3.15.45-4.5 1.2z" fill="#00832D"/>
-                <path d="M59.8 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.5 1.2h36.75c1.6 0 3.15-.45 4.5-1.2z" fill="#2684FC"/>
-                <path d="M73.4 26.5l-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3L43.65 25l16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#FFBA00"/>
-              </svg>
-            </div>
-            <div style={{ fontSize: '0.88rem', fontWeight: 600, marginBottom: 6 }}>Connect Google Drive</div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 16, maxWidth: 360, margin: '0 auto 16px' }}>
-              Sync files directly from Google Drive into this agent's knowledge base. Files stay up to date automatically.
-            </div>
-            <button className="btn btn-primary" onClick={handleConnectGdrive} style={{ fontSize: '0.84rem' }}>
-              Connect Google Drive
-            </button>
-          </div>
         ) : (
-          /* ── State B/C: Connected ── */
           <div>
-            {/* Connected status */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16,
-              padding: '8px 12px', background: 'rgba(74,222,128,0.08)', borderRadius: 'var(--radius-sm)',
-              fontSize: '0.8rem', color: 'var(--success)',
-            }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--success)', flexShrink: 0 }} />
-              Connected as <strong>{gdriveEmail}</strong>
-            </div>
-
-            {/* Folder picker */}
-            <div style={{ marginBottom: 16 }}>
-              <label style={{
-                fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)',
-                display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em',
-              }}>
-                Add a folder to sync
-              </label>
-              <div style={{ position: 'relative' }}>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <div style={{ position: 'relative', flex: 1 }}>
-                    <input
-                      className="form-input"
-                      value={folderQuery}
-                      onChange={e => handleFolderSearch(e.target.value)}
-                      placeholder="Search your Drive folders..."
-                      style={{ fontSize: '0.84rem', paddingLeft: 32 }}
-                    />
-                    <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                    {folderSearching && (
-                      <span className="spinner" style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14 }} />
-                    )}
-                  </div>
-                  {selectedFolder && (
-                    <button
-                      className="btn btn-primary"
-                      onClick={handleCreateSync}
-                      disabled={syncCreating}
-                      style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}
-                    >
-                      {syncCreating ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Syncing...</> : <><Plus size={14} /> Start Sync</>}
-                    </button>
-                  )}
+            {/* ─── Google Drive Section ─── */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.84rem', fontWeight: 600 }}>
+                  <svg width="18" height="18" viewBox="0 0 87.3 78" style={{ display: 'inline-block' }}>
+                    <path d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H1c0 1.55.4 3.1 1.2 4.5z" fill="#0066DA"/>
+                    <path d="M43.65 25L29.9 1.2c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0-1.2 4.5h27.5z" fill="#00AC47"/>
+                    <path d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.8l5.95 10.3z" fill="#EA4335"/>
+                    <path d="M43.65 25L57.4 1.2C56.05.4 54.5 0 52.9 0H34.4c-1.6 0-3.15.45-4.5 1.2z" fill="#00832D"/>
+                    <path d="M59.8 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.5 1.2h36.75c1.6 0 3.15-.45 4.5-1.2z" fill="#2684FC"/>
+                    <path d="M73.4 26.5l-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3L43.65 25l16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#FFBA00"/>
+                  </svg>
+                  Google Drive
                 </div>
-
-                {/* Folder search results dropdown */}
-                {folderResults.length > 0 && !selectedFolder && (
-                  <div style={{
-                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
-                    background: 'var(--bg-card)', border: '1px solid var(--border)',
-                    borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-lg)',
-                    maxHeight: 200, overflowY: 'auto', marginTop: 4,
-                  }}>
-                    {folderResults.map(folder => (
-                      <button
-                        key={folder.id}
-                        onClick={() => {
-                          setSelectedFolder(folder)
-                          setFolderQuery(folder.name)
-                          setFolderResults([])
-                        }}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 8, width: '100%',
-                          padding: '8px 12px', border: 'none', background: 'none',
-                          cursor: 'pointer', fontSize: '0.84rem', color: 'var(--text)',
-                          textAlign: 'left',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                      >
-                        <FolderOpen size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-                        {folder.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {selectedFolder && (
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: 8, marginTop: 8,
-                    padding: '6px 10px', background: 'var(--accent-muted)', borderRadius: 'var(--radius-sm)',
-                    fontSize: '0.8rem',
-                  }}>
-                    <FolderOpen size={14} style={{ color: 'var(--accent)' }} />
-                    <span style={{ fontWeight: 600 }}>{selectedFolder.name}</span>
-                    <button
-                      onClick={() => { setSelectedFolder(null); setFolderQuery(''); }}
-                      style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2 }}
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
+                {gdriveConnected && (
+                  <button className="btn btn-ghost" onClick={handleDisconnectGdrive} style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    <Unplug size={11} /> Disconnect
+                  </button>
                 )}
               </div>
+
+              {!gdriveConnected ? (
+                <div style={{
+                  padding: '20px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    Sync files from Google Drive into this agent's knowledge base.
+                  </div>
+                  <button className="btn btn-secondary" onClick={handleConnectGdrive} style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                    Connect
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12,
+                    padding: '6px 10px', background: 'rgba(74,222,128,0.08)', borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.78rem', color: 'var(--success)',
+                  }}>
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', flexShrink: 0 }} />
+                    Connected as <strong>{gdriveEmail}</strong>
+                  </div>
+
+                  {/* Folder picker */}
+                  <div style={{ position: 'relative' }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <div style={{ position: 'relative', flex: 1 }}>
+                        <input
+                          className="form-input"
+                          value={folderQuery}
+                          onChange={e => handleFolderSearch(e.target.value)}
+                          placeholder="Search your Drive folders..."
+                          style={{ fontSize: '0.84rem', paddingLeft: 32 }}
+                        />
+                        <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                        {folderSearching && (
+                          <span className="spinner" style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14 }} />
+                        )}
+                      </div>
+                      {selectedFolder && (
+                        <button
+                          className="btn btn-primary"
+                          onClick={handleCreateSync}
+                          disabled={syncCreating}
+                          style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}
+                        >
+                          {syncCreating ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Syncing...</> : <><Plus size={14} /> Start Sync</>}
+                        </button>
+                      )}
+                    </div>
+
+                    {folderResults.length > 0 && !selectedFolder && (
+                      <div style={{
+                        position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
+                        background: 'var(--bg-card)', border: '1px solid var(--border)',
+                        borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-lg)',
+                        maxHeight: 200, overflowY: 'auto', marginTop: 4,
+                      }}>
+                        {folderResults.map(folder => (
+                          <button
+                            key={folder.id}
+                            onClick={() => {
+                              setSelectedFolder(folder)
+                              setFolderQuery(folder.name)
+                              setFolderResults([])
+                            }}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                              padding: '8px 12px', border: 'none', background: 'none',
+                              cursor: 'pointer', fontSize: '0.84rem', color: 'var(--text)',
+                              textAlign: 'left',
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                          >
+                            <FolderOpen size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                            {folder.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {selectedFolder && (
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 8, marginTop: 8,
+                        padding: '6px 10px', background: 'var(--accent-muted)', borderRadius: 'var(--radius-sm)',
+                        fontSize: '0.8rem',
+                      }}>
+                        <FolderOpen size={14} style={{ color: 'var(--accent)' }} />
+                        <span style={{ fontWeight: 600 }}>{selectedFolder.name}</span>
+                        <button
+                          onClick={() => { setSelectedFolder(null); setFolderQuery(''); }}
+                          style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2 }}
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Active syncs */}
+            {/* ─── Divider ─── */}
+            <div style={{ borderTop: '1px solid var(--border)', margin: '20px 0' }} />
+
+            {/* ─── S3 Section ─── */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.84rem', fontWeight: 600 }}>
+                  <Cloud size={16} style={{ color: '#FF9900' }} />
+                  S3 Storage
+                </div>
+                {s3Connected && (
+                  <button className="btn btn-ghost" onClick={handleDisconnectS3} style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    <Unplug size={11} /> Disconnect
+                  </button>
+                )}
+              </div>
+
+              {!s3Connected && !s3ShowForm ? (
+                <div style={{
+                  padding: '20px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    Sync files from any S3-compatible storage (AWS, MinIO, Ceph).
+                  </div>
+                  <button className="btn btn-secondary" onClick={() => setS3ShowForm(true)} style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                    Connect
+                  </button>
+                </div>
+              ) : !s3Connected && s3ShowForm ? (
+                /* ── S3 Connection Form ── */
+                <div style={{
+                  padding: '16px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)',
+                }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Endpoint URL
+                      </label>
+                      <input
+                        className="form-input"
+                        value={s3Form.endpoint_url}
+                        onChange={e => setS3Form(prev => ({ ...prev, endpoint_url: e.target.value }))}
+                        placeholder="Leave blank for AWS S3"
+                        style={{ fontSize: '0.84rem' }}
+                      />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Region
+                      </label>
+                      <input
+                        className="form-input"
+                        value={s3Form.region}
+                        onChange={e => setS3Form(prev => ({ ...prev, region: e.target.value }))}
+                        placeholder="us-east-1"
+                        style={{ fontSize: '0.84rem' }}
+                      />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Access Key ID
+                      </label>
+                      <input
+                        className="form-input"
+                        value={s3Form.access_key}
+                        onChange={e => setS3Form(prev => ({ ...prev, access_key: e.target.value }))}
+                        placeholder="AKIAIOSFODNN7..."
+                        style={{ fontSize: '0.84rem' }}
+                      />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Secret Access Key
+                      </label>
+                      <input
+                        className="form-input"
+                        type="password"
+                        value={s3Form.secret_key}
+                        onChange={e => setS3Form(prev => ({ ...prev, secret_key: e.target.value }))}
+                        placeholder="wJalrXUtnFEMI..."
+                        style={{ fontSize: '0.84rem' }}
+                      />
+                    </div>
+                  </div>
+
+                  {s3TestResult && (
+                    <div style={{
+                      padding: '8px 12px', borderRadius: 'var(--radius-sm)', marginBottom: 12,
+                      fontSize: '0.78rem',
+                      background: s3TestResult.ok ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.08)',
+                      color: s3TestResult.ok ? 'var(--success)' : 'var(--error)',
+                      border: `1px solid ${s3TestResult.ok ? 'rgba(74,222,128,0.3)' : 'rgba(248,113,113,0.3)'}`,
+                    }}>
+                      {s3TestResult.ok ? '✓ ' : '✗ '}{s3TestResult.message}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <button className="btn btn-ghost" onClick={() => { setS3ShowForm(false); setS3TestResult(null) }} style={{ fontSize: '0.82rem' }}>
+                      Cancel
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={handleTestS3}
+                      disabled={s3Testing || !s3Form.access_key || !s3Form.secret_key}
+                      style={{ fontSize: '0.82rem' }}
+                    >
+                      {s3Testing ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Testing...</> : 'Test Connection'}
+                    </button>
+                    <button
+                      className="btn btn-primary"
+                      onClick={handleConnectS3}
+                      disabled={s3Connecting || !s3Form.access_key || !s3Form.secret_key}
+                      style={{ fontSize: '0.82rem' }}
+                    >
+                      {s3Connecting ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Connecting...</> : 'Connect'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* ── S3 Connected: Browse and sync ── */
+                <div>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12,
+                    padding: '6px 10px', background: 'rgba(74,222,128,0.08)', borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.78rem', color: 'var(--success)',
+                  }}>
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', flexShrink: 0 }} />
+                    Connected to <strong>{s3Label}</strong>
+                  </div>
+
+                  {/* Bucket/prefix browser */}
+                  <div style={{ marginBottom: 12 }}>
+                    {!s3BrowseBucket ? (
+                      /* Bucket selection */
+                      <div>
+                        <label style={{
+                          fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)',
+                          display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em',
+                        }}>
+                          Select a bucket
+                        </label>
+                        {s3Buckets.length > 0 ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {s3Buckets.map(b => (
+                              <button
+                                key={b.id}
+                                onClick={() => handleBrowseS3(b.id)}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                                  padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)',
+                                  background: 'var(--bg-card)', cursor: 'pointer', fontSize: '0.84rem', color: 'var(--text)',
+                                  textAlign: 'left',
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+                                onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                              >
+                                <Cloud size={14} style={{ color: '#FF9900' }} />
+                                {b.name}
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <button className="btn btn-secondary" onClick={() => handleBrowseS3('')} style={{ fontSize: '0.82rem' }}>
+                            {s3Browsing ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Loading...</> : 'Load Buckets'}
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      /* Prefix browsing within a bucket */
+                      <div>
+                        {/* Breadcrumb */}
+                        <div style={{
+                          display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8,
+                          fontSize: '0.78rem', color: 'var(--text-muted)',
+                        }}>
+                          <button
+                            onClick={() => { setS3BrowseBucket(''); setS3BrowsePrefix(''); setS3BrowseResults({ prefixes: [], files: [] }) }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: '0.78rem', padding: 0 }}
+                          >
+                            Buckets
+                          </button>
+                          <span>/</span>
+                          <button
+                            onClick={() => handleBrowseS3(s3BrowseBucket, '')}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: '0.78rem', padding: 0 }}
+                          >
+                            {s3BrowseBucket}
+                          </button>
+                          {s3BrowsePrefix && s3BrowsePrefix.split('/').filter(Boolean).map((seg, i, arr) => {
+                            const path = arr.slice(0, i + 1).join('/') + '/'
+                            return (
+                              <span key={path} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span>/</span>
+                                <button
+                                  onClick={() => handleBrowseS3(s3BrowseBucket, path)}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: i === arr.length - 1 ? 'var(--text)' : 'var(--accent)', fontSize: '0.78rem', padding: 0 }}
+                                >
+                                  {seg}
+                                </button>
+                              </span>
+                            )
+                          })}
+                        </div>
+
+                        {s3Browsing ? (
+                          <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                            <span className="spinner" style={{ width: 14, height: 14, marginRight: 6 }} /> Loading...
+                          </div>
+                        ) : (
+                          <div>
+                            {/* Prefixes (folders) */}
+                            {s3BrowseResults.prefixes.map(p => (
+                              <button
+                                key={p.id}
+                                onClick={() => handleBrowseS3(s3BrowseBucket, p.full_path)}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                                  padding: '6px 10px', border: 'none', background: 'none',
+                                  cursor: 'pointer', fontSize: '0.82rem', color: 'var(--text)', textAlign: 'left',
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+                                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                              >
+                                <FolderOpen size={14} style={{ color: '#FF9900' }} />
+                                {p.name}/
+                              </button>
+                            ))}
+                            {/* Files preview */}
+                            {s3BrowseResults.files.slice(0, 5).map(f => (
+                              <div key={f.id} style={{
+                                display: 'flex', alignItems: 'center', gap: 8,
+                                padding: '6px 10px', fontSize: '0.78rem', color: 'var(--text-muted)',
+                              }}>
+                                <FileText size={12} />
+                                {f.name}
+                                <span style={{ marginLeft: 'auto', fontSize: '0.7rem' }}>
+                                  {f.size > 1024 * 1024 ? `${(f.size / 1024 / 1024).toFixed(1)} MB` : `${Math.round(f.size / 1024)} KB`}
+                                </span>
+                              </div>
+                            ))}
+                            {s3BrowseResults.files.length > 5 && (
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', padding: '4px 10px' }}>
+                                + {s3BrowseResults.files.length - 5} more files
+                              </div>
+                            )}
+                            {s3BrowseResults.prefixes.length === 0 && s3BrowseResults.files.length === 0 && (
+                              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', padding: '12px 0', textAlign: 'center' }}>
+                                No supported files found at this location.
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Sync this path button */}
+                        <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+                          <button
+                            className="btn btn-primary"
+                            onClick={handleCreateS3Sync}
+                            disabled={s3SyncCreating}
+                            style={{ fontSize: '0.82rem' }}
+                          >
+                            {s3SyncCreating
+                              ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Syncing...</>
+                              : <><Plus size={14} /> Sync this {s3BrowsePrefix ? 'prefix' : 'bucket'}</>
+                            }
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ─── Shared Synced Folders List ─── */}
             {syncs.length > 0 && (
               <div>
+                <div style={{ borderTop: '1px solid var(--border)', margin: '20px 0' }} />
                 <label style={{
                   fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)',
                   display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em',
                 }}>
-                  Synced Folders
+                  Synced Sources
                 </label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {syncs.map(sync => {
@@ -1841,6 +2234,7 @@ export default function AgentDetail() {
                     const hasError = sync.last_sync_status === 'error'
                     const isPaused = sync.status === 'paused'
                     const statusColor = isRunning ? 'var(--warning)' : hasError ? 'var(--error)' : isPaused ? 'var(--text-muted)' : 'var(--success)'
+                    const isS3 = sync.provider === 's3'
 
                     return (
                       <div key={sync.id} style={{
@@ -1852,9 +2246,17 @@ export default function AgentDetail() {
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <div style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, flexShrink: 0 }} />
-                            <FolderOpen size={16} style={{ color: 'var(--accent)' }} />
+                            {isS3 ? <Cloud size={16} style={{ color: '#FF9900' }} /> : <FolderOpen size={16} style={{ color: 'var(--accent)' }} />}
                             <div>
-                              <div style={{ fontWeight: 600, fontSize: '0.84rem' }}>{sync.remote_folder_name}</div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontWeight: 600, fontSize: '0.84rem' }}>{sync.remote_folder_name}</span>
+                                <span style={{
+                                  fontSize: '0.6rem', fontWeight: 700, padding: '1px 6px', borderRadius: 4,
+                                  background: isS3 ? 'rgba(255,153,0,0.12)' : 'rgba(66,133,244,0.12)',
+                                  color: isS3 ? '#FF9900' : '#4285F4',
+                                  textTransform: 'uppercase', letterSpacing: '0.05em',
+                                }}>{isS3 ? 'S3' : 'Drive'}</span>
+                              </div>
                               <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
                                 {isRunning ? (
                                   <><span className="spinner" style={{ width: 10, height: 10, marginRight: 4, display: 'inline-block', verticalAlign: 'middle' }} /> Syncing...</>
@@ -1862,7 +2264,7 @@ export default function AgentDetail() {
                                   <>Last synced {new Date(sync.last_sync_at).toLocaleString()}</>
                                 ) : 'Not synced yet'}
                                 {sync.last_sync_message && !isRunning && (
-                                  <> — {sync.last_sync_message}</>
+                                  <> - {sync.last_sync_message}</>
                                 )}
                               </div>
                             </div>
@@ -1887,7 +2289,6 @@ export default function AgentDetail() {
                           </div>
                         </div>
 
-                        {/* Expanded file list */}
                         {expandedSync === sync.id && syncFiles[sync.id] && (
                           <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
                             {syncFiles[sync.id].length === 0 ? (
@@ -1917,12 +2318,6 @@ export default function AgentDetail() {
                     )
                   })}
                 </div>
-              </div>
-            )}
-
-            {syncs.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '12px 0', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                Search for a Google Drive folder above to start syncing documents.
               </div>
             )}
           </div>

@@ -21,6 +21,7 @@ from connector_models import ConnectorCredential, ConnectorSync, ConnectorFile
 from auth import get_current_user
 from services.crypto import encrypt, decrypt
 from services import gdrive
+from services import s3 as s3_service
 
 router = APIRouter(prefix="/api/connectors", tags=["connectors"])
 
@@ -233,6 +234,162 @@ def browse_folders(
 
 
 # ══════════════════════════════════════════
+#  S3-Compatible Storage
+# ══════════════════════════════════════════
+
+def _get_s3_credential(tenant_id: str, db: Session):
+    """Get the active S3 credential for a tenant."""
+    return db.query(ConnectorCredential).filter(
+        ConnectorCredential.tenant_id == tenant_id,
+        ConnectorCredential.provider == "s3",
+        ConnectorCredential.is_active == True,
+    ).first()
+
+
+@router.post("/s3/test")
+async def test_s3(
+    request: Request,
+    user: User = Depends(get_current_user),
+):
+    """Test an S3 connection with the given credentials."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON body")
+
+    endpoint_url = body.get("endpoint_url", "")
+    access_key = body.get("access_key", "")
+    secret_key = body.get("secret_key", "")
+    region = body.get("region", "us-east-1")
+
+    if not access_key or not secret_key:
+        raise HTTPException(400, "Access key and secret key are required")
+
+    try:
+        result = s3_service.test_connection(endpoint_url, access_key, secret_key, region)
+        return result
+    except Exception as e:
+        raise HTTPException(400, f"Connection failed: {str(e)[:200]}")
+
+
+@router.post("/s3/connect")
+async def connect_s3(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Store S3 credentials for the tenant."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON body")
+
+    endpoint_url = body.get("endpoint_url", "")
+    access_key = body.get("access_key", "")
+    secret_key = body.get("secret_key", "")
+    region = body.get("region", "us-east-1")
+    display_label = body.get("display_label", "")
+
+    if not access_key or not secret_key:
+        raise HTTPException(400, "Access key and secret key are required")
+
+    if not display_label:
+        if endpoint_url:
+            display_label = endpoint_url.replace("https://", "").replace("http://", "").split("/")[0]
+        else:
+            display_label = "AWS S3"
+
+    # Encrypt creds as JSON
+    creds_json = _json.dumps({
+        "access_key": access_key,
+        "secret_key": secret_key,
+        "endpoint_url": endpoint_url,
+        "region": region,
+    })
+
+    # Upsert credential
+    existing = _get_s3_credential(user.tenant_id, db)
+    if existing:
+        existing.refresh_token = encrypt(creds_json)
+        existing.access_token = ""
+        existing.token_expires_at = None
+        existing.account_email = display_label
+        existing.is_active = True
+        existing.updated_at = datetime.utcnow()
+    else:
+        cred = ConnectorCredential(
+            tenant_id=user.tenant_id,
+            provider="s3",
+            refresh_token=encrypt(creds_json),
+            access_token="",
+            account_email=display_label,
+        )
+        db.add(cred)
+
+    db.commit()
+    return {"connected": True, "display_label": display_label}
+
+
+@router.get("/s3/status")
+def s3_status(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Check if tenant has S3 connected."""
+    cred = _get_s3_credential(user.tenant_id, db)
+    if cred:
+        return {"connected": True, "display_label": cred.account_email or "S3"}
+    return {"connected": False, "display_label": ""}
+
+
+@router.delete("/s3")
+def disconnect_s3(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Disconnect S3 - delete credential and all S3 syncs."""
+    cred = _get_s3_credential(user.tenant_id, db)
+    if not cred:
+        raise HTTPException(404, "S3 not connected")
+
+    # Delete all syncs and their files
+    syncs = db.query(ConnectorSync).filter(
+        ConnectorSync.credential_id == cred.id,
+    ).all()
+    for sync in syncs:
+        _delete_sync_data(sync, db)
+
+    db.delete(cred)
+    db.commit()
+    return {"status": "disconnected"}
+
+
+@router.get("/s3/browse")
+def browse_s3(
+    bucket: str = Query(""),
+    prefix: str = Query(""),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Browse S3 buckets and prefixes."""
+    cred = _get_s3_credential(user.tenant_id, db)
+    if not cred:
+        raise HTTPException(400, "S3 not connected")
+
+    try:
+        if not bucket:
+            # List buckets
+            buckets = s3_service.list_buckets(cred)
+            return {"buckets": buckets, "prefixes": [], "files": []}
+        else:
+            # Browse within a bucket
+            result = s3_service.list_prefixes(cred, bucket, prefix)
+            return {"buckets": [], **result}
+    except Exception as e:
+        raise HTTPException(502, f"Failed to browse S3: {str(e)[:200]}")
+
+
+# ══════════════════════════════════════════
 #  Sync CRUD
 # ══════════════════════════════════════════
 
@@ -256,11 +413,12 @@ def create_sync(
     workspace_id: str = Query(...),
     folder_id: str = Query(...),
     folder_name: str = Query(""),
+    provider: str = Query("google_drive"),
     background_tasks: BackgroundTasks = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Create a new sync (folder → workspace) and trigger initial sync."""
+    """Create a new sync (folder/bucket -> workspace) and trigger initial sync."""
     # Validate workspace
     ws = db.query(Workspace).filter(
         Workspace.id == workspace_id, Workspace.tenant_id == user.tenant_id,
@@ -268,9 +426,14 @@ def create_sync(
     if not ws:
         raise HTTPException(400, "Invalid workspace")
 
-    cred = _get_credential(user.tenant_id, db)
-    if not cred:
-        raise HTTPException(400, "Google Drive not connected")
+    if provider == "s3":
+        cred = _get_s3_credential(user.tenant_id, db)
+        if not cred:
+            raise HTTPException(400, "S3 not connected")
+    else:
+        cred = _get_credential(user.tenant_id, db)
+        if not cred:
+            raise HTTPException(400, "Google Drive not connected")
 
     # Check for duplicate
     existing = db.query(ConnectorSync).filter(
@@ -285,6 +448,7 @@ def create_sync(
         tenant_id=user.tenant_id,
         credential_id=cred.id,
         workspace_id=workspace_id,
+        provider=provider,
         remote_folder_id=folder_id,
         remote_folder_name=folder_name or folder_id,
         status="active",
@@ -411,6 +575,7 @@ def _serialize_sync(sync: ConnectorSync, db: Session) -> dict:
     return {
         "id": sync.id,
         "workspace_id": sync.workspace_id,
+        "provider": sync.provider or "google_drive",
         "remote_folder_id": sync.remote_folder_id,
         "remote_folder_name": sync.remote_folder_name,
         "status": sync.status,
