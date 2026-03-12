@@ -17,7 +17,7 @@ from auth import get_current_user
 from security import sanitize_query
 from services.limits import check_search_limit
 from services.rag import build_context, build_system_prompt, call_claude
-from streaming import stream_claude, get_conversation_history, save_conversation_turn, _sse
+from streaming import stream_claude, get_conversation_history, save_conversation_turn, persist_conversation_turn, _sse
 from services.analytics import log_conversation
 from services.memory import get_memories, format_memories_for_prompt, extract_memories_background
 import time
@@ -79,10 +79,12 @@ def ask(
         claude_tools, tool_lookup = get_all_tools(workspace_id, user.tenant_id, db) if workspace_id else ([], {})
 
         if claude_tools:
+            chaining = getattr(ws, "tool_chaining_enabled", False) if workspace_id and ws else False
             messages = [{"role": "user", "content": user_prompt}]
             summary = call_claude_with_tools(
                 messages=messages, system=system_prompt,
                 tools=claude_tools, tool_lookup=tool_lookup, db_session=db,
+                max_iterations=5 if chaining else 3,
             )
         else:
             summary = call_claude(user_prompt, system=system_prompt)
@@ -106,6 +108,14 @@ def ask(
                 db, tenant_id=user.tenant_id, workspace_id=workspace_id,
                 query=q, answer=summary, channel="internal", user_id=user.id,
                 chunks_used=ctx.chunks_used, sources=ctx.sources, response_time_ms=elapsed_ms,
+            )
+            # Persist to conversation history
+            persist_conversation_turn(
+                session_id="", workspace_id=workspace_id,
+                tenant_id=user.tenant_id, user_id=user.id,
+                query=q, answer=summary, sources=ctx.sources,
+                chunks_used=ctx.chunks_used, response_time_ms=elapsed_ms,
+                channel="internal",
             )
 
         return {
@@ -174,6 +184,7 @@ def ask_stream(
 
     claude_tools, tool_lookup = get_all_tools(workspace_id, user.tenant_id, db) if workspace_id else ([], {})
     has_tools = len(claude_tools) > 0
+    chaining = getattr(ws, "tool_chaining_enabled", False) if workspace_id and ws else False
 
     # Capture user context for memory extraction
     _user_id = user.id
@@ -187,20 +198,40 @@ def ask_stream(
                              "chunks_used": ctx.chunks_used})
                 yield _sse({"type": "tool_status", "message": "Checking tools..."})
 
+                # Collect tool events for SSE
+                tool_events = []
+                def _on_tool_event(evt):
+                    tool_events.append(evt)
+
                 from database import SessionLocal
                 tool_db = SessionLocal()
                 try:
                     full_response = call_claude_with_tools(
                         messages=messages, system=system_prompt,
                         tools=claude_tools, tool_lookup=tool_lookup, db_session=tool_db,
+                        max_iterations=5 if chaining else 3,
+                        on_tool_event=_on_tool_event,
                     )
                 finally:
                     tool_db.close()
+
+                # Yield tool step events
+                for evt in tool_events:
+                    yield _sse({"type": "tool_step", **evt})
 
                 chunk_size = 8
                 for i in range(0, len(full_response), chunk_size):
                     yield _sse({"type": "text", "text": full_response[i:i+chunk_size]})
                 save_conversation_turn(session_id, q, full_response)
+
+                # Persist to DB
+                if _workspace_id:
+                    persist_conversation_turn(
+                        session_id=session_id, workspace_id=_workspace_id,
+                        tenant_id=_tenant_id, user_id=_user_id,
+                        query=q, answer=full_response, sources=ctx.sources,
+                        chunks_used=ctx.chunks_used, channel="internal",
+                    )
 
                 # Extract memories in background
                 if _workspace_id and full_response:
@@ -223,6 +254,15 @@ def ask_stream(
                         pass
             full_response = "".join(full_text)
             save_conversation_turn(session_id, q, full_response)
+
+            # Persist to DB
+            if _workspace_id:
+                persist_conversation_turn(
+                    session_id=session_id, workspace_id=_workspace_id,
+                    tenant_id=_tenant_id, user_id=_user_id,
+                    query=q, answer=full_response, sources=ctx.sources,
+                    chunks_used=ctx.chunks_used, channel="internal",
+                )
 
             # Extract memories in background
             if _workspace_id and full_response:

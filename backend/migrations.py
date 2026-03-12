@@ -20,6 +20,9 @@ def run_all():
     _migrate_agent_links_table()
     _migrate_agent_schedules_table()
     _migrate_agent_memories_table()
+    _migrate_conversations_table()
+    _migrate_schedule_condition_columns()
+    _migrate_tool_chaining_column()
 
 
 def _migrate_agent_columns():
@@ -472,3 +475,107 @@ def _migrate_agent_memories_table():
         print("  [DB] agent_memories table created")
     else:
         print("  [DB] agent_memories table already exists")
+
+
+def _migrate_conversations_table():
+    """Create conversations and conversation_messages tables."""
+    insp = inspect(engine)
+    tables = insp.get_table_names()
+
+    if "conversations" not in tables:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                CREATE TABLE conversations (
+                    id VARCHAR(36) PRIMARY KEY,
+                    workspace_id VARCHAR(36) NOT NULL,
+                    tenant_id VARCHAR(36) NOT NULL,
+                    user_id VARCHAR(36) NULL,
+                    session_id VARCHAR(100) NULL,
+                    title VARCHAR(500) DEFAULT '',
+                    channel VARCHAR(20) DEFAULT 'internal',
+                    message_count INT DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+                    FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+                    INDEX idx_conversations_workspace (workspace_id, created_at)
+                )
+            """))
+        print("  [DB] conversations table created")
+    else:
+        print("  [DB] conversations table already exists")
+
+    if "conversation_messages" not in tables:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                CREATE TABLE conversation_messages (
+                    id VARCHAR(36) PRIMARY KEY,
+                    conversation_id VARCHAR(36) NOT NULL,
+                    role VARCHAR(20) NOT NULL,
+                    content TEXT NOT NULL,
+                    sources TEXT NULL,
+                    chunks_used INT DEFAULT 0,
+                    response_time_ms INT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+                    INDEX idx_conv_messages_conv (conversation_id, created_at)
+                )
+            """))
+        print("  [DB] conversation_messages table created")
+    else:
+        print("  [DB] conversation_messages table already exists")
+
+
+def _migrate_schedule_condition_columns():
+    """Add condition columns to agent_schedules and condition_met to agent_schedule_runs."""
+    insp = inspect(engine)
+    try:
+        cols = {c["name"] for c in insp.get_columns("agent_schedules")}
+        condition_cols = {
+            "condition_enabled": "ALTER TABLE agent_schedules ADD COLUMN condition_enabled TINYINT(1) DEFAULT 0",
+            "condition_prompt": "ALTER TABLE agent_schedules ADD COLUMN condition_prompt TEXT DEFAULT ''",
+            "condition_action": "ALTER TABLE agent_schedules ADD COLUMN condition_action VARCHAR(50) DEFAULT 'store_only'",
+            "condition_webhook_url": "ALTER TABLE agent_schedules ADD COLUMN condition_webhook_url TEXT DEFAULT ''",
+            "condition_webhook_headers": "ALTER TABLE agent_schedules ADD COLUMN condition_webhook_headers TEXT DEFAULT '{}'",
+        }
+        added = []
+        for col_name, sql in condition_cols.items():
+            if col_name not in cols:
+                with engine.begin() as conn:
+                    conn.execute(text(sql))
+                added.append(col_name)
+        if added:
+            print(f"  [DB] Schedule condition columns added: {', '.join(added)}")
+        else:
+            print("  [DB] Schedule condition columns already present")
+    except Exception as e:
+        print(f"  [DB] Schedule condition migration skipped: {e}")
+
+    # Add condition_met to agent_schedule_runs
+    try:
+        run_cols = {c["name"] for c in insp.get_columns("agent_schedule_runs")}
+        if "condition_met" not in run_cols:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE agent_schedule_runs ADD COLUMN condition_met TINYINT(1) NULL"
+                ))
+            print("  [DB] Added condition_met to agent_schedule_runs")
+    except Exception as e:
+        print(f"  [DB] Schedule runs condition_met migration skipped: {e}")
+
+
+def _migrate_tool_chaining_column():
+    """Add tool_chaining_enabled column to workspaces."""
+    insp = inspect(engine)
+    cols = {c["name"] for c in insp.get_columns("workspaces")}
+    if "tool_chaining_enabled" not in cols:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE workspaces ADD COLUMN tool_chaining_enabled TINYINT(1) DEFAULT 0"
+                ))
+            print("  [DB] Added tool_chaining_enabled to workspaces")
+        except Exception as e:
+            print(f"  [DB] tool_chaining_enabled migration failed: {e}")
+    else:
+        print("  [DB] tool_chaining_enabled column already present")

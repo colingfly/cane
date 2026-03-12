@@ -111,21 +111,67 @@ def run_schedule(schedule_id: str):
                 )
 
                 if claude_tools:
+                    chaining = getattr(ws, "tool_chaining_enabled", False)
                     messages = [{"role": "user", "content": user_prompt}]
                     response_text = call_claude_with_tools(
                         messages=messages, system=system_prompt,
                         tools=claude_tools, tool_lookup=tool_lookup,
                         db_session=db,
+                        max_iterations=5 if chaining else 3,
                     )
                 else:
                     response_text = call_claude(user_prompt, system=system_prompt)
 
                 elapsed_ms = int((time.time() - t0) * 1000)
 
+                # Evaluate condition if enabled
+                condition_met = None
+                if getattr(schedule, "condition_enabled", False) and getattr(schedule, "condition_prompt", ""):
+                    try:
+                        eval_prompt = (
+                            f"Evaluate the following output against this condition.\n\n"
+                            f"Condition: {schedule.condition_prompt}\n\n"
+                            f"Output to evaluate:\n{(response_text or '')[:3000]}\n\n"
+                            f"Does the output meet the condition? Answer only YES or NO."
+                        )
+                        eval_result = call_claude(eval_prompt, system="You are a condition evaluator. Answer only YES or NO.")
+                        condition_met = "YES" in (eval_result or "").upper()
+                        print(f"  [Scheduler] Condition eval: {(eval_result or '').strip()} -> met={condition_met}")
+                    except Exception as e:
+                        print(f"  [Scheduler] Condition eval failed: {e}")
+                        condition_met = False
+
+                # Execute conditional action if met
+                if condition_met and getattr(schedule, "condition_action", "") == "send_webhook":
+                    webhook_url = getattr(schedule, "condition_webhook_url", "")
+                    if webhook_url:
+                        try:
+                            import json as _json
+                            webhook_headers = _json.loads(getattr(schedule, "condition_webhook_headers", "{}") or "{}")
+                            webhook_headers.setdefault("Content-Type", "application/json")
+                            payload = _json.dumps({
+                                "agent_id": schedule.workspace_id,
+                                "schedule_id": schedule.id,
+                                "prompt": schedule.prompt,
+                                "response": (response_text or "")[:5000],
+                                "condition": schedule.condition_prompt,
+                                "timestamp": datetime.utcnow().isoformat(),
+                            }).encode()
+                            import urllib.request
+                            req = urllib.request.Request(
+                                webhook_url, data=payload,
+                                headers=webhook_headers, method="POST"
+                            )
+                            with urllib.request.urlopen(req, timeout=15) as resp:
+                                print(f"  [Scheduler] Condition webhook sent: {resp.status}")
+                        except Exception as e:
+                            print(f"  [Scheduler] Condition webhook failed: {e}")
+
                 # Update run record
                 run.response = response_text or ""
                 run.status = "success"
                 run.duration_ms = elapsed_ms
+                run.condition_met = condition_met
 
                 # Update schedule
                 schedule.last_run_at = datetime.utcnow()

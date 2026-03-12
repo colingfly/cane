@@ -145,6 +145,8 @@ def call_claude_with_tools(
     tools: list,
     tool_lookup: dict,
     db_session=None,
+    max_iterations: int = 3,
+    on_tool_event=None,
 ) -> str:
     """
     Call Claude with tool definitions. If Claude wants to use a tool,
@@ -152,6 +154,8 @@ def call_claude_with_tools(
 
     tool_lookup: dict mapping tool_name -> ToolRef (from services.tools)
                  OR dict mapping tool_name -> AgentTool (legacy webhook-only)
+    max_iterations: max tool-use loop iterations (3 default, 5 with chaining)
+    on_tool_event: optional callback({"step": int, "tool": str, "status": str})
     """
     from services.claude import call_with_tools as _sdk_call
     from services.tools import ToolRef, execute_tool_call
@@ -159,7 +163,9 @@ def call_claude_with_tools(
     # Add instruction to always provide text answer
     enhanced_system = system + "\n\nIMPORTANT: You MUST always provide a complete text answer to the user's question. If you also call tools, you must STILL include your full written answer."
 
-    max_iterations = 3  # Safety limit on tool-use loops
+    if max_iterations > 3:
+        enhanced_system += "\n\nYou can chain multiple tools together to accomplish complex tasks. After receiving a tool result, you may call another tool if needed before giving your final answer. Think step by step about which tools to use and in what order."
+
     current_messages = list(messages)
     all_text_parts = []  # Collect text across all iterations
 
@@ -211,6 +217,9 @@ def call_claude_with_tools(
                 tool_use_id = block.id
 
                 print(f"  [Tools] Claude wants to call: {tool_name} with input: {json.dumps(tool_input)[:200]}")
+
+                if on_tool_event:
+                    on_tool_event({"step": iteration + 1, "tool": tool_name, "status": "calling"})
 
                 ref = tool_lookup.get(tool_name)
 
@@ -339,6 +348,9 @@ def call_claude_with_tools(
                     })
                 else:
                     result_content = exec_result.get("body", "")[:2000] or json.dumps(exec_result)
+
+                if on_tool_event:
+                    on_tool_event({"step": iteration + 1, "tool": tool_name, "status": "done"})
 
                 tool_results.append({
                     "type": "tool_result",

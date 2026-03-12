@@ -881,15 +881,22 @@ export default function AgentDetail() {
         </div>
       </div>
 
-      {/* Ask this agent */}
+      {/* Ask this agent + History */}
       {readyDocs.length > 0 && agent.system_prompt && (
-        <div style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
           <button
             className="btn btn-primary"
-            style={{ width: '100%', padding: 12, justifyContent: 'center', fontSize: '0.9375rem' }}
+            style={{ flex: 1, padding: 12, justifyContent: 'center', fontSize: '0.9375rem' }}
             onClick={() => navigate(`/search?workspace=${agentId}`)}
           >
             <MessageSquare size={16} /> Ask this agent
+          </button>
+          <button
+            className="btn btn-outline"
+            style={{ padding: '12px 16px', fontSize: '0.8125rem' }}
+            onClick={() => navigate(`/agents/${agentId}/conversations`)}
+          >
+            <Clock size={14} /> History
           </button>
         </div>
       )}
@@ -926,6 +933,32 @@ export default function AgentDetail() {
           style={{ padding: 4 }}
         >
           {agent.show_on_homepage
+            ? <ToggleRight size={28} style={{ color: 'var(--accent)' }} />
+            : <ToggleLeft size={28} style={{ color: 'var(--text-muted)' }} />
+          }
+        </button>
+      </div>
+      )}
+
+      {/* Tool Chaining toggle */}
+      {tab === 'configure' && (
+      <div className="card" style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <div style={{ fontWeight: 600, marginBottom: 2 }}>Tool Chaining</div>
+          <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+            Allow the agent to chain up to 5 tool calls in sequence for complex tasks
+          </div>
+        </div>
+        <button
+          className="btn btn-ghost"
+          onClick={async () => {
+            const newVal = !agent.tool_chaining_enabled
+            await updateAgent(agentId, { tool_chaining_enabled: newVal })
+            setAgent(prev => ({ ...prev, tool_chaining_enabled: newVal }))
+          }}
+          style={{ padding: 4 }}
+        >
+          {agent.tool_chaining_enabled
             ? <ToggleRight size={28} style={{ color: 'var(--accent)' }} />
             : <ToggleLeft size={28} style={{ color: 'var(--text-muted)' }} />
           }
@@ -2606,9 +2639,21 @@ export default function AgentDetail() {
                           {new Date(run.created_at).toLocaleString()}
                         </span>
                       </div>
-                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                        {run.duration_ms > 0 ? `${(run.duration_ms / 1000).toFixed(1)}s` : ''}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {run.condition_met !== null && run.condition_met !== undefined && (
+                          <span style={{
+                            fontSize: '0.65rem', fontWeight: 600,
+                            padding: '1px 6px', borderRadius: 4,
+                            background: run.condition_met ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
+                            color: run.condition_met ? '#4ade80' : '#f87171',
+                          }}>
+                            {run.condition_met ? 'Condition met' : 'Condition not met'}
+                          </span>
+                        )}
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                          {run.duration_ms > 0 ? `${(run.duration_ms / 1000).toFixed(1)}s` : ''}
+                        </span>
+                      </div>
                     </div>
 
                     {expandedRun === run.id && (
@@ -2632,6 +2677,112 @@ export default function AgentDetail() {
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Conditional Output */}
+        {schedule && (
+          <div style={{
+            marginTop: 16, padding: 14,
+            background: 'rgba(255,255,255,0.02)', borderRadius: 8,
+            border: '1px solid var(--rule)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: schedule.condition_enabled ? 12 : 0 }}>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700 }}>Conditional Output</div>
+              <button
+                className="btn btn-ghost"
+                style={{ padding: 4 }}
+                onClick={async () => {
+                  try {
+                    await updateSchedule(agentId, schedule.id, {
+                      condition_enabled: !schedule.condition_enabled,
+                    })
+                    setSchedule(prev => ({ ...prev, condition_enabled: !prev.condition_enabled }))
+                  } catch (e) { alert(e.message) }
+                }}
+              >
+                {schedule.condition_enabled
+                  ? <ToggleRight size={22} style={{ color: '#4ade80' }} />
+                  : <ToggleLeft size={22} style={{ color: 'var(--text-muted)' }} />
+                }
+              </button>
+            </div>
+
+            {schedule.condition_enabled && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div>
+                  <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                    Condition (when should the output be sent?)
+                  </label>
+                  <textarea
+                    value={schedule.condition_prompt || ''}
+                    onChange={e => setSchedule(prev => ({ ...prev, condition_prompt: e.target.value }))}
+                    placeholder="e.g. The output contains urgent or high-priority items"
+                    rows={2}
+                    style={{
+                      width: '100%', padding: '8px 10px', fontSize: '0.8125rem',
+                      background: 'var(--paper)', border: '1px solid var(--rule)',
+                      borderRadius: 6, color: 'var(--text)', resize: 'vertical',
+                      fontFamily: 'var(--font-body)', lineHeight: 1.5,
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                    Action when condition is met
+                  </label>
+                  <select
+                    value={schedule.condition_action || 'store_only'}
+                    onChange={e => setSchedule(prev => ({ ...prev, condition_action: e.target.value }))}
+                    style={{
+                      width: '100%', padding: '8px 10px', fontSize: '0.8125rem',
+                      background: 'var(--paper)', border: '1px solid var(--rule)',
+                      borderRadius: 6, color: 'var(--text)',
+                    }}
+                  >
+                    <option value="store_only">Store only (no notification)</option>
+                    <option value="send_webhook">Send to webhook</option>
+                  </select>
+                </div>
+
+                {(schedule.condition_action === 'send_webhook') && (
+                  <div>
+                    <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                      Webhook URL
+                    </label>
+                    <input
+                      type="text"
+                      value={schedule.condition_webhook_url || ''}
+                      onChange={e => setSchedule(prev => ({ ...prev, condition_webhook_url: e.target.value }))}
+                      placeholder="https://hooks.slack.com/services/..."
+                      style={{
+                        width: '100%', padding: '8px 10px', fontSize: '0.8125rem',
+                        background: 'var(--paper)', border: '1px solid var(--rule)',
+                        borderRadius: 6, color: 'var(--text)',
+                      }}
+                    />
+                  </div>
+                )}
+
+                <button
+                  className="btn btn-primary"
+                  style={{ alignSelf: 'flex-start', fontSize: '0.78rem', padding: '6px 14px' }}
+                  onClick={async () => {
+                    try {
+                      await updateSchedule(agentId, schedule.id, {
+                        condition_enabled: schedule.condition_enabled,
+                        condition_prompt: schedule.condition_prompt || '',
+                        condition_action: schedule.condition_action || 'store_only',
+                        condition_webhook_url: schedule.condition_webhook_url || '',
+                      })
+                    } catch (e) { alert(e.message) }
+                  }}
+                >
+                  Save Condition
+                </button>
               </div>
             )}
           </div>

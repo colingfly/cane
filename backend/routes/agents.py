@@ -110,6 +110,7 @@ def get_agent(agent_id: str, user: User = Depends(get_current_user), db: Session
         "agent_description": ws.agent_description or "",
         "system_prompt": ws.system_prompt or "",
         "show_on_homepage": getattr(ws, "show_on_homepage", False) or False,
+        "tool_chaining_enabled": getattr(ws, "tool_chaining_enabled", False) or False,
         "document_count": doc_count,
         "created_at": ws.created_at.isoformat() if ws.created_at else "",
     }
@@ -120,6 +121,7 @@ def update_agent(
     agent_id: str, name: str = Form(None), description: str = Form(None),
     icon: str = Form(None), system_prompt: str = Form(None),
     show_on_homepage: str = Form(None),
+    tool_chaining_enabled: str = Form(None),
     user: User = Depends(get_current_user), db: Session = Depends(get_db),
 ):
     ws = db.query(Workspace).filter(
@@ -139,6 +141,8 @@ def update_agent(
         ws.system_prompt = system_prompt
     if show_on_homepage is not None:
         ws.show_on_homepage = show_on_homepage.lower() in ("true", "1", "yes")
+    if tool_chaining_enabled is not None:
+        ws.tool_chaining_enabled = tool_chaining_enabled.lower() in ("true", "1", "yes")
 
     db.commit()
     return {
@@ -146,6 +150,7 @@ def update_agent(
         "agent_icon": ws.agent_icon or "", "agent_description": ws.agent_description or "",
         "system_prompt": ws.system_prompt or "",
         "show_on_homepage": getattr(ws, "show_on_homepage", False) or False,
+        "tool_chaining_enabled": getattr(ws, "tool_chaining_enabled", False) or False,
     }
 
 

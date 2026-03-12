@@ -37,6 +37,77 @@ def save_conversation_turn(session_id: str, query: str, answer: str):
         _conversation_history[session_id] = hist[-10:]
 
 
+def persist_conversation_turn(
+    session_id, workspace_id, tenant_id, user_id,
+    query, answer, sources=None, chunks_used=0,
+    response_time_ms=None, channel="internal",
+):
+    """
+    Persist a conversation turn to the database.
+    Fire-and-forget: never raises, opens its own DB session.
+    """
+    if not workspace_id or not query or not answer:
+        return
+    try:
+        from database import SessionLocal
+        from conversation_models import Conversation, ConversationMessage
+        from datetime import datetime
+
+        db = SessionLocal()
+        try:
+            # Find existing conversation by session_id + workspace_id
+            conv = None
+            if session_id:
+                conv = db.query(Conversation).filter(
+                    Conversation.session_id == session_id,
+                    Conversation.workspace_id == workspace_id,
+                ).first()
+
+            if not conv:
+                # Create new conversation
+                conv = Conversation(
+                    workspace_id=workspace_id,
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    session_id=session_id or "",
+                    title=query[:80],
+                    channel=channel,
+                    message_count=0,
+                )
+                db.add(conv)
+                db.flush()
+
+            # Add user message
+            user_msg = ConversationMessage(
+                conversation_id=conv.id,
+                role="user",
+                content=query,
+                chunks_used=0,
+            )
+            db.add(user_msg)
+
+            # Add assistant message
+            import json as _json
+            sources_json = _json.dumps(sources or [])
+            asst_msg = ConversationMessage(
+                conversation_id=conv.id,
+                role="assistant",
+                content=answer,
+                sources=sources_json,
+                chunks_used=chunks_used,
+                response_time_ms=response_time_ms,
+            )
+            db.add(asst_msg)
+
+            conv.message_count = (conv.message_count or 0) + 2
+            conv.updated_at = datetime.utcnow()
+            db.commit()
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"  [Conversations] Persist failed: {e}")
+
+
 def stream_claude(user_prompt: str, system: str = "", messages: list = None):
     """
     Stream Claude API response as SSE data lines.

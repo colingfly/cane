@@ -469,6 +469,24 @@ export async function clearMemories(agentId) {
   return request(`/agents/${agentId}/memories`, { method: 'DELETE' })
 }
 
+// ─── Conversations ───
+
+export async function getConversations(agentId, limit = 50, offset = 0) {
+  return request(`/agents/${agentId}/conversations?limit=${limit}&offset=${offset}`)
+}
+
+export async function getConversation(agentId, convId) {
+  return request(`/agents/${agentId}/conversations/${convId}`)
+}
+
+export async function deleteConversation(agentId, convId) {
+  return request(`/agents/${agentId}/conversations/${convId}`, { method: 'DELETE' })
+}
+
+export async function clearConversations(agentId) {
+  return request(`/agents/${agentId}/conversations`, { method: 'DELETE' })
+}
+
 // ─── MCP Servers ───
 
 export async function getMcpCatalog() {

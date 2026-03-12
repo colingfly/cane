@@ -91,7 +91,8 @@ class Workspace(Base):
     agent_icon = Column(String(10), default="")                 # Emoji icon
     agent_description = Column(Text, default="")                # Short description
     show_on_homepage = Column(Boolean, default=False)           # Show in search page workspace dropdown
-    # widget_config added via migration — access via raw SQL in analytics_routes
+    tool_chaining_enabled = Column(Boolean, default=False)     # Allow up to 5 tool calls per turn
+    # widget_config added via migration -- access via raw SQL in analytics_routes
 
     # Relationships
     tenant = relationship("Tenant", back_populates="workspaces")
@@ -189,3 +190,4 @@ from connector_models import (                                         # noqa: E
 )
 from schedule_models import AgentSchedule, AgentScheduleRun            # noqa: E402, F401
 from memory_models import AgentMemory                                  # noqa: E402, F401
+from conversation_models import Conversation, ConversationMessage      # noqa: E402, F401

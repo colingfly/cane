@@ -19,6 +19,7 @@ import Environments from './pages/Environments'
 import EnvironmentDetail from './pages/EnvironmentDetail'
 import Analytics from './pages/Analytics'
 import Architecture from './pages/Architecture'
+import ConversationHistory from './pages/ConversationHistory'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -74,6 +75,12 @@ export default function App() {
       <Route path="/agents/:agentId" element={
         <ProtectedRoute>
           <Layout><AgentDetail /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/agents/:agentId/conversations" element={
+        <ProtectedRoute>
+          <Layout><ConversationHistory /></Layout>
         </ProtectedRoute>
       } />
 

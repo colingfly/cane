@@ -62,6 +62,10 @@ def list_schedules(
                 "last_run_status": s.last_run_status or "",
                 "next_run_at": s.next_run_at.isoformat() if s.next_run_at else None,
                 "run_count": s.run_count or 0,
+                "condition_enabled": getattr(s, "condition_enabled", False) or False,
+                "condition_prompt": getattr(s, "condition_prompt", "") or "",
+                "condition_action": getattr(s, "condition_action", "store_only") or "store_only",
+                "condition_webhook_url": getattr(s, "condition_webhook_url", "") or "",
                 "created_at": s.created_at.isoformat() if s.created_at else None,
             }
             for s in schedules
@@ -105,6 +109,15 @@ def create_schedule(
     if existing:
         return JSONResponse({"error": "This agent already has a schedule. Delete or update the existing one."}, status_code=409)
 
+    # Conditional output settings
+    condition_enabled = bool(body.get("condition_enabled", False))
+    condition_prompt = (body.get("condition_prompt") or "").strip()
+    condition_action = body.get("condition_action", "store_only")
+    if condition_action not in ("store_only", "send_webhook"):
+        condition_action = "store_only"
+    condition_webhook_url = (body.get("condition_webhook_url") or "").strip()
+    condition_webhook_headers = body.get("condition_webhook_headers", "{}")
+
     schedule = AgentSchedule(
         workspace_id=agent_id,
         tenant_id=user.tenant_id,
@@ -113,6 +126,11 @@ def create_schedule(
         interval_minutes=interval_minutes,
         daily_time=daily_time if schedule_type == "daily" else "",
         is_enabled=True,
+        condition_enabled=condition_enabled,
+        condition_prompt=condition_prompt,
+        condition_action=condition_action,
+        condition_webhook_url=condition_webhook_url,
+        condition_webhook_headers=condition_webhook_headers,
     )
     schedule.next_run_at = _compute_next_run(schedule)
 
@@ -129,6 +147,10 @@ def create_schedule(
         "is_enabled": schedule.is_enabled,
         "next_run_at": schedule.next_run_at.isoformat() if schedule.next_run_at else None,
         "run_count": 0,
+        "condition_enabled": schedule.condition_enabled or False,
+        "condition_prompt": schedule.condition_prompt or "",
+        "condition_action": schedule.condition_action or "store_only",
+        "condition_webhook_url": schedule.condition_webhook_url or "",
     }
 
 
@@ -183,6 +205,24 @@ def update_schedule(
         schedule.is_enabled = bool(body["is_enabled"])
         changed = True
 
+    if "condition_enabled" in body:
+        schedule.condition_enabled = bool(body["condition_enabled"])
+        changed = True
+    if "condition_prompt" in body:
+        schedule.condition_prompt = (body["condition_prompt"] or "").strip()
+        changed = True
+    if "condition_action" in body:
+        val = body["condition_action"]
+        if val in ("store_only", "send_webhook"):
+            schedule.condition_action = val
+            changed = True
+    if "condition_webhook_url" in body:
+        schedule.condition_webhook_url = (body["condition_webhook_url"] or "").strip()
+        changed = True
+    if "condition_webhook_headers" in body:
+        schedule.condition_webhook_headers = body["condition_webhook_headers"] or "{}"
+        changed = True
+
     if changed:
         # Recompute next run when schedule params change or re-enabled
         if schedule.is_enabled:
@@ -201,6 +241,10 @@ def update_schedule(
         "last_run_status": schedule.last_run_status or "",
         "next_run_at": schedule.next_run_at.isoformat() if schedule.next_run_at else None,
         "run_count": schedule.run_count or 0,
+        "condition_enabled": getattr(schedule, "condition_enabled", False) or False,
+        "condition_prompt": getattr(schedule, "condition_prompt", "") or "",
+        "condition_action": getattr(schedule, "condition_action", "store_only") or "store_only",
+        "condition_webhook_url": getattr(schedule, "condition_webhook_url", "") or "",
     }
 
 
@@ -260,6 +304,7 @@ def get_schedule_runs(
                 "status": r.status,
                 "error_message": r.error_message or "",
                 "duration_ms": r.duration_ms or 0,
+                "condition_met": getattr(r, "condition_met", None),
                 "created_at": r.created_at.isoformat() if r.created_at else None,
             }
             for r in runs
