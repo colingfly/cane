@@ -136,6 +136,7 @@ app.include_router(auth_router)
 app.include_router(documents_router)
 app.include_router(search_router)
 app.include_router(ask_router)
+app.include_router(collaboration_router)
 app.include_router(agents_router)
 app.include_router(admin_router)
 app.include_router(team_router)
@@ -156,7 +157,6 @@ app.include_router(demo_router)
 app.include_router(schedule_router)
 app.include_router(memory_router)
 app.include_router(conversation_router)
-app.include_router(collaboration_router)
 
 
 # ── Background sync loop for Live Connectors ──
