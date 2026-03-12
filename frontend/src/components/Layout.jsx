@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { Search, Settings, Shield, Bot, HelpCircle, FlaskConical, Store } from 'lucide-react'
+import { Search, Settings, Shield, Bot, HelpCircle, FlaskConical, Store, Share2 } from 'lucide-react'
 
 export default function Layout({ children }) {
   const { user, tenant, handleLogout, isAdmin } = useAuth()
@@ -19,6 +19,10 @@ export default function Layout({ children }) {
           <NavLink to="/" end>
             <Bot />
             Agent Builder
+          </NavLink>
+          <NavLink to="/agents/network">
+            <Share2 />
+            Network
           </NavLink>
           <NavLink to="/environments">
             <FlaskConical />

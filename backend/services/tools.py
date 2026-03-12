@@ -21,7 +21,9 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from tool_models import AgentTool, AgentLink
+import time as _time
+
+from tool_models import AgentTool, AgentLink, AgentCommunication
 from mcp_models import McpServer
 
 # Thread-local depth counter for agent-as-tool recursion
@@ -176,6 +178,44 @@ def get_all_tools(
             agent_workspace_id=link.child_workspace_id,
         )
 
+    # 4) Orchestrator mode: auto-discover all tenant agents as tools
+    try:
+        from db_models import Workspace
+        ws = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+        if ws and getattr(ws, "orchestrator_mode", False):
+            all_agents = db.query(Workspace).filter(
+                Workspace.tenant_id == tenant_id,
+                Workspace.agent_type.isnot(None),
+                Workspace.id != workspace_id,
+            ).all()
+            linked_ids = {link.child_workspace_id for link in agent_links} if agent_links else set()
+            for agent in all_agents:
+                if agent.id in linked_ids:
+                    continue
+                safe_name = f"auto_{agent.name}".replace(" ", "_").replace("-", "_").lower()[:64]
+                desc = agent.agent_description or agent.description or agent.name
+                claude_tools.append({
+                    "name": safe_name,
+                    "description": f"Specialist agent: {desc}. Delegate when this agent's expertise matches the query.",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The question or task to delegate to this specialist agent",
+                            },
+                            "reason": {
+                                "type": "string",
+                                "description": "Brief explanation of why delegating to this specialist",
+                            },
+                        },
+                        "required": ["query"],
+                    },
+                })
+                tool_lookup[safe_name] = ToolRef(source="agent", agent_workspace_id=agent.id)
+    except Exception as e:
+        print(f"  [Tools] Orchestrator auto-discover skipped: {e}")
+
     return claude_tools, tool_lookup
 
 
@@ -184,6 +224,9 @@ def execute_tool_call(
     input_data: dict,
     tool_lookup: dict[str, ToolRef],
     db: Session | None = None,
+    session_id: str = "",
+    tenant_id: str = "",
+    on_agent_event: callable = None,
 ) -> dict:
     """
     Execute a tool call, routing to webhook or MCP backend.
@@ -199,7 +242,11 @@ def execute_tool_call(
     elif ref.source == "mcp" and ref.mcp_server:
         return _execute_mcp(ref.mcp_server, ref.mcp_tool_name, input_data, db)
     elif ref.source == "agent" and ref.agent_workspace_id:
-        return _execute_agent(ref.agent_workspace_id, input_data, db)
+        return _execute_agent(
+            ref.agent_workspace_id, input_data, db,
+            session_id=session_id, tenant_id=tenant_id,
+            on_agent_event=on_agent_event,
+        )
     else:
         return {"status": "error", "body": "Invalid tool reference", "status_code": 0}
 
@@ -257,12 +304,19 @@ def _execute_mcp(server: McpServer, tool_name: str, arguments: dict, db: Session
         return {"status": "error", "body": result.error[:500], "status_code": 0}
 
 
-def _execute_agent(child_workspace_id: str, input_data: dict, db: Session | None) -> dict:
+def _execute_agent(
+    child_workspace_id: str,
+    input_data: dict,
+    db: Session | None,
+    session_id: str = "",
+    tenant_id: str = "",
+    on_agent_event: callable = None,
+) -> dict:
     """Execute a sub-agent: run the child agent's full RAG + tool pipeline."""
     from database import SessionLocal
     from db_models import Workspace
 
-    # Depth check — prevent infinite recursion
+    # Depth check -- prevent infinite recursion
     depth = getattr(_agent_depth_local, 'depth', 0)
     if depth >= MAX_AGENT_DEPTH:
         return {
@@ -277,10 +331,26 @@ def _execute_agent(child_workspace_id: str, input_data: dict, db: Session | None
 
     # Use a fresh DB session to avoid conflicts with parent's session
     child_db = SessionLocal()
+    t0 = _time.time()
+    child_name = ""
+    child_icon = ""
     try:
         ws = child_db.query(Workspace).filter(Workspace.id == child_workspace_id).first()
         if not ws:
             return {"status": "error", "body": "Sub-agent workspace not found", "status_code": 0}
+
+        child_name = ws.name or "Agent"
+        child_icon = ws.agent_icon or ""
+        _tenant_id = tenant_id or ws.tenant_id
+
+        # Emit start event
+        if on_agent_event:
+            on_agent_event({
+                "subtype": "agent_start",
+                "child_name": child_name,
+                "child_icon": child_icon,
+                "query": query[:200],
+            })
 
         # Build child's RAG context
         from services.rag import build_context, build_system_prompt
@@ -311,10 +381,75 @@ def _execute_agent(child_workspace_id: str, input_data: dict, db: Session | None
         finally:
             _agent_depth_local.depth = depth
 
-        return {"status": "ok", "body": (answer or "")[:2000], "status_code": 200}
+        elapsed_ms = int((_time.time() - t0) * 1000)
+        result_body = (answer or "")[:2000]
+
+        # Emit done event
+        if on_agent_event:
+            on_agent_event({
+                "subtype": "agent_done",
+                "child_name": child_name,
+                "child_icon": child_icon,
+                "duration_ms": elapsed_ms,
+                "response_preview": result_body[:300],
+            })
+
+        # Log communication (fire-and-forget)
+        _log_agent_communication(
+            tenant_id=_tenant_id,
+            parent_agent_id="",  # filled by caller context
+            child_agent_id=child_workspace_id,
+            session_id=session_id,
+            query_sent=query[:2000],
+            response_received=result_body,
+            depth_level=depth,
+            duration_ms=elapsed_ms,
+            status="ok",
+        )
+
+        return {"status": "ok", "body": result_body, "status_code": 200}
 
     except Exception as e:
+        elapsed_ms = int((_time.time() - t0) * 1000)
         print(f"  [Tools] Sub-agent execution error: {e}")
+
+        if on_agent_event:
+            on_agent_event({
+                "subtype": "agent_done",
+                "child_name": child_name or "Agent",
+                "child_icon": child_icon,
+                "duration_ms": elapsed_ms,
+                "response_preview": f"Error: {str(e)[:100]}",
+            })
+
+        _log_agent_communication(
+            tenant_id=tenant_id,
+            parent_agent_id="",
+            child_agent_id=child_workspace_id,
+            session_id=session_id,
+            query_sent=query[:2000],
+            response_received="",
+            depth_level=depth,
+            duration_ms=elapsed_ms,
+            status="error",
+            error_message=str(e)[:500],
+        )
+
         return {"status": "error", "body": f"Sub-agent error: {str(e)[:200]}", "status_code": 0}
     finally:
         child_db.close()
+
+
+def _log_agent_communication(**kwargs):
+    """Fire-and-forget log of an inter-agent call. Never raises."""
+    try:
+        from database import SessionLocal
+        log_db = SessionLocal()
+        try:
+            comm = AgentCommunication(**kwargs)
+            log_db.add(comm)
+            log_db.commit()
+        finally:
+            log_db.close()
+    except Exception as e:
+        print(f"  [Tools] Failed to log agent communication: {e}")

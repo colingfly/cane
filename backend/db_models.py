@@ -92,6 +92,7 @@ class Workspace(Base):
     agent_description = Column(Text, default="")                # Short description
     show_on_homepage = Column(Boolean, default=False)           # Show in search page workspace dropdown
     tool_chaining_enabled = Column(Boolean, default=False)     # Allow up to 5 tool calls per turn
+    orchestrator_mode = Column(Boolean, default=False)         # Auto-discover and route to all tenant agents
     # widget_config added via migration -- access via raw SQL in analytics_routes
 
     # Relationships
@@ -184,7 +185,7 @@ from eval_models import (                                          # noqa: E402,
 from marketplace_models import (                                    # noqa: E402, F401
     MarketplaceListing, MarketplaceClone,
 )
-from tool_models import AgentTool, AgentLink                           # noqa: E402, F401
+from tool_models import AgentTool, AgentLink, AgentCommunication        # noqa: E402, F401
 from connector_models import (                                         # noqa: E402, F401
     ConnectorCredential, ConnectorSync, ConnectorFile,
 )

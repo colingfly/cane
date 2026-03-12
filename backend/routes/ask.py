@@ -171,6 +171,11 @@ def ask_stream(
 
     system_prompt = build_system_prompt(agent_prompt, memory_context)
 
+    # Orchestrator mode: inject routing instructions
+    is_orchestrator = getattr(ws, "orchestrator_mode", False) if workspace_id and ws else False
+    if is_orchestrator:
+        system_prompt += "\n\nYou are an orchestrator agent. Analyze each query and route it to the most relevant specialist agent available as a tool. You may consult multiple agents and synthesize their responses into a unified answer. Always explain which specialists you consulted and why."
+
     # Build messages with conversation history
     messages = get_conversation_history(session_id)
     messages.append({
@@ -198,10 +203,13 @@ def ask_stream(
                              "chunks_used": ctx.chunks_used})
                 yield _sse({"type": "tool_status", "message": "Checking tools..."})
 
-                # Collect tool events for SSE
+                # Collect tool + agent events for SSE
                 tool_events = []
+                agent_events = []
                 def _on_tool_event(evt):
                     tool_events.append(evt)
+                def _on_agent_event(evt):
+                    agent_events.append(evt)
 
                 from database import SessionLocal
                 tool_db = SessionLocal()
@@ -211,6 +219,9 @@ def ask_stream(
                         tools=claude_tools, tool_lookup=tool_lookup, db_session=tool_db,
                         max_iterations=5 if chaining else 3,
                         on_tool_event=_on_tool_event,
+                        session_id=session_id,
+                        tenant_id=_tenant_id,
+                        on_agent_event=_on_agent_event,
                     )
                 finally:
                     tool_db.close()
@@ -218,6 +229,10 @@ def ask_stream(
                 # Yield tool step events
                 for evt in tool_events:
                     yield _sse({"type": "tool_step", **evt})
+
+                # Yield agent delegation events
+                for evt in agent_events:
+                    yield _sse({"type": "agent_delegation", **evt})
 
                 chunk_size = 8
                 for i in range(0, len(full_response), chunk_size):

@@ -147,6 +147,9 @@ def call_claude_with_tools(
     db_session=None,
     max_iterations: int = 3,
     on_tool_event=None,
+    session_id: str = "",
+    tenant_id: str = "",
+    on_agent_event=None,
 ) -> str:
     """
     Call Claude with tool definitions. If Claude wants to use a tool,
@@ -156,6 +159,9 @@ def call_claude_with_tools(
                  OR dict mapping tool_name -> AgentTool (legacy webhook-only)
     max_iterations: max tool-use loop iterations (3 default, 5 with chaining)
     on_tool_event: optional callback({"step": int, "tool": str, "status": str})
+    session_id: conversation session ID (for agent communication logging)
+    tenant_id: tenant ID (for agent communication logging)
+    on_agent_event: optional callback for agent delegation events
     """
     from services.claude import call_with_tools as _sdk_call
     from services.tools import ToolRef, execute_tool_call
@@ -327,7 +333,11 @@ def call_claude_with_tools(
                     print(f"  [Tools] Fire-and-forget {tool_name}: dispatched to background")
                 else:
                     if isinstance(ref, ToolRef):
-                        exec_result = execute_tool_call(tool_name, tool_input, tool_lookup, db_session)
+                        exec_result = execute_tool_call(
+                            tool_name, tool_input, tool_lookup, db_session,
+                            session_id=session_id, tenant_id=tenant_id,
+                            on_agent_event=on_agent_event,
+                        )
                     else:
                         exec_result = execute_tool(ref, tool_input)
                         if db_session:

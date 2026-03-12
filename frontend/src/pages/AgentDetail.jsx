@@ -966,6 +966,32 @@ export default function AgentDetail() {
       </div>
       )}
 
+      {/* Orchestrator Mode */}
+      {tab === 'configure' && (
+      <div className="card" style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <div style={{ fontWeight: 600, marginBottom: 2 }}>Orchestrator Mode</div>
+          <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+            Auto-discovers all agents in your workspace and routes queries to the best specialist. No manual linking needed.
+          </div>
+        </div>
+        <button
+          className="btn btn-ghost"
+          onClick={async () => {
+            const newVal = !agent.orchestrator_mode
+            await updateAgent(agentId, { orchestrator_mode: newVal })
+            setAgent(prev => ({ ...prev, orchestrator_mode: newVal }))
+          }}
+          style={{ padding: 4 }}
+        >
+          {agent.orchestrator_mode
+            ? <ToggleRight size={28} style={{ color: 'var(--accent)' }} />
+            : <ToggleLeft size={28} style={{ color: 'var(--text-muted)' }} />
+          }
+        </button>
+      </div>
+      )}
+
       {/* Files */}
       {tab === 'knowledge' && (
       <div className="card" style={{ marginBottom: 24 }}>

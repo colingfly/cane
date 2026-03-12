@@ -69,3 +69,26 @@ class AgentLink(Base):
 
     def __repr__(self):
         return f"<AgentLink {self.parent_workspace_id} -> {self.child_workspace_id}>"
+
+
+class AgentCommunication(Base):
+    """Logs every inter-agent delegation call for audit and visualization."""
+    __tablename__ = "agent_communications"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    tenant_id = Column(String(36), ForeignKey("tenants.id"), nullable=False)
+    parent_agent_id = Column(String(36), nullable=False)
+    child_agent_id = Column(String(36), nullable=False)
+    session_id = Column(String(100), default="")
+
+    query_sent = Column(Text, default="")
+    response_received = Column(Text, default="")
+    depth_level = Column(Integer, default=0)
+    duration_ms = Column(Integer, default=0)
+    status = Column(String(20), default="ok")
+    error_message = Column(Text, default="")
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<AgentCommunication {self.parent_agent_id} -> {self.child_agent_id}>"

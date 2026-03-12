@@ -175,6 +175,7 @@ export async function askStream(query, n = 5, workspaceId = '', onText, onMeta, 
           if (data.type === 'text') onText?.(data.text)
           else if (data.type === 'meta') onMeta?.(data)
           else if (data.type === 'tool_status') onMeta?.({ ...data, type: 'tool_status' })
+          else if (data.type === 'agent_delegation') onMeta?.({ ...data, type: 'agent_delegation' })
           else if (data.type === 'done') onDone?.()
           else if (data.type === 'error') onError?.(data.error)
         } catch {
@@ -485,6 +486,16 @@ export async function deleteConversation(agentId, convId) {
 
 export async function clearConversations(agentId) {
   return request(`/agents/${agentId}/conversations`, { method: 'DELETE' })
+}
+
+// ─── Agent Network / Collaboration ───
+
+export async function getAgentNetwork() {
+  return request('/agents/network')
+}
+
+export async function getAgentCommunications(agentId, limit = 50) {
+  return request(`/agents/${agentId}/communications?limit=${limit}`)
 }
 
 // ─── MCP Servers ───

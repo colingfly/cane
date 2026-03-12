@@ -20,6 +20,7 @@ import EnvironmentDetail from './pages/EnvironmentDetail'
 import Analytics from './pages/Analytics'
 import Architecture from './pages/Architecture'
 import ConversationHistory from './pages/ConversationHistory'
+import AgentNetwork from './pages/AgentNetwork'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -69,6 +70,12 @@ export default function App() {
       <Route path="/documents" element={
         <ProtectedRoute>
           <Layout><Documents /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/agents/network" element={
+        <ProtectedRoute>
+          <Layout><AgentNetwork /></Layout>
         </ProtectedRoute>
       } />
 

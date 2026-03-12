@@ -23,6 +23,8 @@ def run_all():
     _migrate_conversations_table()
     _migrate_schedule_condition_columns()
     _migrate_tool_chaining_column()
+    _migrate_agent_communications_table()
+    _migrate_orchestrator_mode_column()
 
 
 def _migrate_agent_columns():
@@ -579,3 +581,52 @@ def _migrate_tool_chaining_column():
             print(f"  [DB] tool_chaining_enabled migration failed: {e}")
     else:
         print("  [DB] tool_chaining_enabled column already present")
+
+
+def _migrate_agent_communications_table():
+    """Create agent_communications table for inter-agent call logging."""
+    insp = inspect(engine)
+    if "agent_communications" not in insp.get_table_names():
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("""
+                    CREATE TABLE agent_communications (
+                        id VARCHAR(36) PRIMARY KEY,
+                        tenant_id VARCHAR(36) NOT NULL,
+                        parent_agent_id VARCHAR(36) NOT NULL,
+                        child_agent_id VARCHAR(36) NOT NULL,
+                        session_id VARCHAR(100) DEFAULT '',
+                        query_sent TEXT,
+                        response_received TEXT,
+                        depth_level INT DEFAULT 0,
+                        duration_ms INT DEFAULT 0,
+                        status VARCHAR(20) DEFAULT 'ok',
+                        error_message TEXT DEFAULT '',
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+                        INDEX idx_comms_tenant (tenant_id, created_at),
+                        INDEX idx_comms_parent (parent_agent_id, created_at)
+                    )
+                """))
+            print("  [DB] agent_communications table created")
+        except Exception as e:
+            print(f"  [DB] agent_communications migration failed: {e}")
+    else:
+        print("  [DB] agent_communications table already exists")
+
+
+def _migrate_orchestrator_mode_column():
+    """Add orchestrator_mode column to workspaces."""
+    insp = inspect(engine)
+    cols = {c["name"] for c in insp.get_columns("workspaces")}
+    if "orchestrator_mode" not in cols:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "ALTER TABLE workspaces ADD COLUMN orchestrator_mode TINYINT(1) DEFAULT 0"
+                ))
+            print("  [DB] Added orchestrator_mode to workspaces")
+        except Exception as e:
+            print(f"  [DB] orchestrator_mode migration failed: {e}")
+    else:
+        print("  [DB] orchestrator_mode column already present")

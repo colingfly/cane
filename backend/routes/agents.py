@@ -111,6 +111,7 @@ def get_agent(agent_id: str, user: User = Depends(get_current_user), db: Session
         "system_prompt": ws.system_prompt or "",
         "show_on_homepage": getattr(ws, "show_on_homepage", False) or False,
         "tool_chaining_enabled": getattr(ws, "tool_chaining_enabled", False) or False,
+        "orchestrator_mode": getattr(ws, "orchestrator_mode", False) or False,
         "document_count": doc_count,
         "created_at": ws.created_at.isoformat() if ws.created_at else "",
     }
@@ -122,6 +123,7 @@ def update_agent(
     icon: str = Form(None), system_prompt: str = Form(None),
     show_on_homepage: str = Form(None),
     tool_chaining_enabled: str = Form(None),
+    orchestrator_mode: str = Form(None),
     user: User = Depends(get_current_user), db: Session = Depends(get_db),
 ):
     ws = db.query(Workspace).filter(
@@ -143,6 +145,8 @@ def update_agent(
         ws.show_on_homepage = show_on_homepage.lower() in ("true", "1", "yes")
     if tool_chaining_enabled is not None:
         ws.tool_chaining_enabled = tool_chaining_enabled.lower() in ("true", "1", "yes")
+    if orchestrator_mode is not None:
+        ws.orchestrator_mode = orchestrator_mode.lower() in ("true", "1", "yes")
 
     db.commit()
     return {
@@ -151,6 +155,7 @@ def update_agent(
         "system_prompt": ws.system_prompt or "",
         "show_on_homepage": getattr(ws, "show_on_homepage", False) or False,
         "tool_chaining_enabled": getattr(ws, "tool_chaining_enabled", False) or False,
+        "orchestrator_mode": getattr(ws, "orchestrator_mode", False) or False,
     }
 
 
@@ -214,6 +219,9 @@ def delete_agent(agent_id: str, user: User = Depends(get_current_user), db: Sess
 
         # ── 3d. Agent memories ──
         _safe_delete(db, "DELETE FROM agent_memories WHERE workspace_id = :wid", {"wid": agent_id})
+
+        # ── 3e. Agent communications ──
+        _safe_delete(db, "DELETE FROM agent_communications WHERE parent_agent_id = :wid OR child_agent_id = :wid", {"wid": agent_id})
 
         # ── 4. MCP servers (safe) ──
         _safe_delete(db, "DELETE FROM mcp_servers WHERE workspace_id = :wid", {"wid": agent_id})

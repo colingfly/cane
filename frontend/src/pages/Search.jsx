@@ -17,6 +17,7 @@ export default function SearchPage() {
   const [lightbox, setLightbox] = useState(null)
   const [history, setHistory] = useState([])
   const [agents, setAgents] = useState([])
+  const [delegations, setDelegations] = useState([])
 
   // Load agents for dropdown
   useEffect(() => {
@@ -46,6 +47,7 @@ export default function SearchPage() {
     setStreamText('')
     setMeta(null)
     setError(null)
+    setDelegations([])
 
     let fullText = ''
     let metaRef = null
@@ -56,6 +58,21 @@ export default function SearchPage() {
       (metaData) => {
         if (metaData.type === 'tool_status') {
           setStreamText(prev => prev || metaData.message + '\n\n')
+        } else if (metaData.type === 'agent_delegation') {
+          if (metaData.subtype === 'agent_start') {
+            setDelegations(prev => [...prev, {
+              child_name: metaData.child_name,
+              child_icon: metaData.child_icon,
+              query: metaData.query,
+              status: 'active',
+            }])
+          } else if (metaData.subtype === 'agent_done') {
+            setDelegations(prev => prev.map(d =>
+              d.child_name === metaData.child_name && d.status === 'active'
+                ? { ...d, status: 'done', duration_ms: metaData.duration_ms, response_preview: metaData.response_preview }
+                : d
+            ))
+          }
         } else {
           metaRef = metaData; setMeta(metaData)
         }
@@ -63,7 +80,7 @@ export default function SearchPage() {
       () => {
         setLoading(false)
         if (fullText) {
-          setHistory(prev => [...prev, { q: currentQuery, a: fullText, meta: metaRef }])
+          setHistory(prev => [...prev, { q: currentQuery, a: fullText, meta: metaRef, delegations: [...(delegations || [])] }])
           setStreamText('')
           setMeta(null)
         }
@@ -174,6 +191,15 @@ export default function SearchPage() {
         </div>
       ))}
 
+      {/* Agent delegation cards */}
+      {delegations.length > 0 && (
+        <div style={{ maxWidth: 720, margin: '0 auto 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {delegations.map((d, i) => (
+            <DelegationCard key={i} delegation={d} />
+          ))}
+        </div>
+      )}
+
       {/* Current streaming answer */}
       {(streamText || loading) && (
         <div className="ai-summary fade-in">
@@ -181,8 +207,13 @@ export default function SearchPage() {
             <p style={{ color: 'var(--text-muted)' }}>{error}</p>
           ) : (
             <>
-              {loading && !streamText && (
+              {loading && !streamText && !delegations.some(d => d.status === 'active') && (
                 <div className="loading-center"><div className="spinner" /></div>
+              )}
+              {loading && !streamText && delegations.some(d => d.status === 'active') && (
+                <div style={{ textAlign: 'center', padding: 16, color: 'var(--text-muted)', fontSize: '0.8125rem' }}>
+                  Coordinating with specialist agents...
+                </div>
               )}
               {streamText && (
                 <div className="summary-text">
@@ -239,4 +270,63 @@ function fmtTime(sec) {
   const m = Math.floor(sec / 60)
   const s = Math.floor(sec % 60)
   return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+
+function DelegationCard({ delegation }) {
+  const [expanded, setExpanded] = useState(false)
+  const isActive = delegation.status === 'active'
+  const icon = delegation.child_icon || delegation.child_name?.slice(0, 2).toUpperCase() || '??'
+
+  return (
+    <div className="card fade-in" style={{
+      padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 6,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{
+          width: 28, height: 28, borderRadius: 6,
+          background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '0.65rem', fontWeight: 700, flexShrink: 0,
+        }}>
+          {icon}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ fontSize: '0.8rem', color: isActive ? 'var(--text)' : 'var(--text-muted)' }}>
+            {isActive ? `Consulting ${delegation.child_name}...` : `${delegation.child_name} responded`}
+          </span>
+          {!isActive && delegation.duration_ms != null && (
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: 8 }}>
+              {delegation.duration_ms}ms
+            </span>
+          )}
+        </div>
+        {isActive && <div className="spinner" style={{ width: 16, height: 16 }} />}
+        {!isActive && delegation.response_preview && (
+          <button
+            className="btn btn-ghost"
+            style={{ padding: '2px 6px', fontSize: '0.7rem', color: 'var(--text-muted)' }}
+            onClick={() => setExpanded(!expanded)}
+          >
+            {expanded ? 'Hide' : 'Details'}
+          </button>
+        )}
+      </div>
+      {expanded && (
+        <div style={{
+          fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5,
+          borderTop: '1px solid var(--rule)', paddingTop: 8, marginTop: 2,
+        }}>
+          <div style={{ marginBottom: 4 }}>
+            <strong style={{ color: 'var(--text)', fontWeight: 600 }}>Query:</strong>{' '}
+            {delegation.query}
+          </div>
+          <div>
+            <strong style={{ color: 'var(--text)', fontWeight: 600 }}>Response:</strong>{' '}
+            {delegation.response_preview}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
