@@ -1222,10 +1222,7 @@ export default function AgentDetail() {
         <textarea
           value={editPrompt}
           onChange={e => { setEditPrompt(e.target.value); markDirty({ prompt: e.target.value }) }}
-          placeholder={agent.agent_type === 'custom'
-            ? 'Upload files and click "Auto-generate" to create a specialized prompt, or write your own...'
-            : 'Template prompt loaded. Upload files and click "Refine with files" to specialize it for your documents...'
-          }
+          placeholder='Upload files and click "Auto-generate" to create a specialized prompt, or write your own...'
           style={{
             width: '100%',
             minHeight: 200,

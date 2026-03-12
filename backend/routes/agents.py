@@ -1,5 +1,5 @@
 """
-routes/agents.py — Agent CRUD, templates, and prompt generation.
+routes/agents.py — Agent CRUD and prompt generation.
 """
 import traceback
 
@@ -12,17 +12,12 @@ from database import get_db
 from db_models import Tenant, User, Workspace, Document, SearchLog, ApiKey
 from tool_models import AgentLink
 from auth import get_current_user
-from agent_prompts import get_template, list_templates, auto_generate_prompt, generate_replica_prompt
+from agent_prompts import auto_generate_prompt, generate_replica_prompt
 from security import sanitize_form_field
 from services.limits import check_agent_limit
 from services.chroma import text_col, image_col
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
-
-
-@router.get("/templates")
-def get_agent_templates(user: User = Depends(get_current_user)):
-    return {"templates": list_templates()}
 
 
 @router.get("")
@@ -63,16 +58,9 @@ def create_agent(
     description = sanitize_form_field(description)
     icon = sanitize_form_field(icon)
 
-    tmpl = get_template(agent_type)
-    if tmpl:
-        name = name or tmpl.get("name", "New Agent")
-        icon = icon or tmpl.get("icon", "")
-        description = description or tmpl.get("description", "")
-        system_prompt = tmpl.get("system_prompt", "")
-    else:
-        agent_type = "custom"
-        icon = icon or "CA"
-        system_prompt = ""
+    agent_type = agent_type or "custom"
+    icon = icon or "CA"
+    system_prompt = ""
 
     if not name:
         return JSONResponse({"error": "Agent name is required"}, status_code=400)

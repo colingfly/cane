@@ -194,10 +194,6 @@ export async function getStats() {
 }
 
 // -- Agents --
-export async function getAgentTemplates() {
-  return request('/agents/templates')
-}
-
 export async function getAgents() {
   return request('/agents')
 }
@@ -541,20 +537,6 @@ export async function syncMcpServer(serverId) {
 export async function testMcpTool(serverId, toolName, args = '{}') {
   const qs = new URLSearchParams({ tool_name: toolName, arguments: args })
   return request(`/mcp/servers/${serverId}/test?${qs.toString()}`, { method: 'POST' })
-}
-
-// ─── Agent Packs ───
-
-export async function getPacks() {
-  return request('/packs')
-}
-
-export async function getPackDetail(packId) {
-  return request(`/packs/${packId}`)
-}
-
-export async function clonePack(packId) {
-  return request(`/packs/${packId}/clone`, { method: 'POST' })
 }
 
 // ─── Analytics ───

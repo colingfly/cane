@@ -192,7 +192,7 @@ function GettingStarted() {
               step: '2',
               icon: Bot,
               title: 'Build an agent',
-              description: 'Choose a template or start from scratch. Upload domain-specific files. Auto-generate a system prompt, or write your own. Add webhook tools and MCP connections to let your agent take actions.',
+              description: 'Upload domain-specific files. Auto-generate a system prompt, or write your own. Add webhook tools and MCP connections to let your agent take actions.',
             },
             {
               step: '3',
@@ -268,11 +268,7 @@ function AgentsTab() {
 
       <SectionBlock title="Creating Agents">
         <QA
-          q="What templates are available?"
-          a='Three pre-built templates: Customer Support Agent (for website-facing support with friendly tone and escalation handling), Compliance & Policy Agent (for regulated industries with strict citation and no speculation), and Internal Ops Agent (for SOPs, onboarding, and procedures with tool integration). Each comes with an optimized system prompt for its use case.'
-        />
-        <QA
-          q="How do I create a custom agent?"
+          q="How do I create an agent?"
           a='Go to Agent Builder and click "Create Your Own." Give it a name, then upload files. You can write your own system prompt or use Auto-generate, which analyzes your uploaded files and writes a specialized prompt based on the domain, terminology, and content it finds. Edit the result before saving.'
         />
         <QA
@@ -304,7 +300,7 @@ function AgentsTab() {
         />
         <QA
           q="How do I build one?"
-          a='Choose the "Digital Replica" template from the Agent Builder. Upload the person&apos;s writing samples as files: emails, blog posts, social media posts, meeting notes, anything that shows how they communicate. Then fill in the Personality Profile: name, role, communication style, key topics, and personality traits. Click "Generate My Replica" and Cane will analyze everything to create a personalized prompt.'
+          a='Create a new agent in the Agent Builder and select the Digital Replica type. Upload the person&apos;s writing samples as files: emails, blog posts, social media posts, meeting notes, anything that shows how they communicate. Then fill in the Personality Profile: name, role, communication style, key topics, and personality traits. Click "Generate My Replica" and Cane will analyze everything to create a personalized prompt.'
         />
         <QA
           q="What makes a good replica?"

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Trash2 } from 'lucide-react'
-import { getAgents, getAgentTemplates, createAgent, deleteAgent } from '../api/client'
+import { getAgents, createAgent, deleteAgent } from '../api/client'
 
 const ICON_COLORS = {
   OG: { bg: 'rgba(255,255,255,0.15)' },
@@ -28,11 +28,9 @@ function AgentIcon({ icon, size = 40 }) {
 
 export default function AgentBuilder() {
   const [agents, setAgents] = useState([])
-  const [templates, setTemplates] = useState([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [showCustomModal, setShowCustomModal] = useState(false)
-  const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [customName, setCustomName] = useState('')
   const [customDesc, setCustomDesc] = useState('')
   const [error, setError] = useState('')
@@ -42,31 +40,12 @@ export default function AgentBuilder() {
 
   const loadData = async () => {
     try {
-      const [agentRes, templateRes] = await Promise.all([getAgents(), getAgentTemplates()])
+      const agentRes = await getAgents()
       setAgents(agentRes.agents || [])
-      setTemplates(templateRes.templates || [])
     } catch (e) {
       console.error('Failed to load agents:', e)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleCreateFromTemplate = async () => {
-    if (creating || !selectedTemplate) return
-    setCreating(true)
-    setError('')
-    try {
-      const res = await createAgent({ agent_type: selectedTemplate.type })
-      if (res.id) {
-        setSelectedTemplate(null)
-        navigate(`/agents/${res.id}`)
-      }
-    } catch (e) {
-      setError(e.message)
-      setSelectedTemplate(null)
-    } finally {
-      setCreating(false)
     }
   }
 
@@ -120,7 +99,7 @@ export default function AgentBuilder() {
             Welcome to Cane
           </div>
           <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-            Start by choosing a template or creating a custom agent. Upload your files, and your agent will be ready to answer questions in minutes.
+            Create a custom agent, upload your files, and your agent will be ready to answer questions in minutes.
           </div>
         </div>
       )}
@@ -130,7 +109,7 @@ export default function AgentBuilder() {
           Agent Builder
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-          Create AI agents specialized for your files. Choose a template or build your own.
+          Create AI agents specialized for your files.
         </p>
       </div>
 
@@ -148,33 +127,8 @@ export default function AgentBuilder() {
         </div>
       )}
 
-      {/* Templates */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-        <div style={{ height: 1, flex: 1, background: 'var(--rule)' }} />
-        <span style={{ fontSize: '0.58rem', fontWeight: 800, letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Templates</span>
-        <div style={{ height: 1, flex: 1, background: 'var(--rule)' }} />
-      </div>
+      {/* Create New Agent */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14, marginBottom: 40 }}>
-        {templates.map((t) => (
-          <div
-            key={t.type}
-            className="card"
-            style={{ cursor: 'pointer', transition: 'all 0.1s', padding: 20 }}
-            onClick={() => setSelectedTemplate(t)}
-            onMouseOver={e => e.currentTarget.style.borderColor = 'var(--cane-500)'}
-            onMouseOut={e => e.currentTarget.style.borderColor = ''}
-          >
-            <div style={{ marginBottom: 12 }}>
-              <AgentIcon icon={t.icon} size={40} />
-            </div>
-            <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: 4, fontFamily: 'var(--font-display)', letterSpacing: '-0.01em' }}>{t.name}</div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-              {t.description}
-            </div>
-          </div>
-        ))}
-
-        {/* Create Your Own */}
         <div
           className="card"
           style={{
@@ -273,34 +227,6 @@ export default function AgentBuilder() {
             ))}
           </div>
         </>
-      )}
-
-      {/* Template Confirmation Modal */}
-      {selectedTemplate && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 1000,
-        }} onClick={() => setSelectedTemplate(null)}>
-          <div className="card" style={{ width: 420, maxWidth: '90vw' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 16 }}>
-              <AgentIcon icon={selectedTemplate.icon} size={48} />
-              <div>
-                <h3 style={{ marginBottom: 2 }}>{selectedTemplate.name}</h3>
-                <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Agent Template</div>
-              </div>
-            </div>
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 24 }}>
-              {selectedTemplate.description} This will create a new agent workspace with a pre-configured prompt. You can upload files and customize the prompt after creation.
-            </p>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button className="btn btn-ghost" onClick={() => setSelectedTemplate(null)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleCreateFromTemplate} disabled={creating}>
-                {creating ? 'Creating...' : 'Create Agent'}
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* Custom Agent Modal */}
