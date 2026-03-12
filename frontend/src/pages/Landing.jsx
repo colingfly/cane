@@ -66,10 +66,8 @@ export default function Landing() {
               </a>
             </div></div>
           </div>
-          <Link to="/demo">Demo</Link>
           <Link to="/guide">Docs</Link>
-          <Link to="/register" className="lp-nav-cta">Get started free</Link>
-          <Link to="/login">Sign in</Link>
+          <Link to="/login" className="lp-nav-cta">Sign in</Link>
         </div>
       </nav>
 
