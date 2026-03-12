@@ -49,7 +49,7 @@ export default function Landing() {
             <span className="lp-dropdown-trigger">Products <span className="lp-chevron">&#9662;</span></span>
             <div className="lp-dropdown-menu"><div className="lp-dropdown-inner">
               <a href="#rag" className="lp-dropdown-item">
-                <span className="lp-dropdown-title">Cane RAG</span>
+                <span className="lp-dropdown-title">Cane Agent</span>
                 <span className="lp-dropdown-desc">Build agents on your documents</span>
               </a>
               <a href="#orchestrate" className="lp-dropdown-item">
@@ -74,10 +74,10 @@ export default function Landing() {
       {/* Hero */}
       <section className="lp-hero">
         <h1 className="lp-reveal">
-          Build an AI workforce.
+          Build, connect, monitor,<br />and verify AI agents.
         </h1>
         <p className="lp-hero-sub lp-reveal">
-          A team of AI agents that work together on your data. No code. Deploy in minutes.
+          Four products. One platform. From RAG pipelines to agent networks to automated evals.
         </p>
         <div className="lp-hero-actions lp-reveal">
           <Link to="/register" className="lp-btn-fill">Get started free</Link>
@@ -89,7 +89,7 @@ export default function Landing() {
       <section className="lp-stats lp-reveal">
         <div className="lp-stats-inner">
           {[
-            ['Cane RAG', 'Hybrid retrieval with re-ranking. Not just embeddings'],
+            ['Cane Agent', 'Hybrid retrieval with re-ranking. Not just embeddings'],
             ['Cane Orchestrate', 'Agents discover, call, and delegate to each other'],
             ['Cane Observe', 'Every call logged. Full audit trail. Live graph'],
             ['Cane Eval', 'LLM judge scores accuracy, completeness, relevance'],
@@ -102,11 +102,11 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Cane RAG */}
+      {/* Cane Agent */}
       <section id="rag" className="lp-section">
         <div className="lp-contain">
           <div className="lp-section-head lp-reveal">
-            <div className="lp-product-label">Cane RAG</div>
+            <div className="lp-product-label">Cane Agent</div>
             <h2>Build agents on your documents.</h2>
             <p>Upload files or sync Google Drive. Cane handles ingestion, retrieval, and deployment.</p>
           </div>

@@ -133,7 +133,7 @@ function GettingStarted() {
           Build a team of AI agents that work together on your data.
         </div>
         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.7, maxWidth: 560 }}>
-          No code. Deploy in minutes. Connect agents into a collaborative network, add live web scraping,
+          Deploy in minutes. Connect agents into a collaborative network, add live web scraping,
           and let the orchestrator route queries to the right specialist automatically.
         </div>
       </div>
@@ -906,7 +906,7 @@ function APIDocsTab() {
 }
 
 const tabs = [
-  { id: 'rag', label: 'Cane RAG', Component: RagDocsTab },
+  { id: 'rag', label: 'Cane Agent', Component: RagDocsTab },
   { id: 'orchestrate', label: 'Cane Orchestrate', Component: OrchestrateDocsTab },
   { id: 'observe', label: 'Cane Observe', Component: ObserveDocsTab },
   { id: 'eval', label: 'Cane Eval', Component: EvalDocsTab },
