@@ -47,7 +47,7 @@ export default function Landing() {
         <div className="lp-nav-links">
           <div className="lp-dropdown">
             <span className="lp-dropdown-trigger">Products <span className="lp-chevron">&#9662;</span></span>
-            <div className="lp-dropdown-menu">
+            <div className="lp-dropdown-menu"><div className="lp-dropdown-inner">
               <a href="#rag" className="lp-dropdown-item">
                 <span className="lp-dropdown-title">Cane RAG</span>
                 <span className="lp-dropdown-desc">Build agents on your documents</span>
@@ -64,7 +64,7 @@ export default function Landing() {
                 <span className="lp-dropdown-title">Cane Eval</span>
                 <span className="lp-dropdown-desc">Test and verify agent accuracy</span>
               </a>
-            </div>
+            </div></div>
           </div>
           <Link to="/demo">Demo</Link>
           <Link to="/guide">Docs</Link>
@@ -412,25 +412,27 @@ const landingStyles = `
 
 .lp-dropdown-menu {
   position: absolute;
-  top: calc(100% + 12px);
+  top: 100%;
   left: 50%;
   transform: translateX(-50%);
+  padding-top: 8px;
   width: 280px;
-  background: rgba(10,10,10,0.95);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 12px;
-  padding: 8px;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.15s, transform 0.15s;
-  transform: translateX(-50%) translateY(4px);
+  transition: opacity 0.15s;
 }
 
 .lp-dropdown:hover .lp-dropdown-menu {
   opacity: 1;
   pointer-events: auto;
-  transform: translateX(-50%) translateY(0);
+}
+
+.lp-dropdown-inner {
+  background: rgba(10,10,10,0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 8px;
 }
 
 .lp-dropdown-item {
