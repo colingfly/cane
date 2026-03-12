@@ -69,13 +69,18 @@ def execute_tool(tool, input_data: dict) -> dict:
 
         # Support URL path templates: replace {{param}} in the URL itself
         # e.g. https://r.jina.ai/{{url}} becomes https://r.jina.ai/https://example.com
+        # e.g. https://s.jina.ai/{{query}} becomes https://s.jina.ai/latest%20AI%20news
+        import urllib.parse
         clean_input = {k: v for k, v in input_data.items() if k not in ("reason", "_tool_id")}
         for key, value in clean_input.items():
-            url = url.replace(f"{{{{{key}}}}}", str(value))
+            placeholder = f"{{{{{key}}}}}"
+            if placeholder in url:
+                # URL-encode the value for safe path substitution
+                encoded_value = urllib.parse.quote(str(value), safe="/:?&=")
+                url = url.replace(placeholder, encoded_value)
 
         # For GET requests, append remaining params as query string
         if tool.method == "GET" and clean_input:
-            import urllib.parse
             # Only include params not already substituted into URL
             query_params = {k: v for k, v in clean_input.items() if f"{{{{{k}}}}}" not in (tool.url or "")}
             if query_params:
@@ -110,7 +115,7 @@ def execute_tool(tool, input_data: dict) -> dict:
         data = json.dumps(payload).encode() if tool.method in ("POST", "PUT", "PATCH") else None
         req = urllib.request.Request(url, data=data, headers=headers, method=tool.method)
 
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:
             body = resp.read().decode("utf-8", errors="replace")[:8000]
             return {
                 "status": "ok",
@@ -321,7 +326,7 @@ def call_claude_with_tools(
                             print(f"  [Tools] BG {name}: {snapshot['method']} {url} payload={json.dumps(payload)[:200]}")
 
                             req = urllib.request.Request(url, data=data, headers=headers, method=snapshot["method"])
-                            with urllib.request.urlopen(req, timeout=15) as resp:
+                            with urllib.request.urlopen(req, timeout=30) as resp:
                                 body = resp.read().decode("utf-8", errors="replace")[:500]
                                 print(f"  [Tools] BG {name}: {resp.status} — {body[:100]}")
                         except Exception as e:
