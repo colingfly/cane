@@ -60,8 +60,8 @@ export default function Landing() {
           production AI agents
         </h1>
         <p className="lp-hero-sub lp-reveal">
-          Ingest documents. Build specialized agents. Connect them to tools and to each other.
-          Score accuracy with automated evals. Deploy anywhere with one script tag.
+          Ingest documents. Build specialized agents with persistent memory and scheduled autonomy.
+          Connect tools, orchestrate sub-agents, and deploy anywhere with one script tag.
         </p>
         <div className="lp-hero-actions lp-reveal">
           <Link to="/demo" className="lp-btn-fill">Try the live demo</Link>
@@ -74,8 +74,8 @@ export default function Landing() {
         <div className="lp-stats-inner">
           {[
             ['Hybrid RAG', 'Vector + BM25 + cross-encoder re-ranking'],
-            ['Agent Orchestration', 'Supervisor agents delegate to specialist sub-agents'],
-            ['Tool Execution', 'Webhooks, MCP protocol, agent-as-tool delegation'],
+            ['Agent Memory', 'Persistent learning from every conversation turn'],
+            ['Agent Orchestration', 'Sub-agents, scheduled runs, multi-agent delegation'],
             ['LLM-as-Judge', 'Automated eval with weighted scoring criteria'],
           ].map(([title, desc], i) => (
             <div key={i} className="lp-stat">
@@ -91,7 +91,7 @@ export default function Landing() {
         <div className="lp-contain">
           <div className="lp-section-head lp-reveal">
             <h2>Architecture</h2>
-            <p>Five layers. Each one built, not imported.</p>
+            <p>Six layers. Each one built, not imported.</p>
           </div>
           <div className="lp-arch-grid">
             {[
@@ -102,13 +102,13 @@ export default function Landing() {
               },
               {
                 n: '02', title: 'Retrieval',
-                body: 'Hybrid search combining dense vector similarity and sparse BM25 keyword matching. Results merged with Reciprocal Rank Fusion, then re-ranked by a cross-encoder. Final chunks sent to Claude with full conversation history.',
+                body: 'Hybrid search combining dense vector similarity and sparse BM25 keyword matching. Results merged with Reciprocal Rank Fusion, then re-ranked by a cross-encoder. Final chunks and persistent memories sent to Claude for context-aware answers.',
                 stack: 'ChromaDB, BGE-base-en, BM25, ms-marco MiniLM cross-encoder',
               },
               {
                 n: '03', title: 'Agents & Orchestration',
-                body: 'Scoped knowledge bases with custom system prompts. Agents call webhook tools, connect to MCP servers, and delegate to other agents as tools. A supervisor can route questions to the right specialist automatically.',
-                stack: 'Claude API, MCP Protocol, agent-as-tool, depth-limited recursion',
+                body: 'Scoped knowledge bases with custom system prompts and persistent memory. Agents call webhook tools, connect to MCP servers, delegate to sub-agents, and run on configurable schedules for full autonomy.',
+                stack: 'Claude API, MCP Protocol, agent-as-tool, memory extraction, scheduled runner',
               },
               {
                 n: '04', title: 'Tools & Integrations',
@@ -116,7 +116,12 @@ export default function Landing() {
                 stack: 'Webhook executor, MCP client, SSE streaming, unified tool router',
               },
               {
-                n: '05', title: 'Evaluation',
+                n: '05', title: 'Memory & Scheduling',
+                body: 'Agents extract facts, preferences, and instructions from every conversation. Memories persist across sessions and are injected into future prompts. Scheduled runs execute agents autonomously on intervals or daily triggers.',
+                stack: 'Background extraction, deduplication, daemon threads, cron-style scheduler',
+              },
+              {
+                n: '06', title: 'Evaluation',
                 body: 'Automated test suites scored by an LLM judge. Four criteria: accuracy, completeness, relevance, and faithfulness. Configurable weights and custom rules. Score history tracks improvement across runs.',
                 stack: 'LLM-as-Judge, weighted criteria, custom rules, regression tracking',
               },
@@ -145,8 +150,10 @@ export default function Landing() {
           <div className="lp-cap-list">
             {[
               ['Hybrid RAG Pipeline', 'Vector search, BM25 keyword matching, Reciprocal Rank Fusion, and cross-encoder re-ranking in a single retrieval pass. Not just embeddings.'],
-              ['Google Drive Sync', 'OAuth popup, folder picker, incremental sync via the Changes API. Google Docs and Sheets auto-export to text. Encrypted credential storage.'],
+              ['Agent Memory', 'Agents extract facts, preferences, and instructions from conversations automatically. Memories persist across sessions and are injected into future prompts so agents get smarter over time.'],
+              ['Scheduled Agent Runs', 'Configure agents to run autonomously on intervals or daily triggers. Background execution with run history, status tracking, and manual trigger support. Built for daily briefings and automated workflows.'],
               ['Multi-Agent Orchestration', 'Link agents as callable tools. A supervisor agent delegates questions to specialists and combines their answers. Depth-limited recursion prevents runaway chains.'],
+              ['Google Drive Sync', 'OAuth popup, folder picker, incremental sync via the Changes API. Google Docs and Sheets auto-export to text. Encrypted credential storage.'],
               ['MCP Connections', 'Model Context Protocol for connecting agents to Slack, Google Calendar, HubSpot, and more. Pre-built connector catalog plus custom server support.'],
               ['Webhook Tools', 'HTTP actions triggered by agent reasoning. Fire-and-forget for notifications, wait-for-response for live data lookups. Custom headers and payload templates.'],
               ['Evaluation Engine', 'Write test cases with expected answers. Run automated scoring with configurable criteria weights and custom rules. Track scores across runs to catch regressions.'],
@@ -172,11 +179,11 @@ export default function Landing() {
           <div className="lp-stack-row lp-reveal">
             {[
               ['Backend', 'Python, FastAPI, Gunicorn, SQLAlchemy'],
-              ['AI / ML', 'Claude API, BGE embeddings, BM25, cross-encoder re-ranking'],
+              ['AI / ML', 'Claude API, BGE embeddings, BM25, cross-encoder re-ranking, memory extraction'],
               ['Storage', 'MySQL, ChromaDB, Google Drive API'],
-              ['Frontend', 'React 18, Vite, Lucide icons'],
+              ['Frontend', 'React 18, Vite, Lucide icons, tabbed agent config'],
               ['Auth', 'JWT, OAuth 2.0, Fernet encryption, scoped API keys'],
-              ['Infra', 'Railway, background sync workers, multi-process'],
+              ['Infra', 'Railway, background workers, scheduled runner, daemon threads'],
             ].map(([label, val], i) => (
               <div key={i} className="lp-stack-item">
                 <span className="lp-stack-label">{label}</span>

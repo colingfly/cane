@@ -40,7 +40,7 @@ export default function Architecture() {
           </h1>
           <p className="arch-hero-sub arch-reveal">
             A deep dive into the system that powers Cane. Every layer was built from scratch:
-            ingestion, retrieval, agent orchestration, tool execution, evaluation, and deployment.
+            ingestion, retrieval, agent orchestration, tool execution, memory and scheduling, evaluation, and deployment.
           </p>
         </div>
       </section>
@@ -54,7 +54,7 @@ export default function Architecture() {
           </div>
           <div className="arch-flow arch-reveal">
             <div className="arch-flow-row">
-              {['User Query', 'API / Widget', 'Agent Router', 'RAG Pipeline', 'Claude + Tools', 'Streamed Response'].map((step, i) => (
+              {['User Query', 'API / Widget', 'Agent Router', 'RAG + Memory', 'Claude + Tools', 'Streamed Response'].map((step, i) => (
                 <div key={i} className="arch-flow-step">
                   <div className="arch-flow-n">{String(i + 1).padStart(2, '0')}</div>
                   <div className="arch-flow-label">{step}</div>
@@ -67,8 +67,8 @@ export default function Architecture() {
                 Queries arrive through the chat widget, REST API, or internal UI.
                 The agent router identifies the target workspace and loads its system prompt, knowledge base, and tool palette.
                 The RAG pipeline retrieves relevant document chunks via hybrid search.
-                Claude receives the chunks, conversation history, and available tools, then generates a streamed response.
-                If Claude invokes a tool, execution loops back for a follow-up completion.
+                Claude receives the chunks, persistent memories, and available tools, then generates a streamed response.
+                If Claude invokes a tool, execution loops back for a follow-up completion. After the response, a background thread extracts new memories from the conversation.
               </p>
             </div>
           </div>
@@ -301,11 +301,65 @@ export default function Architecture() {
         </div>
       </section>
 
-      {/* Layer 5: Evaluation */}
+      {/* Layer 5: Memory & Scheduling */}
       <section className="arch-section">
         <div className="arch-contain">
           <div className="arch-layer-header arch-reveal">
             <div className="arch-layer-n">05</div>
+            <div>
+              <h2>Memory & Scheduling</h2>
+              <p className="arch-layer-sub">Persistent learning and autonomous execution</p>
+            </div>
+          </div>
+          <div className="arch-detail-grid arch-reveal">
+            <div className="arch-detail-card">
+              <h4>Memory Extraction</h4>
+              <p>
+                After every conversation turn, a background daemon thread sends the Q+A pair
+                to Claude with a structured extraction prompt. Claude returns facts, preferences,
+                and instructions as typed JSON. New memories are deduplicated against existing
+                ones before saving.
+              </p>
+            </div>
+            <div className="arch-detail-card">
+              <h4>Memory Injection</h4>
+              <p>
+                Before each response, the system loads active memories for the current agent
+                and user. Memories are formatted and injected into the system prompt so Claude
+                has context from all previous conversations. Per-user scoping ensures different
+                users get personalized experiences.
+              </p>
+            </div>
+            <div className="arch-detail-card">
+              <h4>Scheduled Runner</h4>
+              <p>
+                A background async loop polls the schedule table every 60 seconds. Due schedules
+                spawn daemon threads that execute the full ask pipeline (RAG + tools + Claude).
+                Supports interval-based and daily-time triggers with per-schedule locking to
+                prevent concurrent runs.
+              </p>
+            </div>
+            <div className="arch-detail-card">
+              <h4>Run History</h4>
+              <p>
+                Every scheduled execution is logged with prompt, response, status, duration,
+                and error details. Run history is queryable per schedule with the last 20 runs
+                displayed in the UI. Analytics logs scheduled runs as a separate channel.
+              </p>
+            </div>
+          </div>
+          <div className="arch-stack-bar arch-reveal">
+            <span>Daemon threads</span><span>Claude extraction</span><span>Deduplication</span>
+            <span>Async scheduler</span><span>Per-schedule locking</span><span>Run history logging</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Layer 6: Evaluation */}
+      <section className="arch-section">
+        <div className="arch-contain">
+          <div className="arch-layer-header arch-reveal">
+            <div className="arch-layer-n">06</div>
             <div>
               <h2>Evaluation Engine</h2>
               <p className="arch-layer-sub">Automated scoring with LLM-as-Judge</p>
@@ -352,11 +406,11 @@ export default function Architecture() {
         </div>
       </section>
 
-      {/* Layer 6: Deployment */}
+      {/* Layer 7: Deployment */}
       <section className="arch-section">
         <div className="arch-contain">
           <div className="arch-layer-header arch-reveal">
-            <div className="arch-layer-n">06</div>
+            <div className="arch-layer-n">07</div>
             <div>
               <h2>Deployment</h2>
               <p className="arch-layer-sub">Widget embed, REST API, and marketplace distribution</p>
@@ -418,8 +472,9 @@ export default function Architecture() {
               { category: 'Database', items: 'MySQL with multi-tenant schema, foreign key constraints, cascading deletes' },
               { category: 'Auth & Security', items: 'JWT tokens, OAuth 2.0 (Google), Fernet symmetric encryption, hashed API keys, per-key rate limiting' },
               { category: 'Integrations', items: 'Google Drive API, Model Context Protocol (MCP), webhook tool executor, SSE streaming' },
-              { category: 'Frontend', items: 'React 18, Vite, Lucide icons, CSS custom properties, responsive grid layout' },
-              { category: 'Infrastructure', items: 'Railway deployment, background sync workers, multi-process Gunicorn, environment-based config' },
+              { category: 'Memory & Scheduling', items: 'Background memory extraction, deduplication, per-user scoping, async schedule loop, daemon thread execution' },
+              { category: 'Frontend', items: 'React 18, Vite, Lucide icons, tabbed agent config, CSS custom properties, responsive grid layout' },
+              { category: 'Infrastructure', items: 'Railway deployment, background sync workers, scheduled runner, multi-process Gunicorn, environment-based config' },
             ].map((row, i) => (
               <div key={i} className="arch-full-stack-row">
                 <div className="arch-full-stack-cat">{row.category}</div>

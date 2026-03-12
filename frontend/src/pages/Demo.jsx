@@ -46,6 +46,9 @@ export default function Demo() {
   // Deploy
   const [copied, setCopied] = useState(false)
 
+  // Tabs
+  const [tab, setTab] = useState('configure')
+
   const rateLimited = msgCount >= MAX_MESSAGES
   const readyDocs = documents.filter(d => d.status === 'ready')
   const processingDocs = documents.filter(d => d.status === 'processing')
@@ -295,6 +298,28 @@ export default function Demo() {
         </div>
       </div>
 
+      {/* Tab Navigation */}
+      <div className="workspace-tabs" style={{ marginBottom: 24 }}>
+        {[
+          { id: 'configure', label: 'Configure' },
+          { id: 'knowledge', label: 'Knowledge' },
+          { id: 'tools', label: 'Tools' },
+          { id: 'behavior', label: 'Behavior' },
+          { id: 'deploy', label: 'Deploy' },
+        ].map(t => (
+          <button
+            key={t.id}
+            className={`workspace-tab ${tab === t.id ? 'active' : ''}`}
+            onClick={() => setTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ═══ Knowledge Tab ═══ */}
+      {tab === 'knowledge' && (<>
+
       {/* Files card */}
       <div className="card" style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -392,6 +417,31 @@ export default function Demo() {
         )}
       </div>
 
+      {/* Google Drive teaser */}
+      <div className="card" style={{ marginBottom: 24, opacity: 0.5 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2L4.5 7.5V16.5L12 22L19.5 16.5V7.5L12 2Z" />
+            </svg>
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>Google Drive</div>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                Live sync folders from Drive. Auto-updates when files change
+              </div>
+            </div>
+          </div>
+          <Link to="/register" className="btn btn-outline" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+            Requires account
+          </Link>
+        </div>
+      </div>
+
+      </>)}
+
+      {/* ═══ Configure Tab ═══ */}
+      {tab === 'configure' && (<>
+
       {/* System Prompt card */}
       <div className="card" style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -435,25 +485,10 @@ export default function Demo() {
         </div>
       </div>
 
-      {/* Google Drive teaser */}
-      <div className="card" style={{ marginBottom: 24, opacity: 0.5 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L4.5 7.5V16.5L12 22L19.5 16.5V7.5L12 2Z" />
-            </svg>
-            <div>
-              <div style={{ fontWeight: 600, marginBottom: 2 }}>Google Drive</div>
-              <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-                Live sync folders from Drive. Auto-updates when files change
-              </div>
-            </div>
-          </div>
-          <Link to="/register" className="btn btn-outline" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
-            Requires account
-          </Link>
-        </div>
-      </div>
+      </>)}
+
+      {/* ═══ Tools Tab ═══ */}
+      {tab === 'tools' && (<>
 
       {/* Webhook Tools teaser */}
       <div className="card" style={{ marginBottom: 24, opacity: 0.5 }}>
@@ -466,26 +501,6 @@ export default function Demo() {
               <div style={{ fontWeight: 600, marginBottom: 2 }}>Webhook Tools</div>
               <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
                 Connect HTTP actions. Fire-and-forget notifications or wait-for-response data lookups
-              </div>
-            </div>
-          </div>
-          <Link to="/register" className="btn btn-outline" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
-            Requires account
-          </Link>
-        </div>
-      </div>
-
-      {/* Sub-Agent Orchestration teaser */}
-      <div className="card" style={{ marginBottom: 24, opacity: 0.5 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-            </svg>
-            <div>
-              <div style={{ fontWeight: 600, marginBottom: 2 }}>Sub-Agent Orchestration</div>
-              <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-                Link specialist agents as tools. A supervisor delegates questions to the right expert automatically
               </div>
             </div>
           </div>
@@ -517,7 +532,77 @@ export default function Demo() {
         </div>
       </div>
 
-      {/* Ask section */}
+      {/* Sub-Agent Orchestration teaser */}
+      <div className="card" style={{ marginBottom: 24, opacity: 0.5 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>Sub-Agent Orchestration</div>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                Link specialist agents as tools. A supervisor delegates questions to the right expert automatically
+              </div>
+            </div>
+          </div>
+          <Link to="/register" className="btn btn-outline" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+            Requires account
+          </Link>
+        </div>
+      </div>
+
+      </>)}
+
+      {/* ═══ Behavior Tab ═══ */}
+      {tab === 'behavior' && (<>
+
+      {/* Agent Memory teaser */}
+      <div className="card" style={{ marginBottom: 24, opacity: 0.5 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2a8 8 0 0 0-8 8c0 3.4 2.1 6.3 5 7.4V20h6v-2.6c2.9-1.1 5-4 5-7.4a8 8 0 0 0-8-8z" />
+              <line x1="10" y1="22" x2="14" y2="22" />
+            </svg>
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>Agent Memory</div>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                Agents learn from conversations automatically. Persistent facts, preferences, and instructions across sessions
+              </div>
+            </div>
+          </div>
+          <Link to="/register" className="btn btn-outline" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+            Requires account
+          </Link>
+        </div>
+      </div>
+
+      {/* Scheduled Runs teaser */}
+      <div className="card" style={{ marginBottom: 24, opacity: 0.5 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>Scheduled Runs</div>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                Run agents autonomously on intervals or daily triggers. Great for briefings, reports, and automated workflows
+              </div>
+            </div>
+          </div>
+          <Link to="/register" className="btn btn-outline" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+            Requires account
+          </Link>
+        </div>
+      </div>
+
+      </>)}
+
+      {/* Ask section (always visible) */}
+      {(tab === 'configure' || tab === 'knowledge') && (
       <div style={{ marginBottom: 24 }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: 4, fontFamily: 'var(--font-display)' }}>
@@ -567,9 +652,10 @@ export default function Demo() {
           </div>
         )}
       </div>
+      )}
 
-      {/* Conversation history */}
-      {history.map((turn, i) => (
+      {/* Conversation history (always visible when there are messages) */}
+      {(tab === 'configure' || tab === 'knowledge') && history.map((turn, i) => (
         <div key={i} className="ai-summary fade-in" style={{ marginBottom: 16, opacity: i < history.length - 1 ? 0.7 : 1 }}>
           <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
             {turn.q}
@@ -582,13 +668,16 @@ export default function Demo() {
       ))}
 
       {/* Loading state */}
-      {loading && (
+      {(tab === 'configure' || tab === 'knowledge') && loading && (
         <div className="ai-summary fade-in">
           <div className="loading-center"><div className="spinner" /></div>
         </div>
       )}
 
-      <div ref={bottomRef} />
+      {(tab === 'configure' || tab === 'knowledge') && <div ref={bottomRef} />}
+
+      {/* ═══ Deploy Tab ═══ */}
+      {tab === 'deploy' && (<>
 
       {/* Widget Customizer */}
       {readyDocs.length > 0 && (
@@ -801,6 +890,8 @@ export default function Demo() {
         </div>
       </div>
 
+      </>)}
+
       {/* Rate limit CTA */}
       {rateLimited && (
         <div className="card" style={{ textAlign: 'center', padding: 32 }}>
@@ -820,8 +911,8 @@ export default function Demo() {
       {!rateLimited && (
         <div style={{ textAlign: 'center', padding: '24px 0', borderTop: '1px solid var(--rule)', marginTop: 24 }}>
           <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.7 }}>
-            Unlock everything: permanent agents, Google Drive sync, webhook tools,
-            sub-agent orchestration, MCP connections, automated eval, analytics, and a public API.
+            Unlock everything: permanent agents, agent memory, scheduled runs, Google Drive sync,
+            webhook tools, sub-agent orchestration, MCP connections, automated eval, analytics, and a public API.
           </div>
           <Link to="/register" className="btn btn-outline" style={{ fontSize: '0.82rem' }}>
             Create a free account
