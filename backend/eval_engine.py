@@ -9,6 +9,7 @@ Executes an eval run:
 """
 import json
 import time
+import urllib.request
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -356,6 +357,9 @@ def execute_eval_run(run_id: str, db: Session):
 
         print(f"  [Eval] Run complete: {run.overall_score} ({run.passed}P/{run.warned}W/{run.failed}F)")
 
+        # Fire webhook if configured and there are failures
+        _fire_webhook(run, env, results)
+
     except Exception as e:
         print(f"  [Eval] Run failed: {e}")
         import traceback
@@ -364,3 +368,64 @@ def execute_eval_run(run_id: str, db: Session):
         run.error_message = str(e)
         run.completed_at = datetime.utcnow()
         db.commit()
+
+
+def _fire_webhook(run: EvalRun, env: Environment, results: list):
+    """
+    Fire a webhook notification when an eval run completes with failures.
+    Only fires if the environment has webhook_enabled=True and webhook_url set.
+    Follows the same pattern as schedule_runner.py conditional webhooks.
+    """
+    if not getattr(env, "webhook_enabled", False):
+        return
+    webhook_url = getattr(env, "webhook_url", "") or ""
+    if not webhook_url:
+        return
+    if run.failed == 0:
+        print(f"  [Eval] Webhook skipped: no failures (all {run.passed} passed)")
+        return
+
+    try:
+        # Parse custom headers
+        raw_headers = getattr(env, "webhook_headers", "{}") or "{}"
+        try:
+            headers = json.loads(raw_headers)
+        except (json.JSONDecodeError, TypeError):
+            headers = {}
+        headers.setdefault("Content-Type", "application/json")
+
+        # Build payload with failed check details
+        failed_checks = []
+        for r in results:
+            if r.status == "fail":
+                failed_checks.append({
+                    "question": r.question,
+                    "score": r.overall_score,
+                    "status": r.status,
+                    "reasoning": r.judge_reasoning or "",
+                })
+
+        payload = json.dumps({
+            "event": "eval_run_completed",
+            "environment_id": env.id,
+            "environment_name": env.name,
+            "workspace_id": env.workspace_id,
+            "run_id": run.id,
+            "overall_score": run.overall_score,
+            "total_cases": run.total_cases,
+            "passed": run.passed,
+            "warned": run.warned,
+            "failed": run.failed,
+            "failed_checks": failed_checks,
+            "timestamp": datetime.utcnow().isoformat(),
+        }).encode()
+
+        req = urllib.request.Request(
+            webhook_url, data=payload,
+            headers=headers, method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            print(f"  [Eval] Webhook sent: {resp.status} ({run.failed} failed checks)")
+
+    except Exception as e:
+        print(f"  [Eval] Webhook failed: {e}")

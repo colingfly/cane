@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
-  FlaskConical, ArrowLeft, Plus, Trash2, Check, X, Play,
+  FlaskConical, ArrowLeft, Plus, Trash2, Check, X, Play, Bell,
   SlidersHorizontal, ListChecks, BarChart3, Settings, Sparkles, Wand2,
 } from 'lucide-react'
 import {
@@ -9,7 +9,7 @@ import {
   addTestCase, updateTestCase, deleteTestCase,
   updateCriteria, addCustomRule, deleteCustomRule,
   getRuns, triggerRun, getRunDetail, deleteRun,
-  generateTestCases,
+  generateTestCases, testWebhook,
 } from '../api/eval'
 import { getAgents } from '../api/client'
 
@@ -50,6 +50,13 @@ export default function EnvironmentDetail() {
   const [genDifficulty, setGenDifficulty] = useState('mixed')
   const [generating, setGenerating] = useState(false)
 
+  // Webhook state
+  const [webhookUrl, setWebhookUrl] = useState('')
+  const [webhookHeaders, setWebhookHeaders] = useState('{}')
+  const [webhookEnabled, setWebhookEnabled] = useState(false)
+  const [webhookTesting, setWebhookTesting] = useState(false)
+  const [webhookTestResult, setWebhookTestResult] = useState(null)
+
   // Run state
   const [running, setRunning] = useState(false)
   const [activeRunId, setActiveRunId] = useState(null)
@@ -87,6 +94,9 @@ export default function EnvironmentDetail() {
       setName(envRes.name)
       setDescription(envRes.description || '')
       setWorkspaceId(envRes.workspace_id)
+      setWebhookUrl(envRes.webhook_url || '')
+      setWebhookHeaders(envRes.webhook_headers || '{}')
+      setWebhookEnabled(envRes.webhook_enabled || false)
     } catch (err) {
       console.error(err)
     } finally {
@@ -101,6 +111,9 @@ export default function EnvironmentDetail() {
       if (name !== env.name) data.name = name
       if (description !== (env.description || '')) data.description = description
       if (workspaceId !== env.workspace_id) data.workspace_id = workspaceId
+      if (webhookUrl !== (env.webhook_url || '')) data.webhook_url = webhookUrl
+      if (webhookHeaders !== (env.webhook_headers || '{}')) data.webhook_headers = webhookHeaders
+      if (webhookEnabled !== (env.webhook_enabled || false)) data.webhook_enabled = webhookEnabled
       if (Object.keys(data).length > 0) {
         const updated = await updateEnvironment(envId, data)
         setEnv(updated)
@@ -346,6 +359,94 @@ export default function EnvironmentDetail() {
           >
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
+
+          {/* ─── Webhook Notifications ─── */}
+          <div style={{ marginTop: 32, borderTop: '1px solid var(--border)', paddingTop: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Bell size={16} style={{ color: 'var(--cane-600)' }} />
+                  Webhook Notifications
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                  Send a webhook when eval runs complete with failed checks.
+                </div>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={webhookEnabled}
+                  onChange={e => setWebhookEnabled(e.target.checked)}
+                  style={{ width: 16, height: 16 }}
+                />
+                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Enabled</span>
+              </label>
+            </div>
+
+            {webhookEnabled && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div className="form-group">
+                  <label>Webhook URL</label>
+                  <input
+                    className="form-input"
+                    value={webhookUrl}
+                    onChange={e => { setWebhookUrl(e.target.value); setWebhookTestResult(null) }}
+                    placeholder="https://hooks.slack.com/services/... or any POST endpoint"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Custom Headers (JSON)</label>
+                  <textarea
+                    className="form-input"
+                    value={webhookHeaders}
+                    onChange={e => setWebhookHeaders(e.target.value)}
+                    placeholder='{"Authorization": "Bearer your-token"}'
+                    rows={2}
+                    style={{ fontFamily: 'monospace', fontSize: '0.82rem' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={async () => {
+                      setWebhookTesting(true)
+                      setWebhookTestResult(null)
+                      try {
+                        // Save first so the backend has the latest URL/headers
+                        await updateEnvironment(envId, {
+                          webhook_url: webhookUrl,
+                          webhook_headers: webhookHeaders,
+                          webhook_enabled: webhookEnabled,
+                        })
+                        await testWebhook(envId)
+                        setWebhookTestResult({ ok: true })
+                      } catch (err) {
+                        setWebhookTestResult({ ok: false, error: err.message })
+                      } finally {
+                        setWebhookTesting(false)
+                      }
+                    }}
+                    disabled={webhookTesting || !webhookUrl.trim()}
+                    style={{ fontSize: '0.82rem' }}
+                  >
+                    {webhookTesting ? 'Sending...' : 'Test Webhook'}
+                  </button>
+                  {webhookTestResult && (
+                    <span style={{
+                      fontSize: '0.82rem',
+                      color: webhookTestResult.ok ? '#16a34a' : '#dc2626',
+                      fontWeight: 600,
+                    }}>
+                      {webhookTestResult.ok
+                        ? 'Test payload sent successfully'
+                        : `Failed: ${webhookTestResult.error}`
+                      }
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

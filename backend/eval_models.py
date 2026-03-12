@@ -37,6 +37,9 @@ class Environment(Base):
     description = Column(Text, default="")
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     is_active = Column(Boolean, default=True)
+    webhook_url = Column(String(500), nullable=True, default="")
+    webhook_headers = Column(Text, nullable=True, default="{}")
+    webhook_enabled = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

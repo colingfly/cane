@@ -26,6 +26,7 @@ def run_all():
     _migrate_agent_communications_table()
     _migrate_orchestrator_mode_column()
     _migrate_external_agents_table()
+    _migrate_environment_webhook_columns()
 
 
 def _migrate_agent_columns():
@@ -665,3 +666,27 @@ def _migrate_external_agents_table():
             print(f"  [DB] external_agents migration failed: {e}")
     else:
         print("  [DB] external_agents table already exists")
+
+
+def _migrate_environment_webhook_columns():
+    """Add webhook notification columns to environments table."""
+    insp = inspect(engine)
+    try:
+        cols = {c["name"] for c in insp.get_columns("environments")}
+        webhook_cols = {
+            "webhook_url": "ALTER TABLE environments ADD COLUMN webhook_url VARCHAR(500) NULL DEFAULT ''",
+            "webhook_headers": "ALTER TABLE environments ADD COLUMN webhook_headers TEXT NULL",
+            "webhook_enabled": "ALTER TABLE environments ADD COLUMN webhook_enabled TINYINT(1) DEFAULT 0",
+        }
+        added = []
+        for col_name, sql in webhook_cols.items():
+            if col_name not in cols:
+                with engine.begin() as conn:
+                    conn.execute(text(sql))
+                added.append(col_name)
+        if added:
+            print(f"  [DB] Environment webhook columns added: {', '.join(added)}")
+        else:
+            print("  [DB] Environment webhook columns already present")
+    except Exception as e:
+        print(f"  [DB] Environment webhook migration skipped: {e}")

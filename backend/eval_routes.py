@@ -5,6 +5,7 @@ Phase 1: CRUD for environments, test cases, judge criteria, and custom rules.
 Phase 2 will add: run execution, judge pipeline, auto-generate.
 """
 import json
+import urllib.request
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
@@ -57,6 +58,9 @@ def _serialize_env(env: Environment, include_details=False) -> dict:
         "test_case_count": len(env.test_cases),
         "run_count": len(env.runs),
         "last_score": None,
+        "webhook_url": env.webhook_url or "",
+        "webhook_headers": env.webhook_headers or "{}",
+        "webhook_enabled": bool(env.webhook_enabled),
         "created_at": env.created_at.isoformat() if env.created_at else None,
         "updated_at": env.updated_at.isoformat() if env.updated_at else None,
     }
@@ -202,6 +206,9 @@ def update_environment(
     name: str = None,
     description: str = None,
     workspace_id: str = None,
+    webhook_url: str = None,
+    webhook_headers: str = None,
+    webhook_enabled: bool = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -212,6 +219,12 @@ def update_environment(
         env.name = name.strip()
     if description is not None:
         env.description = description.strip()
+    if webhook_url is not None:
+        env.webhook_url = webhook_url.strip()
+    if webhook_headers is not None:
+        env.webhook_headers = webhook_headers.strip()
+    if webhook_enabled is not None:
+        env.webhook_enabled = webhook_enabled
     if workspace_id is not None:
         ws = db.query(Workspace).filter(
             Workspace.id == workspace_id,
@@ -758,3 +771,63 @@ def delete_run(
     db.delete(run)
     db.commit()
     return {"deleted": True}
+
+
+# ═══════════════════════════════════════════
+#  WEBHOOK TEST
+# ═══════════════════════════════════════════
+
+@router.post("/{env_id}/webhook/test")
+def test_webhook(
+    env_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Send a test payload to the environment's configured webhook URL."""
+    env = _get_env(env_id, user.tenant_id, db)
+
+    webhook_url = env.webhook_url or ""
+    if not webhook_url:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No webhook URL configured")
+
+    # Parse custom headers
+    try:
+        headers = json.loads(env.webhook_headers or "{}")
+    except (json.JSONDecodeError, TypeError):
+        headers = {}
+    headers.setdefault("Content-Type", "application/json")
+
+    # Build sample payload
+    payload = json.dumps({
+        "event": "webhook_test",
+        "environment_id": env.id,
+        "environment_name": env.name,
+        "workspace_id": env.workspace_id,
+        "message": "This is a test webhook from Cane. If you see this, your webhook is configured correctly.",
+        "sample_data": {
+            "overall_score": 62.5,
+            "total_cases": 10,
+            "passed": 5,
+            "warned": 2,
+            "failed": 3,
+            "failed_checks": [
+                {
+                    "question": "Validate this contract for required standard clauses.",
+                    "score": 35.0,
+                    "status": "fail",
+                    "reasoning": "Missing indemnification and force majeure clauses.",
+                },
+            ],
+        },
+        "timestamp": datetime.utcnow().isoformat(),
+    }).encode()
+
+    try:
+        req = urllib.request.Request(
+            webhook_url, data=payload,
+            headers=headers, method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return {"ok": True, "status_code": resp.status}
+    except Exception as e:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Webhook failed: {str(e)[:200]}")

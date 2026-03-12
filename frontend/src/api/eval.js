@@ -98,3 +98,6 @@ export const triggerRun = (envId) => request(`/environments/${envId}/run`, { met
 export const getRunDetail = (envId, runId) => request(`/environments/${envId}/runs/${runId}`)
 
 export const deleteRun = (envId, runId) => request(`/environments/${envId}/runs/${runId}`, { method: 'DELETE' })
+
+// -- Webhook --
+export const testWebhook = (envId) => request(`/environments/${envId}/webhook/test`, { method: 'POST' })
