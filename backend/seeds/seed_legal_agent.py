@@ -21,6 +21,7 @@ from database import init_db, SessionLocal
 from db_models import User, Tenant, Workspace
 from eval_models import Environment, TestCase, JudgeCriteria, JudgeCustomRule
 from marketplace_models import MarketplaceListing
+import migrations
 
 
 # ── Agent Config ──
@@ -190,6 +191,27 @@ CUSTOM_RULES = [
 def seed():
     """Create Legal Document Processor agent, eval environment, and marketplace listing."""
     init_db()
+    try:
+        migrations.run_all()
+    except Exception as e:
+        print(f"[Seed] Migrations: {e}")
+
+    # Ensure workspace columns exist (migrations may fail partway through)
+    from sqlalchemy import text, inspect as sa_inspect
+    from database import engine
+    try:
+        insp = sa_inspect(engine)
+        cols = {c["name"] for c in insp.get_columns("workspaces")}
+        with engine.begin() as conn:
+            if "tool_chaining_enabled" not in cols:
+                conn.execute(text("ALTER TABLE workspaces ADD COLUMN tool_chaining_enabled TINYINT(1) DEFAULT 0"))
+                print("[Seed] Added tool_chaining_enabled column")
+            if "orchestrator_mode" not in cols:
+                conn.execute(text("ALTER TABLE workspaces ADD COLUMN orchestrator_mode TINYINT(1) DEFAULT 0"))
+                print("[Seed] Added orchestrator_mode column")
+    except Exception as e:
+        print(f"[Seed] Column check: {e}")
+
     db = SessionLocal()
 
     try:
