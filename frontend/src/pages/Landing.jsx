@@ -77,7 +77,7 @@ export default function Landing() {
           Build, connect, monitor,<br />and verify AI agents.
         </h1>
         <p className="lp-hero-sub lp-reveal">
-          Four products. One platform. From RAG pipelines to agent networks to automated evals.
+          The platform for teams that run on AI agents. From RAG pipelines to agent networks to automated evals, all in one place.
         </p>
         <div className="lp-hero-actions lp-reveal">
           <Link to="/register" className="lp-btn-fill">Get started free</Link>
