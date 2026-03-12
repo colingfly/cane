@@ -3,6 +3,7 @@ connector_routes.py — API endpoints for Live Connectors (Google Drive sync).
 
 Handles OAuth flows, folder browsing, sync CRUD, and manual sync triggers.
 """
+import json
 import urllib.parse
 from datetime import datetime
 
@@ -300,7 +301,7 @@ async def connect_s3(
             display_label = "AWS S3"
 
     # Encrypt creds as JSON
-    creds_json = _json.dumps({
+    creds_json = json.dumps({
         "access_key": access_key,
         "secret_key": secret_key,
         "endpoint_url": endpoint_url,

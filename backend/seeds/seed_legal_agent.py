@@ -29,9 +29,9 @@ import migrations
 AGENT_NAME = "Legal Document Processor"
 AGENT_ICON = "LA"
 AGENT_DESC = (
-    "RAG agent built for legal departments. Upload contracts, policies, and compliance "
-    "documents. Ask questions and get precise answers with section citations, risk flags, "
-    "and cross-references. Built for multi-tenant deployments across departments."
+    "Document validation agent for legal departments. Upload contracts, policies, and compliance "
+    "documents. Automatically audit for missing fields, absent clauses, incomplete sections, "
+    "and placeholder values. Produces structured completeness reports for human review."
 )
 
 SYSTEM_PROMPT = """You are a Legal Document Processor, a specialized RAG assistant for legal departments. You help attorneys, paralegals, compliance officers, and staff navigate contracts, policies, regulations, and internal legal documents using ONLY the provided document excerpts.
@@ -83,63 +83,63 @@ Terminology:
 
 TEST_CASES = [
     {
-        "question": "What are the termination provisions in our vendor agreements?",
-        "expected_answer": "The agent should identify termination clauses including termination for cause, termination for convenience, notice periods, cure periods, and any post-termination obligations. Each provision should cite the specific section and document.",
-        "tags": '["contracts", "termination"]',
+        "question": "Validate this contract for required standard clauses. Check for: indemnification, limitation of liability, termination, force majeure, governing law, and dispute resolution. List any that are missing.",
+        "expected_answer": "The agent should check the document for each of the six standard clauses and produce a checklist showing PRESENT or MISSING for each one. Any missing clause should be flagged as a gap requiring review. Citations should reference the section where each present clause appears.",
+        "tags": '["validation", "clauses", "completeness"]',
         "sort_order": 1,
     },
     {
-        "question": "What is our data retention policy for employee records?",
-        "expected_answer": "The agent should cite the specific data retention policy document, identify retention periods by record type, note any regulatory requirements mentioned, and flag if certain record types are not covered.",
-        "tags": '["policy", "compliance", "data"]',
+        "question": "Audit this document for missing party information. Verify that all parties are fully identified with: legal entity name, address, jurisdiction, and authorized signatory. Flag any incomplete entries.",
+        "expected_answer": "The agent should extract every party referenced in the document and check each for the four required fields (legal name, address, jurisdiction, signatory). Output a structured report showing which fields are present and which are missing for each party.",
+        "tags": '["validation", "parties", "completeness"]',
         "sort_order": 2,
     },
     {
-        "question": "Are there any indemnification clauses in the Smith Corp contract?",
-        "expected_answer": "The agent should identify all indemnification provisions, specify which party indemnifies whom, the scope of indemnification, any caps or limitations, and cite exact section numbers. If no indemnification clause exists, the agent should flag this as a missing standard provision.",
-        "tags": '["contracts", "risk", "clauses"]',
+        "question": "Check this agreement for date completeness. Verify that the following dates are present and valid: effective date, expiration date, renewal deadline, and notice periods. Flag any missing or ambiguous dates.",
+        "expected_answer": "The agent should scan the entire document for date-related fields and produce a date inventory. Each required date should be marked as FOUND (with the value and section) or MISSING. Ambiguous dates (e.g., 'within a reasonable time') should be flagged for human review.",
+        "tags": '["validation", "dates", "completeness"]',
         "sort_order": 3,
     },
     {
-        "question": "What should we do about the upcoming lease renewal?",
-        "expected_answer": "The agent should NOT give advice. It should respond with something like 'I can show you what the documents say, but legal advice should come from your legal counsel.' Then present the relevant lease terms, renewal dates, notice requirements, and any options documented.",
-        "tags": '["guardrails", "advice"]',
+        "question": "Review this contract for unsigned or incomplete signature blocks. Verify that all parties have signature lines with: name, title, date, and signature placeholder. Report any gaps.",
+        "expected_answer": "The agent should locate all signature blocks in the document and verify each one contains the four required elements. Missing elements should be listed per party. If the document lacks signature blocks entirely, that should be flagged as a critical gap.",
+        "tags": '["validation", "signatures", "completeness"]',
         "sort_order": 4,
     },
     {
-        "question": "Compare the liability limitations across our three largest vendor contracts.",
-        "expected_answer": "The agent should present a structured comparison citing each contract by name, the specific liability cap amounts or formulas, what is excluded from the cap, and any differences in approach. Cross-reference format with clear per-contract breakdowns.",
-        "tags": '["contracts", "comparison", "risk"]',
+        "question": "Scan this policy document for regulatory compliance references. Check whether it cites applicable regulations (GDPR, HIPAA, SOX, PCI-DSS, or industry-specific). Flag if no regulatory framework is referenced.",
+        "expected_answer": "The agent should search the document for mentions of regulatory frameworks, compliance standards, and statutory references. Produce a list of all regulations cited with their section locations. If no regulatory references are found, flag this as a compliance gap requiring human review.",
+        "tags": '["validation", "compliance", "regulatory"]',
         "sort_order": 5,
     },
     {
-        "question": "Define 'Force Majeure' as used in our standard contract template.",
-        "expected_answer": "The agent should cite the exact definition from the documents, list the enumerated events if specified, note any notice requirements, and identify which obligations are excused. Should reference the specific document and section where the term is defined.",
-        "tags": '["terminology", "contracts"]',
+        "question": "Validate the financial terms in this agreement. Check for: payment amounts, payment schedule, currency, late payment penalties, and interest rates. Flag any that are missing or left as placeholders (e.g., '[TBD]', '___').",
+        "expected_answer": "The agent should extract all financial terms and check each for completeness. Placeholder values like '[TBD]', blanks, or '___' should be flagged as incomplete fields requiring human input. Each found term should be listed with its value and location.",
+        "tags": '["validation", "financial", "completeness"]',
         "sort_order": 6,
     },
     {
-        "question": "What are the whistleblower protections in our compliance handbook?",
-        "expected_answer": "The agent should cite the compliance handbook sections covering whistleblower protections, reporting procedures, anti-retaliation provisions, and confidentiality guarantees. If the handbook does not address whistleblower protections, the agent should explicitly state this and suggest reviewing the relevant policy.",
-        "tags": '["compliance", "policy"]',
+        "question": "Check this document for internal consistency. Verify that party names, defined terms, and section cross-references are used consistently throughout. Flag any mismatches or undefined terms.",
+        "expected_answer": "The agent should track all defined terms and party name variations across the document. Any inconsistency (e.g., 'ABC Corp' vs 'ABC Corporation' vs 'the Company' without a definitions section linking them) should be flagged. Broken cross-references (referencing sections that do not exist) should also be reported.",
+        "tags": '["validation", "consistency", "quality"]',
         "sort_order": 7,
     },
     {
-        "question": "Is there anything in the documents about intellectual property assignment?",
-        "expected_answer": "The agent should search all excerpts for IP assignment, work-for-hire, invention disclosure, and related provisions. Present findings with citations. If not found, clearly state it is not addressed in the available documents rather than speculating.",
-        "tags": '["contracts", "ip", "clauses"]',
+        "question": "Audit this contract for confidentiality and data protection provisions. Verify the presence of: confidentiality obligations, data handling requirements, breach notification procedures, and data return/destruction clauses. Flag any that are absent.",
+        "expected_answer": "The agent should check for each of the four data protection elements and report PRESENT or MISSING for each. For present provisions, cite the section. For missing provisions, flag them as gaps that may expose the organization to data-related risk.",
+        "tags": '["validation", "data-protection", "completeness"]',
         "sort_order": 8,
     },
     {
-        "question": "What are our obligations under Section 7.3 of the ABC Partnership Agreement?",
-        "expected_answer": "The agent should locate Section 7.3, quote the relevant obligations precisely, identify who is obligated, any deadlines or conditions, and cross-reference related sections if applicable. If Section 7.3 is not in the provided excerpts, say so explicitly.",
-        "tags": '["contracts", "obligations"]',
+        "question": "Validate the insurance requirements in this vendor agreement. Check for: minimum coverage amounts, required policy types (general liability, professional liability, cyber), certificate of insurance requirements, and additional insured status. Flag any gaps.",
+        "expected_answer": "The agent should locate insurance-related provisions and check for each required element. Missing coverage types or unspecified minimum amounts should be flagged. If the agreement has no insurance section at all, flag this as a critical gap for vendor risk management.",
+        "tags": '["validation", "insurance", "vendor-risk"]',
         "sort_order": 9,
     },
     {
-        "question": "Summarize all non-compete and non-solicitation clauses across our employment agreements.",
-        "expected_answer": "The agent should identify each non-compete and non-solicitation provision, cite the document and section, note the duration, geographic scope, and scope of restricted activities for each. Flag any that may be unusually broad or narrow compared to others.",
-        "tags": '["contracts", "employment", "risk"]',
+        "question": "Perform a completeness check on this document. Verify it contains: a title, effective date, recitals/background section, definitions section, operative clauses, representations and warranties, and signature blocks. Produce a document structure report.",
+        "expected_answer": "The agent should check for each structural element and produce a document structure checklist. Each element should be marked PRESENT (with location) or MISSING. The report should serve as a high-level completeness assessment that a human reviewer can use to quickly identify structural gaps before detailed review.",
+        "tags": '["validation", "structure", "completeness"]',
         "sort_order": 10,
     },
 ]
@@ -148,31 +148,31 @@ TEST_CASES = [
 
 CRITERIA = [
     {
-        "key": "accuracy",
-        "label": "Accuracy",
-        "description": "Does the response accurately reflect what the source documents actually say? No fabricated provisions, no misquoted sections, no hallucinated content.",
-        "weight": 30,
+        "key": "gap_detection",
+        "label": "Gap Detection",
+        "description": "Does the response correctly identify missing fields, absent clauses, and incomplete sections? Does it catch placeholder values and blank entries? Are all gaps explicitly called out rather than glossed over?",
+        "weight": 35,
         "sort_order": 1,
     },
     {
-        "key": "citation_quality",
-        "label": "Citation Quality",
-        "description": "Does the response cite specific document titles, section numbers, and page references? Are citations precise enough to locate the source material?",
+        "key": "structured_output",
+        "label": "Structured Output",
+        "description": "Does the response produce a clear, structured checklist or report? Is each item marked as PRESENT or MISSING? Can a human reviewer quickly scan the output to understand what needs attention?",
         "weight": 25,
         "sort_order": 2,
     },
     {
-        "key": "completeness",
-        "label": "Completeness",
-        "description": "Does the response address all parts of the question? Does it search across all available excerpts before concluding? Does it note when information may be incomplete?",
+        "key": "accuracy",
+        "label": "Accuracy",
+        "description": "Does the response accurately reflect what the source documents contain? No fabricated provisions, no false positives (flagging something as missing when it exists), no hallucinated content.",
         "weight": 25,
         "sort_order": 3,
     },
     {
-        "key": "guardrail_compliance",
-        "label": "Guardrail Compliance",
-        "description": "Does the response avoid giving legal advice? Does it refrain from speculating about legal outcomes? Does it properly redirect advice-seeking questions to legal counsel?",
-        "weight": 20,
+        "key": "actionability",
+        "label": "Actionability",
+        "description": "Does the response provide enough context for a human reviewer to act on each finding? Does it cite specific sections, explain why a gap matters, and indicate severity where relevant?",
+        "weight": 15,
         "sort_order": 4,
     },
 ]
@@ -180,11 +180,11 @@ CRITERIA = [
 # ── Custom Rules ──
 
 CUSTOM_RULES = [
-    "Never fabricate or hallucinate document sections, clauses, or citations that do not appear in the provided excerpts.",
-    "When the question asks for legal advice or recommendations, the agent must redirect to legal counsel rather than providing an opinion.",
-    "All substantive claims must include a citation in the format [Document Title, Section X.X] or equivalent.",
-    "When comparing across documents, present findings in a structured format with clear per-document breakdowns.",
-    "If a standard contract clause (indemnification, limitation of liability, termination, force majeure) is missing, explicitly flag it as a potential gap.",
+    "Never fabricate document sections, clauses, or citations. If a provision is not found in the provided excerpts, mark it as MISSING rather than inventing content.",
+    "Always produce output as a structured checklist or report with clear PRESENT/MISSING indicators for each item being validated.",
+    "When flagging a missing field or clause, explain why it matters and what risk it introduces (e.g., 'Missing indemnification clause leaves the organization exposed to third-party claims').",
+    "Detect and flag placeholder values such as '[TBD]', '___', 'INSERT HERE', or blank fields as incomplete items requiring human input.",
+    "When validating across multiple documents or sections, produce a per-document breakdown so reviewers can address gaps individually.",
 ]
 
 
@@ -253,7 +253,7 @@ def seed():
             tenant_id=admin.tenant_id,
             workspace_id=ws.id,
             name=f"{AGENT_NAME} - Eval",
-            description="Evaluation suite for the Legal Document Processor. Tests clause extraction, citation quality, risk flagging, cross-referencing, and guardrail compliance.",
+            description="Validation suite for the Legal Document Processor. Tests gap detection, missing field identification, completeness auditing, and structured report output.",
             created_by=admin.id,
         )
         db.add(env)
