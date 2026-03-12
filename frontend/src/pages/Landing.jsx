@@ -68,7 +68,8 @@ export default function Landing() {
           </div>
           <Link to="/demo">Demo</Link>
           <Link to="/guide">Docs</Link>
-          <Link to="/login" className="lp-nav-cta">Sign in</Link>
+          <Link to="/register" className="lp-nav-cta">Get started free</Link>
+          <Link to="/login">Sign in</Link>
         </div>
       </nav>
 
@@ -81,8 +82,8 @@ export default function Landing() {
           A team of AI agents that work together on your data. No code. Deploy in minutes.
         </p>
         <div className="lp-hero-actions lp-reveal">
-          <Link to="/demo" className="lp-btn-fill">Try the live demo</Link>
-          <a href="#orchestrate" className="lp-btn-ghost">See the agent network</a>
+          <Link to="/register" className="lp-btn-fill">Get started free</Link>
+          <a href="#rag" className="lp-btn-ghost">See the products</a>
         </div>
       </section>
 
@@ -297,15 +298,15 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Demo CTA */}
+      {/* CTA */}
       <section className="lp-section lp-demo-section">
         <div className="lp-contain lp-reveal" style={{ textAlign: 'center' }}>
-          <h2 style={{ marginBottom: 16 }}>See it run.</h2>
+          <h2 style={{ marginBottom: 16 }}>Ready to build?</h2>
           <p className="lp-demo-sub">
-            Four autonomous agents are running on this platform right now. They search the web, research companies, write content, and delegate tasks to each other. Try the demo or sign in to see the live agent network.
+            Four products. One platform. Build agents on your documents, connect them into a network, monitor everything, and verify accuracy. Start free.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-            <Link to="/demo" className="lp-btn-fill">Open demo</Link>
+            <Link to="/register" className="lp-btn-fill">Get started free</Link>
             <Link to="/agents/network" className="lp-btn-ghost">View the agent network</Link>
           </div>
         </div>

@@ -823,34 +823,76 @@ function FAQTab() {
   )
 }
 
-// ─── TABS ───
+// ─── PRODUCT TABS ───
 
-const tabs = [
-  { id: 'guide', label: 'User Guide', Component: UserGuideTab },
-  { id: 'api', label: 'API Docs', Component: APIDocsTab },
-  { id: 'faq', label: 'FAQ', Component: FAQTab },
-]
-
-function UserGuideTab() {
+function RagDocsTab() {
   return (
     <div>
       <GettingStarted />
       <SectionBlock title="Agents" />
       <AgentsTab />
+      <SectionBlock title="Live Connectors" />
+      <LiveConnectorsTab />
+      <SectionBlock title="Widget & Embed" />
+      <WidgetTab />
+      <SectionBlock title="Marketplace" />
+      <MarketplaceTab />
+    </div>
+  )
+}
+
+function OrchestrateDocsTab() {
+  return (
+    <div>
       <SectionBlock title="Agent Collaboration" />
       <AgentCollaborationTab />
       <SectionBlock title="Tools & Connections" />
       <ToolsTab />
-      <SectionBlock title="Live Connectors" />
-      <LiveConnectorsTab />
-      <SectionBlock title="Evaluations" />
-      <EvaluationsTab />
-      <SectionBlock title="Widget & Embed" />
-      <WidgetTab />
+    </div>
+  )
+}
+
+function ObserveDocsTab() {
+  return (
+    <div>
+      <SectionBlock title="Network Graph">
+        <QA
+          q="What is the network graph?"
+          a="A live force-directed visualization of your entire agent network. Nodes are agents, edges are delegation links. The graph updates in real time as agents communicate. See connections, call frequency, and routing patterns at a glance."
+        />
+        <QA
+          q="How do I access the network view?"
+          a='Click "Network" in the sidebar navigation. The page shows the interactive graph alongside communication statistics and per-connection breakdowns.'
+        />
+        <QA
+          q="What stats are shown?"
+          a="Total communications across all agents, average response time, and per-connection counts. Each edge in the graph is labeled with the number of calls between those two agents. The stats sidebar breaks down communication volume and timing per agent pair."
+        />
+      </SectionBlock>
+      <SectionBlock title="Audit Trail">
+        <QA
+          q="What gets logged during agent communication?"
+          a="Every inter-agent call is logged with: the calling agent (caller), the called agent (callee), the input sent, the output returned, the duration in milliseconds, and the chain depth. You can view the full communication history on the Network page."
+        />
+        <QA
+          q="Can I filter the logs?"
+          a="Yes. Filter by agent pair, time range, or status. Drill into any call to see the complete request and response payloads alongside timing data."
+        />
+        <QA
+          q="Is there a depth limit on delegation chains?"
+          a="Yes. The default max delegation depth is 3, preventing infinite recursion. If Agent A calls Agent B, and Agent B calls Agent C, that chain is depth 3. If Agent C tries to call another agent, the call is blocked. You can adjust this limit per agent."
+        />
+      </SectionBlock>
       <SectionBlock title="Analytics" />
       <AnalyticsTab />
-      <SectionBlock title="Marketplace" />
-      <MarketplaceTab />
+    </div>
+  )
+}
+
+function EvalDocsTab() {
+  return (
+    <div>
+      <EvaluationsTab />
     </div>
   )
 }
@@ -863,8 +905,16 @@ function APIDocsTab() {
   )
 }
 
+const tabs = [
+  { id: 'rag', label: 'Cane RAG', Component: RagDocsTab },
+  { id: 'orchestrate', label: 'Cane Orchestrate', Component: OrchestrateDocsTab },
+  { id: 'observe', label: 'Cane Observe', Component: ObserveDocsTab },
+  { id: 'eval', label: 'Cane Eval', Component: EvalDocsTab },
+  { id: 'api', label: 'API Docs', Component: APIDocsTab },
+]
+
 export default function Guide() {
-  const [activeTab, setActiveTab] = useState('guide')
+  const [activeTab, setActiveTab] = useState('rag')
   const { user } = useAuth()
   const ActiveComponent = tabs.find(t => t.id === activeTab)?.Component || UserGuideTab
 
@@ -879,7 +929,7 @@ export default function Guide() {
           Docs
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-          Everything you need to know about building, connecting, and orchestrating agents on Cane.
+          Four products. Everything you need to know.
         </p>
       </div>
 
