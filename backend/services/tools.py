@@ -343,6 +343,12 @@ def _execute_agent(
         child_icon = ws.agent_icon or ""
         _tenant_id = tenant_id or ws.tenant_id
 
+        # External agent branch -- HTTP call to registered endpoint
+        if ws.agent_type == "external":
+            return _execute_external_agent(
+                ws, query, child_db, session_id, _tenant_id, on_agent_event, depth, t0,
+            )
+
         # Emit start event
         if on_agent_event:
             on_agent_event({
@@ -453,3 +459,128 @@ def _log_agent_communication(**kwargs):
             log_db.close()
     except Exception as e:
         print(f"  [Tools] Failed to log agent communication: {e}")
+
+
+def _execute_external_agent(ws, query, child_db, session_id, tenant_id, on_agent_event, depth, t0):
+    """Execute an external agent by calling its registered HTTP endpoint."""
+    import urllib.request
+    import urllib.error
+    from tool_models import ExternalAgent
+    from services.crypto import decrypt
+
+    child_name = ws.name or "External Agent"
+    child_icon = ws.agent_icon or ""
+
+    # Emit start event
+    if on_agent_event:
+        on_agent_event({
+            "subtype": "agent_start",
+            "child_name": child_name,
+            "child_icon": child_icon,
+            "query": query[:200],
+        })
+
+    try:
+        ext = child_db.query(ExternalAgent).filter(
+            ExternalAgent.workspace_id == ws.id,
+            ExternalAgent.is_active == True,
+        ).first()
+
+        if not ext:
+            return {"status": "error", "body": "External agent config not found", "status_code": 0}
+
+        # Build request
+        payload = json.dumps({"query": query}).encode("utf-8")
+        req = urllib.request.Request(
+            ext.endpoint_url,
+            data=payload,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+
+        # Add auth
+        if ext.auth_type == "bearer" and ext.auth_token:
+            token = decrypt(ext.auth_token)
+            req.add_header("Authorization", f"Bearer {token}")
+        elif ext.auth_type == "header" and ext.auth_token:
+            token = decrypt(ext.auth_token)
+            req.add_header("X-API-Key", token)
+
+        # Execute with timeout
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            raw = resp.read().decode("utf-8")
+
+        # Try to parse JSON response
+        try:
+            data = json.loads(raw)
+            result_body = data.get("response", data.get("answer", data.get("result", raw)))
+        except (json.JSONDecodeError, AttributeError):
+            result_body = raw
+
+        result_body = str(result_body)[:2000]
+        elapsed_ms = int((_time.time() - t0) * 1000)
+
+        # Update stats
+        try:
+            ext.total_calls = (ext.total_calls or 0) + 1
+            ext.last_called_at = _time.strftime("%Y-%m-%d %H:%M:%S", _time.gmtime())
+            prev_avg = ext.avg_response_ms or 0
+            prev_count = max((ext.total_calls or 1) - 1, 1)
+            ext.avg_response_ms = int((prev_avg * prev_count + elapsed_ms) / ext.total_calls)
+            child_db.commit()
+        except Exception:
+            pass
+
+        # Emit done event
+        if on_agent_event:
+            on_agent_event({
+                "subtype": "agent_done",
+                "child_name": child_name,
+                "child_icon": child_icon,
+                "duration_ms": elapsed_ms,
+                "response_preview": result_body[:300],
+            })
+
+        # Log communication
+        _log_agent_communication(
+            tenant_id=tenant_id,
+            parent_agent_id="",
+            child_agent_id=ws.id,
+            session_id=session_id,
+            query_sent=query[:2000],
+            response_received=result_body,
+            depth_level=depth,
+            duration_ms=elapsed_ms,
+            status="ok",
+        )
+
+        return {"status": "ok", "body": result_body, "status_code": 200}
+
+    except (urllib.error.URLError, urllib.error.HTTPError) as e:
+        elapsed_ms = int((_time.time() - t0) * 1000)
+        err_msg = str(e)[:500]
+        print(f"  [Tools] External agent call failed: {err_msg}")
+
+        if on_agent_event:
+            on_agent_event({
+                "subtype": "agent_done",
+                "child_name": child_name,
+                "child_icon": child_icon,
+                "duration_ms": elapsed_ms,
+                "response_preview": f"Error: {err_msg[:100]}",
+            })
+
+        _log_agent_communication(
+            tenant_id=tenant_id,
+            parent_agent_id="",
+            child_agent_id=ws.id,
+            session_id=session_id,
+            query_sent=query[:2000],
+            response_received="",
+            depth_level=depth,
+            duration_ms=elapsed_ms,
+            status="error",
+            error_message=err_msg,
+        )
+
+        return {"status": "error", "body": f"External agent error: {err_msg[:200]}", "status_code": 0}

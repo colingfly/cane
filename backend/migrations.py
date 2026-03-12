@@ -25,6 +25,7 @@ def run_all():
     _migrate_tool_chaining_column()
     _migrate_agent_communications_table()
     _migrate_orchestrator_mode_column()
+    _migrate_external_agents_table()
 
 
 def _migrate_agent_columns():
@@ -630,3 +631,37 @@ def _migrate_orchestrator_mode_column():
             print(f"  [DB] orchestrator_mode migration failed: {e}")
     else:
         print("  [DB] orchestrator_mode column already present")
+
+
+def _migrate_external_agents_table():
+    """Create external_agents table for agents registered from outside Cane."""
+    insp = inspect(engine)
+    if "external_agents" not in insp.get_table_names():
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("""
+                    CREATE TABLE external_agents (
+                        id VARCHAR(36) PRIMARY KEY,
+                        workspace_id VARCHAR(36) NOT NULL,
+                        tenant_id VARCHAR(36) NOT NULL,
+                        endpoint_url TEXT NOT NULL,
+                        auth_type VARCHAR(20) DEFAULT 'none',
+                        auth_token TEXT DEFAULT '',
+                        parameters TEXT DEFAULT '[]',
+                        is_active TINYINT(1) DEFAULT 1,
+                        last_called_at DATETIME NULL,
+                        avg_response_ms INT DEFAULT 0,
+                        total_calls INT DEFAULT 0,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+                        INDEX idx_ext_tenant (tenant_id),
+                        INDEX idx_ext_workspace (workspace_id)
+                    )
+                """))
+            print("  [DB] external_agents table created")
+        except Exception as e:
+            print(f"  [DB] external_agents migration failed: {e}")
+    else:
+        print("  [DB] external_agents table already exists")

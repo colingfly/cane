@@ -92,3 +92,28 @@ class AgentCommunication(Base):
 
     def __repr__(self):
         return f"<AgentCommunication {self.parent_agent_id} -> {self.child_agent_id}>"
+
+
+class ExternalAgent(Base):
+    """Stores endpoint config for agents registered from outside Cane."""
+    __tablename__ = "external_agents"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    workspace_id = Column(String(36), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    tenant_id = Column(String(36), ForeignKey("tenants.id"), nullable=False)
+
+    endpoint_url = Column(Text, nullable=False)
+    auth_type = Column(String(20), default="none")       # "bearer" / "header" / "none"
+    auth_token = Column(Text, default="")                 # Encrypted via services.crypto
+    parameters = Column(Text, default="[]")               # JSON array of expected input params
+
+    is_active = Column(Boolean, default=True)
+    last_called_at = Column(DateTime, nullable=True)
+    avg_response_ms = Column(Integer, default=0)
+    total_calls = Column(Integer, default=0)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<ExternalAgent {self.workspace_id} endpoint={self.endpoint_url}>"
