@@ -67,6 +67,21 @@ def execute_tool(tool, input_data: dict) -> dict:
     try:
         url = tool.url
 
+        # Support URL path templates: replace {{param}} in the URL itself
+        # e.g. https://r.jina.ai/{{url}} becomes https://r.jina.ai/https://example.com
+        clean_input = {k: v for k, v in input_data.items() if k not in ("reason", "_tool_id")}
+        for key, value in clean_input.items():
+            url = url.replace(f"{{{{{key}}}}}", str(value))
+
+        # For GET requests, append remaining params as query string
+        if tool.method == "GET" and clean_input:
+            import urllib.parse
+            # Only include params not already substituted into URL
+            query_params = {k: v for k, v in clean_input.items() if f"{{{{{k}}}}}" not in (tool.url or "")}
+            if query_params:
+                sep = "&" if "?" in url else "?"
+                url = url + sep + urllib.parse.urlencode(query_params)
+
         # Build headers
         headers = json.loads(tool.headers or "{}")
         headers.setdefault("Content-Type", "application/json")
@@ -85,9 +100,9 @@ def execute_tool(tool, input_data: dict) -> dict:
             {"question": "{{question}}", "answer": "{{answer}}"},
         ]
         if template in default_templates:
-            # No custom template — forward Claude's input directly
+            # No custom template -- forward Claude's input directly
             # Remove internal fields Claude adds
-            payload = {k: v for k, v in input_data.items() if k not in ("reason", "_tool_id")}
+            payload = clean_input
         else:
             payload = _render_template(template, input_data)
 
@@ -96,7 +111,7 @@ def execute_tool(tool, input_data: dict) -> dict:
         req = urllib.request.Request(url, data=data, headers=headers, method=tool.method)
 
         with urllib.request.urlopen(req, timeout=15) as resp:
-            body = resp.read().decode("utf-8", errors="replace")[:2000]
+            body = resp.read().decode("utf-8", errors="replace")[:8000]
             return {
                 "status": "ok",
                 "status_code": resp.status,
@@ -357,7 +372,7 @@ def call_claude_with_tools(
                         "message": "Webhook fired successfully" if exec_result["status"] == "ok" else f"Webhook failed: {exec_result['body'][:200]}"
                     })
                 else:
-                    result_content = exec_result.get("body", "")[:2000] or json.dumps(exec_result)
+                    result_content = exec_result.get("body", "")[:8000] or json.dumps(exec_result)
 
                 if on_tool_event:
                     on_tool_event({"step": iteration + 1, "tool": tool_name, "status": "done"})
