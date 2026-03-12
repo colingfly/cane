@@ -46,20 +46,23 @@ def ask(
     if not ANTHROPIC_API_KEY:
         return {"status": "no_llm", "error": "Anthropic API key not configured. Set ANTHROPIC_API_KEY."}
 
-    # Build context using shared service
-    ctx = build_context(q, user.tenant_id, workspace_id, n)
-
-    if not ctx.has_content:
-        return {"status": "no_results", "error": "No text content to summarize."}
-
     # Load agent system prompt
     agent_prompt = ""
+    ws = None
     if workspace_id:
         ws = db.query(Workspace).filter(
             Workspace.id == workspace_id, Workspace.tenant_id == user.tenant_id,
         ).first()
         if ws and ws.system_prompt:
             agent_prompt = ws.system_prompt
+
+    is_agent = bool(ws and (ws.system_prompt or ws.agent_type))
+
+    # Build context using shared service
+    ctx = build_context(q, user.tenant_id, workspace_id, n)
+
+    if not ctx.has_content and not is_agent:
+        return {"status": "no_results", "error": "No text content to summarize."}
 
     # Load memories and inject into system prompt
     memory_context = ""
@@ -68,7 +71,10 @@ def ask(
         memory_context = format_memories_for_prompt(memories)
 
     system_prompt = build_system_prompt(agent_prompt, memory_context)
-    user_prompt = f"Question: {q}\n\nDocument Excerpts:\n{ctx.context}\n\nProvide a clear answer based on the above."
+    if ctx.has_content:
+        user_prompt = f"Question: {q}\n\nDocument Excerpts:\n{ctx.context}\n\nProvide a clear answer based on the above."
+    else:
+        user_prompt = q
 
     try:
         # Load all tools (webhooks + MCP)
@@ -148,20 +154,24 @@ def ask_stream(
     if not ANTHROPIC_API_KEY:
         return JSONResponse({"status": "no_llm", "error": "Anthropic API key not configured."})
 
-    # Build context using shared service
-    ctx = build_context(q, user.tenant_id, workspace_id, n)
-
-    if not ctx.has_content:
-        return JSONResponse({"status": "no_results", "error": "No text content to summarize."})
-
     # Load agent system prompt
     agent_prompt = ""
+    ws = None
     if workspace_id:
         ws = db.query(Workspace).filter(
             Workspace.id == workspace_id, Workspace.tenant_id == user.tenant_id,
         ).first()
         if ws and ws.system_prompt:
             agent_prompt = ws.system_prompt
+
+    # Check if this is an agent (has system prompt or agent_type)
+    is_agent = bool(ws and (ws.system_prompt or ws.agent_type))
+
+    # Build context using shared service
+    ctx = build_context(q, user.tenant_id, workspace_id, n)
+
+    if not ctx.has_content and not is_agent:
+        return JSONResponse({"status": "no_results", "error": "No text content to summarize."})
 
     # Load memories and inject into system prompt
     memory_context = ""
@@ -178,10 +188,16 @@ def ask_stream(
 
     # Build messages with conversation history
     messages = get_conversation_history(session_id)
-    messages.append({
-        "role": "user",
-        "content": f"Question: {q}\n\nDocument Excerpts:\n{ctx.context}\n\nProvide a clear answer based on the above."
-    })
+    if ctx.has_content:
+        messages.append({
+            "role": "user",
+            "content": f"Question: {q}\n\nDocument Excerpts:\n{ctx.context}\n\nProvide a clear answer based on the above."
+        })
+    else:
+        messages.append({
+            "role": "user",
+            "content": q,
+        })
 
     # Load all tools (webhooks + MCP)
     from services.tools import get_all_tools
