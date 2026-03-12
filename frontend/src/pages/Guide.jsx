@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Copy, Check, Search, Bot, FlaskConical, FileText, Upload, Zap, Shield, Globe, Store, Wrench, Code, MessageSquare, BarChart3, Palette, Plug, Cloud } from 'lucide-react'
+import { Copy, Check, Search, Bot, FlaskConical, FileText, Upload, Zap, Shield, Globe, Store, Wrench, Code, MessageSquare, BarChart3, Palette, Plug, Cloud, Network } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 function CodeBlock({ code }) {
@@ -130,17 +130,22 @@ function GettingStarted() {
           fontFamily: 'var(--font-display)', letterSpacing: '-0.02em',
           lineHeight: 1.4, marginBottom: 10,
         }}>
-          Build AI agents that know things, do things, and prove they work.
+          Build a team of AI agents that work together on your data.
         </div>
         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.7, maxWidth: 560 }}>
-          Cane turns your documents into deployable AI agents. Upload files or sync Google Drive folders, build a specialized agent,
-          connect it to your tools via webhooks and MCP, verify it with evaluations, and deploy it on any
-          website, or publish it to the marketplace for others to use.
+          No code. Deploy in minutes. Connect agents into a collaborative network, add live web scraping,
+          and let the orchestrator route queries to the right specialist automatically.
         </div>
       </div>
 
       {/* Feature grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 32 }}>
+        <FeatureCard
+          icon={Zap}
+          title="Agent Collaboration"
+          description="Link agents together into delegation chains. Enable orchestrator mode for automatic routing. Visualize the entire network in a live force-directed graph."
+          detail="Agent-to-agent delegation, orchestrator mode, network visualization"
+        />
         <FeatureCard
           icon={Bot}
           title="Custom AI Agents"
@@ -191,12 +196,18 @@ function GettingStarted() {
             },
             {
               step: '3',
+              icon: Network,
+              title: 'Connect agents together',
+              description: 'Link agents as sub-agents so they can delegate tasks to each other. Enable orchestrator mode for automatic routing. Add live web tools so agents can search and scrape on their own.',
+            },
+            {
+              step: '4',
               icon: FlaskConical,
               title: 'Run evaluations',
               description: 'Write test questions with expected answers. Define scoring criteria with custom weights. Run the suite. Cane scores every response and gives you pass/warn/fail verdicts.',
             },
             {
-              step: '4',
+              step: '5',
               icon: Globe,
               title: 'Deploy and monitor',
               description: 'Embed on any website with one script tag. Customize the widget appearance. Track conversations in the analytics dashboard. Publish to the marketplace for others to clone.',
@@ -303,6 +314,80 @@ function AgentsTab() {
         <QA
           q="Can I deploy a replica on my website?"
           a='Yes. A Digital Replica is a full agent. You can embed it as a chat widget, access it via API, or publish it on the marketplace. Imagine an "Ask Colin" widget on your company site where visitors can talk to your AI clone 24/7.'
+        />
+      </SectionBlock>
+    </div>
+  )
+}
+
+function AgentCollaborationTab() {
+  return (
+    <div>
+      <SectionBlock title="Agent-to-Agent Delegation">
+        <QA
+          q="How does agent delegation work?"
+          a="Any agent can call another agent as a tool. When Agent A has Agent B linked as a sub-agent, Agent A can delegate part of a query to Agent B. Agent B runs its full pipeline (retrieval, tools, reasoning) and returns the result to Agent A, which incorporates it into its final response. The user sees one seamless answer."
+        />
+        <QA
+          q="How do I link agents together?"
+          a='Go to the agent detail page and open the Tools tab. Scroll to the Sub-Agents section and click "Link Agent." Select the agent you want to link. The linked agent appears as a callable tool with its description used to determine when delegation happens.'
+        />
+        <QA
+          q="Are there depth limits on delegation?"
+          a="Yes. The default max delegation depth is 3, which prevents infinite recursion. If Agent A calls Agent B, and Agent B calls Agent C, that chain is depth 3. If Agent C tries to call another agent, the call is blocked. You can adjust this limit in the agent configuration."
+        />
+        <QA
+          q="What gets logged during delegation?"
+          a="Every inter-agent call is logged with: the calling agent (caller), the called agent (callee), the input sent, the output returned, and the duration in milliseconds. You can view the full communication history on the Network page, including chain depth and timing breakdowns."
+        />
+      </SectionBlock>
+
+      <SectionBlock title="Orchestrator Mode">
+        <QA
+          q="What is orchestrator mode?"
+          a="Orchestrator mode turns an agent into an automatic router. When enabled, the agent discovers all other agents in the environment and routes incoming queries to the best specialist based on agent descriptions. No manual linking required."
+        />
+        <QA
+          q="How do I enable orchestrator mode?"
+          a='Go to the agent detail page and open the Configure tab. Toggle on "Orchestrator Mode." The agent will automatically discover all available agents and route queries based on their descriptions and specializations.'
+        />
+        <QA
+          q="When should I use orchestrator mode vs manual linking?"
+          a="Use manual linking when you want explicit, controlled delegation chains (e.g., Cold Outreach always calls Lead Researcher). Use orchestrator mode when you want a general-purpose entry point that automatically routes to the right specialist. You can combine both: manually linked agents handle known workflows, while the orchestrator handles everything else."
+        />
+      </SectionBlock>
+
+      <SectionBlock title="Live Web Tools">
+        <QA
+          q="What web tools are available?"
+          a="Two self-hosted tools: Search (powered by DuckDuckGo HTML lite) and Scrape (powered by Jina Reader with direct HTML fallback). Both run on your Cane instance with no external API keys required."
+        />
+        <QA
+          q="How do I add the search tool to an agent?"
+          a='Add a webhook tool with the URL: /api/tools/search?q={{query}} and set it to "Wait for Response." Describe it as "Search the web for current information." The agent will call it whenever it needs live data.'
+        />
+        <QA
+          q="How do I add the scrape tool to an agent?"
+          a='Add a webhook tool with the URL: /api/tools/scrape?url={{url}} and set it to "Wait for Response." Describe it as "Read the full content of a web page." The agent will call it when it needs to extract content from a specific URL.'
+        />
+        <QA
+          q="Do I need API keys for web tools?"
+          a="No. Both search and scrape are fully self-hosted. Search hits DuckDuckGo HTML lite directly. Scrape uses Jina Reader as primary and falls back to direct HTML fetching. No third-party API keys, no rate limits you do not control."
+        />
+      </SectionBlock>
+
+      <SectionBlock title="Agent Network Visualization">
+        <QA
+          q="What is the network visualization?"
+          a="A live force-directed graph that shows every agent and the connections between them. Nodes are agents, edges are delegation links. The graph updates in real time as agents communicate."
+        />
+        <QA
+          q="How do I access the network view?"
+          a='Click "Network" in the sidebar navigation. The page shows the interactive graph alongside communication statistics.'
+        />
+        <QA
+          q="What stats are shown on the network page?"
+          a="Total communications across all agents, average response time, and per-connection counts. Each edge in the graph is labeled with the number of calls between those two agents. The stats sidebar breaks down communication volume and timing per agent pair."
         />
       </SectionBlock>
     </div>
@@ -752,6 +837,8 @@ function UserGuideTab() {
       <GettingStarted />
       <SectionBlock title="Agents" />
       <AgentsTab />
+      <SectionBlock title="Agent Collaboration" />
+      <AgentCollaborationTab />
       <SectionBlock title="Tools & Connections" />
       <ToolsTab />
       <SectionBlock title="Live Connectors" />
@@ -792,7 +879,7 @@ export default function Guide() {
           Docs
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-          Everything you need to know about building, evaluating, and deploying agents on Cane.
+          Everything you need to know about building, connecting, and orchestrating agents on Cane.
         </p>
       </div>
 

@@ -46,6 +46,7 @@ export default function Landing() {
         <Link to="/" className="lp-logo">Cane</Link>
         <div className="lp-nav-links">
           <a href="#architecture">Architecture</a>
+          <a href="#network">Network</a>
           <a href="#capabilities">Capabilities</a>
           <Link to="/demo">Demo</Link>
           <Link to="/guide">Docs</Link>
@@ -56,16 +57,14 @@ export default function Landing() {
       {/* Hero */}
       <section className="lp-hero">
         <h1 className="lp-reveal">
-          The complete stack for<br />
-          production AI agents
+          Build an AI workforce.
         </h1>
         <p className="lp-hero-sub lp-reveal">
-          Ingest documents. Build specialized agents with persistent memory and scheduled autonomy.
-          Connect tools, orchestrate sub-agents, and deploy anywhere with one script tag.
+          A team of AI agents that work together on your data. No code. Deploy in minutes.
         </p>
         <div className="lp-hero-actions lp-reveal">
           <Link to="/demo" className="lp-btn-fill">Try the live demo</Link>
-          <Link to="/architecture" className="lp-btn-ghost">See the architecture</Link>
+          <a href="#network" className="lp-btn-ghost">See the agent network</a>
         </div>
       </section>
 
@@ -73,10 +72,10 @@ export default function Landing() {
       <section className="lp-stats lp-reveal">
         <div className="lp-stats-inner">
           {[
-            ['Hybrid RAG', 'Vector + BM25 + cross-encoder re-ranking'],
-            ['Agent Memory', 'Persistent learning from every conversation turn'],
-            ['Agent Orchestration', 'Sub-agents, scheduled runs, multi-agent delegation'],
-            ['LLM-as-Judge', 'Automated eval with weighted scoring criteria'],
+            ['Agent Network', 'Agents discover, call, and delegate to other agents autonomously'],
+            ['Live Web Tools', 'Self-hosted search and scrape. No API keys. Agents browse the web on their own'],
+            ['Orchestrator Mode', 'Auto-routes queries to the right specialist. Zero manual config'],
+            ['Full Audit Trail', 'Every inter-agent call logged with timing, input, output, and chain depth'],
           ].map(([title, desc], i) => (
             <div key={i} className="lp-stat">
               <div className="lp-stat-title">{title}</div>
@@ -91,7 +90,7 @@ export default function Landing() {
         <div className="lp-contain">
           <div className="lp-section-head lp-reveal">
             <h2>Architecture</h2>
-            <p>Six layers. Each one built, not imported.</p>
+            <p>Seven layers. Each one built, not imported.</p>
           </div>
           <div className="lp-arch-grid">
             {[
@@ -106,22 +105,27 @@ export default function Landing() {
                 stack: 'ChromaDB, BGE-base-en, BM25, ms-marco MiniLM cross-encoder',
               },
               {
-                n: '03', title: 'Agents & Orchestration',
-                body: 'Scoped knowledge bases with custom system prompts and persistent memory. Agents call webhook tools, connect to MCP servers, delegate to sub-agents, and run on configurable schedules for full autonomy.',
-                stack: 'Claude API, MCP Protocol, agent-as-tool, memory extraction, scheduled runner',
+                n: '03', title: 'Agent Network',
+                body: 'Agents call other agents as tools. A Tweet Generator delegates to AI News for live research. A Cold Outreach agent chains Lead Researcher and AI News to build context before writing. Every delegation is logged with full input/output audit trails.',
+                stack: 'Agent-as-tool protocol, communication logger, depth-limited recursion, force-directed graph',
               },
               {
-                n: '04', title: 'Tools & Integrations',
-                body: 'Three tool backends unified into one palette. Webhook actions for HTTP calls, MCP servers for protocol-native integrations, and linked agents for multi-agent delegation. Claude picks the right tool at runtime.',
-                stack: 'Webhook executor, MCP client, SSE streaming, unified tool router',
+                n: '04', title: 'Orchestration',
+                body: 'Orchestrator Mode auto-discovers every agent in your workspace and routes incoming queries to the right specialist. No manual configuration. The orchestrator reads agent descriptions, picks the best match, delegates, and returns a unified answer.',
+                stack: 'Auto-discovery, description-based routing, unified response synthesis, fallback handling',
               },
               {
-                n: '05', title: 'Memory & Scheduling',
+                n: '05', title: 'Web Tools',
+                body: 'Self-hosted DuckDuckGo search and page scraping. Agents query the live web, extract content from any URL, and use the results as context. No external API keys required. Runs on your infrastructure.',
+                stack: 'DuckDuckGo HTML parser, urllib scraper, plain-text extraction, webhook tool interface',
+              },
+              {
+                n: '06', title: 'Memory & Scheduling',
                 body: 'Agents extract facts, preferences, and instructions from every conversation. Memories persist across sessions and are injected into future prompts. Scheduled runs execute agents autonomously on intervals or daily triggers.',
                 stack: 'Background extraction, deduplication, daemon threads, cron-style scheduler',
               },
               {
-                n: '06', title: 'Evaluation',
+                n: '07', title: 'Evaluation',
                 body: 'Automated test suites scored by an LLM judge. Four criteria: accuracy, completeness, relevance, and faithfulness. Configurable weights and custom rules. Score history tracks improvement across runs.',
                 stack: 'LLM-as-Judge, weighted criteria, custom rules, regression tracking',
               },
@@ -140,6 +144,84 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Live Agent Network */}
+      <section id="network" className="lp-section">
+        <div className="lp-contain">
+          <div className="lp-section-head lp-reveal">
+            <h2>Live Agent Network</h2>
+            <p>Four autonomous agents. Running now.</p>
+          </div>
+
+          {/* Network SVG */}
+          <div className="lp-network-svg lp-reveal">
+            <svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                  <path d="M0,0 L8,3 L0,6" fill="rgba(255,255,255,0.25)" />
+                </marker>
+              </defs>
+
+              {/* Edges */}
+              <line x1="410" y1="120" x2="210" y2="185" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" markerEnd="url(#arrow)" />
+              <line x1="300" y1="320" x2="210" y2="210" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" markerEnd="url(#arrow)" />
+              <line x1="300" y1="320" x2="430" y2="180" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" markerEnd="url(#arrow)" />
+
+              {/* AI News node */}
+              <circle cx="190" cy="200" r="36" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
+              <circle cx="190" cy="200" r="34" fill="rgba(255,255,255,0.04)" />
+              <text x="190" y="196" textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="11" fontWeight="600" fontFamily="Space Grotesk, sans-serif">AI</text>
+              <text x="190" y="210" textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="11" fontWeight="600" fontFamily="Space Grotesk, sans-serif">News</text>
+              <text x="190" y="252" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="10" fontFamily="DM Sans, sans-serif">Web scraper</text>
+
+              {/* Tweet Generator node */}
+              <circle cx="420" cy="140" r="36" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
+              <circle cx="420" cy="140" r="34" fill="rgba(255,255,255,0.04)" />
+              <text x="420" y="136" textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="11" fontWeight="600" fontFamily="Space Grotesk, sans-serif">Tweet</text>
+              <text x="420" y="150" textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="11" fontWeight="600" fontFamily="Space Grotesk, sans-serif">Gen</text>
+              <text x="420" y="192" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="10" fontFamily="DM Sans, sans-serif">Content writer</text>
+
+              {/* Lead Researcher node */}
+              <circle cx="440" cy="280" r="36" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
+              <circle cx="440" cy="280" r="34" fill="rgba(255,255,255,0.04)" />
+              <text x="440" y="276" textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="11" fontWeight="600" fontFamily="Space Grotesk, sans-serif">Lead</text>
+              <text x="440" y="290" textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="11" fontWeight="600" fontFamily="Space Grotesk, sans-serif">Research</text>
+              <text x="440" y="332" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="10" fontFamily="DM Sans, sans-serif">Company intel</text>
+
+              {/* Cold Outreach node */}
+              <circle cx="290" cy="330" r="36" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
+              <circle cx="290" cy="330" r="34" fill="rgba(255,255,255,0.06)" />
+              <text x="290" y="326" textAnchor="middle" fill="rgba(255,255,255,0.6)" fontSize="11" fontWeight="600" fontFamily="Space Grotesk, sans-serif">Cold</text>
+              <text x="290" y="340" textAnchor="middle" fill="rgba(255,255,255,0.6)" fontSize="11" fontWeight="600" fontFamily="Space Grotesk, sans-serif">Outreach</text>
+              <text x="290" y="382" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="10" fontFamily="DM Sans, sans-serif">Email writer</text>
+
+              {/* Delegation labels on edges */}
+              <text x="305" y="140" textAnchor="middle" fill="rgba(255,255,255,0.15)" fontSize="8" fontFamily="JetBrains Mono, monospace">delegates</text>
+              <text x="235" y="275" textAnchor="middle" fill="rgba(255,255,255,0.15)" fontSize="8" fontFamily="JetBrains Mono, monospace">delegates</text>
+              <text x="380" y="310" textAnchor="middle" fill="rgba(255,255,255,0.15)" fontSize="8" fontFamily="JetBrains Mono, monospace">delegates</text>
+            </svg>
+          </div>
+
+          {/* Agent descriptions */}
+          <div className="lp-network-grid lp-reveal">
+            {[
+              ['AI News', 'Scrapes the web for the latest AI headlines using DuckDuckGo search and page scraping. Synthesizes articles into briefings.'],
+              ['Tweet Generator', 'Writes social content by delegating research to AI News. Gets live data, drafts tweet variations with different angles.'],
+              ['Lead Researcher', 'Investigates companies and people by scraping websites, press releases, and LinkedIn. Builds structured research briefs.'],
+              ['Cold Outreach', 'Writes personalized emails by chaining Lead Researcher for company intel and AI News for industry context.'],
+            ].map(([name, desc], i) => (
+              <div key={i} className="lp-network-agent">
+                <h4>{name}</h4>
+                <p>{desc}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="lp-arch-link lp-reveal">
+            <Link to="/agents/network">See the live network &rarr;</Link>
+          </div>
+        </div>
+      </section>
+
       {/* Capabilities */}
       <section id="capabilities" className="lp-section">
         <div className="lp-contain">
@@ -149,10 +231,13 @@ export default function Landing() {
           </div>
           <div className="lp-cap-list">
             {[
+              ['Agent-to-Agent Delegation', 'Link any agent as a callable tool for another agent. A supervisor delegates questions to specialists and combines their answers. Depth-limited recursion prevents runaway chains. Full audit trail for every delegation call.'],
+              ['Orchestrator Mode', 'Flip one toggle and an agent becomes an orchestrator. It auto-discovers every other agent in your workspace, reads their descriptions, routes incoming queries to the right specialist, and returns a unified answer. No manual linking needed.'],
+              ['Live Web Scraping', 'Self-hosted DuckDuckGo search and page scraping built into the platform. Agents query the web, extract content from URLs, and use the results as context for their answers. No external API keys. Runs on your infrastructure.'],
+              ['Agent Communication Logs', 'Every inter-agent call is logged with full input, output, timing, and the delegation chain. Visualize your agent network as a force-directed graph showing connections, call frequency, and response times.'],
               ['Hybrid RAG Pipeline', 'Vector search, BM25 keyword matching, Reciprocal Rank Fusion, and cross-encoder re-ranking in a single retrieval pass. Not just embeddings.'],
               ['Agent Memory', 'Agents extract facts, preferences, and instructions from conversations automatically. Memories persist across sessions and are injected into future prompts so agents get smarter over time.'],
               ['Scheduled Agent Runs', 'Configure agents to run autonomously on intervals or daily triggers. Background execution with run history, status tracking, and manual trigger support. Built for daily briefings and automated workflows.'],
-              ['Multi-Agent Orchestration', 'Link agents as callable tools. A supervisor agent delegates questions to specialists and combines their answers. Depth-limited recursion prevents runaway chains.'],
               ['Google Drive Sync', 'OAuth popup, folder picker, incremental sync via the Changes API. Google Docs and Sheets auto-export to text. Encrypted credential storage.'],
               ['MCP Connections', 'Model Context Protocol for connecting agents to Slack, Google Calendar, HubSpot, and more. Pre-built connector catalog plus custom server support.'],
               ['Webhook Tools', 'HTTP actions triggered by agent reasoning. Fire-and-forget for notifications, wait-for-response for live data lookups. Custom headers and payload templates.'],
@@ -197,13 +282,13 @@ export default function Landing() {
       {/* Demo CTA */}
       <section className="lp-section lp-demo-section">
         <div className="lp-contain lp-reveal" style={{ textAlign: 'center' }}>
-          <h2 style={{ marginBottom: 16 }}>Talk to it.</h2>
+          <h2 style={{ marginBottom: 16 }}>See it run.</h2>
           <p className="lp-demo-sub">
-            There is a live agent running on this platform right now. Upload a file, ask a question, and see the full pipeline in action. No account needed.
+            Four autonomous agents are running on this platform right now. They search the web, research companies, write content, and delegate tasks to each other. Try the demo or sign in to see the live agent network.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
             <Link to="/demo" className="lp-btn-fill">Open demo</Link>
-            <Link to="/architecture" className="lp-btn-ghost">Read the architecture</Link>
+            <Link to="/agents/network" className="lp-btn-ghost">View the agent network</Link>
           </div>
         </div>
       </section>
@@ -218,6 +303,7 @@ export default function Landing() {
           <Link to="/demo">Demo</Link>
           <Link to="/guide">Docs</Link>
           <Link to="/architecture">Architecture</Link>
+          <Link to="/agents/network">Network</Link>
           <Link to="/marketplace">Marketplace</Link>
           <a href="mailto:hello@cane.fyi">Contact</a>
         </div>
@@ -300,8 +386,8 @@ const landingStyles = `
 }
 
 .lp-hero-sub {
-  font-size: 1.05rem;
-  color: rgba(255,255,255,0.4);
+  font-size: 1.15rem;
+  color: rgba(255,255,255,0.45);
   max-width: 560px;
   line-height: 1.7;
   margin-bottom: 40px;
@@ -464,6 +550,45 @@ const landingStyles = `
 
 .lp-arch-link a:hover { color: rgba(255,255,255,0.7); }
 
+/* Network visualization */
+.lp-network-svg {
+  max-width: 600px;
+  margin: 0 auto 48px;
+}
+
+.lp-network-svg svg {
+  width: 100%;
+  height: auto;
+}
+
+.lp-network-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.lp-network-agent {
+  padding: 28px 24px;
+  background: #000;
+}
+
+.lp-network-agent h4 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 8px;
+  letter-spacing: -0.01em;
+}
+
+.lp-network-agent p {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.35);
+  line-height: 1.6;
+}
+
 /* Capabilities list */
 .lp-cap-list {
   display: flex;
@@ -474,7 +599,7 @@ const landingStyles = `
   padding: 28px 0;
   border-bottom: 1px solid rgba(255,255,255,0.06);
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: 240px 1fr;
   gap: 40px;
   align-items: baseline;
 }
@@ -598,6 +723,7 @@ const landingStyles = `
   .lp-stats-inner { grid-template-columns: 1fr 1fr; }
   .lp-stat { padding: 24px 0; }
   .lp-arch-grid { grid-template-columns: 1fr; }
+  .lp-network-grid { grid-template-columns: 1fr 1fr; }
   .lp-cap-row { grid-template-columns: 1fr; gap: 8px; }
   .lp-stack-item { flex: 1 1 100%; }
   .lp-footer { flex-direction: column; gap: 20px; text-align: center; }
