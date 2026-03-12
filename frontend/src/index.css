@@ -409,6 +409,12 @@ select.form-input {
   transition: all 0.15s;
 }
 
+select.search-mode-btn option,
+select.search-mode-btn optgroup {
+  background: #1a1a1a;
+  color: #e0e0e0;
+}
+
 .search-mode-btn:hover {
   border-color: var(--border-hover);
   background: var(--cane-100);

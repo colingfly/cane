@@ -535,10 +535,10 @@ def _migrate_schedule_condition_columns():
         cols = {c["name"] for c in insp.get_columns("agent_schedules")}
         condition_cols = {
             "condition_enabled": "ALTER TABLE agent_schedules ADD COLUMN condition_enabled TINYINT(1) DEFAULT 0",
-            "condition_prompt": "ALTER TABLE agent_schedules ADD COLUMN condition_prompt TEXT DEFAULT ''",
+            "condition_prompt": "ALTER TABLE agent_schedules ADD COLUMN condition_prompt TEXT NULL",
             "condition_action": "ALTER TABLE agent_schedules ADD COLUMN condition_action VARCHAR(50) DEFAULT 'store_only'",
-            "condition_webhook_url": "ALTER TABLE agent_schedules ADD COLUMN condition_webhook_url TEXT DEFAULT ''",
-            "condition_webhook_headers": "ALTER TABLE agent_schedules ADD COLUMN condition_webhook_headers TEXT DEFAULT '{}'",
+            "condition_webhook_url": "ALTER TABLE agent_schedules ADD COLUMN condition_webhook_url TEXT NULL",
+            "condition_webhook_headers": "ALTER TABLE agent_schedules ADD COLUMN condition_webhook_headers TEXT NULL",
         }
         added = []
         for col_name, sql in condition_cols.items():

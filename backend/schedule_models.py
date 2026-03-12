@@ -39,10 +39,10 @@ class AgentSchedule(Base):
 
     # Conditional output
     condition_enabled = Column(Boolean, default=False)
-    condition_prompt = Column(Text, default="")             # e.g. "The output contains urgent items"
+    condition_prompt = Column(Text, nullable=True, default="")
     condition_action = Column(String(50), default="store_only")  # "store_only" | "send_webhook"
-    condition_webhook_url = Column(Text, default="")
-    condition_webhook_headers = Column(Text, default="{}")
+    condition_webhook_url = Column(Text, nullable=True, default="")
+    condition_webhook_headers = Column(Text, nullable=True, default="{}")
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
