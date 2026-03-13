@@ -33,6 +33,7 @@ def run_all():
     _migrate_agent_versions_table()
     _migrate_finetune_jobs_table()
     _migrate_mining_tables()
+    _migrate_eval_schedules_table()
 
 
 def _migrate_agent_columns():
@@ -898,3 +899,46 @@ def _migrate_mining_tables():
             print(f"  [DB] mined_examples migration failed: {e}")
     else:
         print("  [DB] mined_examples table already exists")
+
+
+def _migrate_eval_schedules_table():
+    """Create eval_schedules table for automated eval runs."""
+    insp = inspect(engine)
+    if "eval_schedules" not in insp.get_table_names():
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("""
+                    CREATE TABLE eval_schedules (
+                        id VARCHAR(36) PRIMARY KEY,
+                        environment_id VARCHAR(36) NOT NULL,
+                        tenant_id VARCHAR(36) NOT NULL,
+                        is_enabled TINYINT(1) DEFAULT 1,
+                        schedule_type VARCHAR(20) DEFAULT 'daily',
+                        daily_time VARCHAR(5) DEFAULT '09:00',
+                        interval_hours INT DEFAULT 24,
+                        cron_expression VARCHAR(100) NULL,
+                        auto_mine TINYINT(1) DEFAULT 0,
+                        mine_max_score INT DEFAULT 60,
+                        notify_on_regression TINYINT(1) DEFAULT 1,
+                        last_run_id VARCHAR(36) NULL,
+                        last_run_at DATETIME NULL,
+                        last_score FLOAT NULL,
+                        next_run_at DATETIME NULL,
+                        run_count INT DEFAULT 0,
+                        last_status VARCHAR(20) DEFAULT 'idle',
+                        consecutive_failures INT DEFAULT 0,
+                        created_by VARCHAR(36) NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        FOREIGN KEY (environment_id) REFERENCES environments(id) ON DELETE CASCADE,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+                        INDEX idx_eval_sched_env (environment_id),
+                        INDEX idx_eval_sched_tenant (tenant_id),
+                        INDEX idx_eval_sched_next (is_enabled, next_run_at)
+                    )
+                """))
+            print("  [DB] eval_schedules table created")
+        except Exception as e:
+            print(f"  [DB] eval_schedules migration failed: {e}")
+    else:
+        print("  [DB] eval_schedules table already exists")

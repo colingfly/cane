@@ -178,6 +178,14 @@ async def start_schedule_runner():
     asyncio.create_task(start_schedule_loop())
 
 
+# ── Background schedule loop for Scheduled Eval Runs ──
+@app.on_event("startup")
+async def start_eval_schedule_runner():
+    import asyncio
+    from services.eval_schedule_runner import start_eval_schedule_loop
+    asyncio.create_task(start_eval_schedule_loop())
+
+
 # ── Health check ──
 @app.get("/api/health")
 def health_check():

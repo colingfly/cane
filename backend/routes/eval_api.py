@@ -19,7 +19,7 @@ from auth import get_api_key_auth
 from db_models import ApiKey
 from eval_models import (
     Environment, TestCase, JudgeCriteria, JudgeCustomRule, EvalRun, EvalResult,
-    MiningJob, MinedExample,
+    MiningJob, MinedExample, EvalSchedule,
 )
 
 router = APIRouter(prefix="/v1/eval", tags=["eval-api"])
@@ -412,3 +412,125 @@ def api_export_mining_job(
             "Content-Disposition": f'attachment; filename="mined_{format}_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.jsonl"',
         },
     )
+
+
+# ── Eval Scheduling (public API) ──
+
+@router.get("/schedule/{environment_id}")
+def api_get_eval_schedule(
+    environment_id: str,
+    api_key: ApiKey = Depends(get_api_key_auth),
+    db: Session = Depends(get_db),
+):
+    """Get the eval schedule for an environment."""
+    env = db.query(Environment).filter(
+        Environment.id == environment_id,
+        Environment.is_active == True,
+    ).first()
+    if not env:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    if not env.is_public and env.tenant_id != api_key.tenant_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+
+    schedule = db.query(EvalSchedule).filter(
+        EvalSchedule.environment_id == env.id,
+    ).first()
+
+    if not schedule:
+        return {"schedule": None}
+
+    return {
+        "schedule": {
+            "id": schedule.id,
+            "is_enabled": schedule.is_enabled,
+            "schedule_type": schedule.schedule_type,
+            "daily_time": schedule.daily_time,
+            "interval_hours": schedule.interval_hours,
+            "auto_mine": schedule.auto_mine,
+            "last_run_at": schedule.last_run_at.isoformat() if schedule.last_run_at else None,
+            "last_score": schedule.last_score,
+            "next_run_at": schedule.next_run_at.isoformat() if schedule.next_run_at else None,
+            "run_count": schedule.run_count or 0,
+            "last_status": schedule.last_status,
+        },
+    }
+
+
+@router.post("/schedule/{environment_id}")
+def api_create_eval_schedule(
+    environment_id: str,
+    schedule_type: str = Query("daily"),
+    daily_time: str = Query("09:00"),
+    interval_hours: int = Query(24, ge=1, le=168),
+    auto_mine: bool = Query(False),
+    mine_max_score: int = Query(60, ge=0, le=100),
+    notify_on_regression: bool = Query(True),
+    api_key: ApiKey = Depends(get_api_key_auth),
+    db: Session = Depends(get_db),
+):
+    """Create or update an eval schedule via API key."""
+    env = db.query(Environment).filter(
+        Environment.id == environment_id,
+        Environment.is_active == True,
+    ).first()
+    if not env:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    if env.tenant_id != api_key.tenant_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+
+    schedule = db.query(EvalSchedule).filter(
+        EvalSchedule.environment_id == env.id,
+    ).first()
+
+    if not schedule:
+        schedule = EvalSchedule(
+            environment_id=env.id,
+            tenant_id=env.tenant_id,
+        )
+        db.add(schedule)
+
+    schedule.schedule_type = schedule_type
+    schedule.daily_time = daily_time
+    schedule.interval_hours = max(1, interval_hours)
+    schedule.auto_mine = auto_mine
+    schedule.mine_max_score = mine_max_score
+    schedule.notify_on_regression = notify_on_regression
+    schedule.is_enabled = True
+
+    from services.eval_schedule_runner import _compute_next_run
+    schedule.next_run_at = _compute_next_run(schedule)
+
+    db.commit()
+    db.refresh(schedule)
+
+    return {
+        "schedule_id": schedule.id,
+        "is_enabled": True,
+        "next_run_at": schedule.next_run_at.isoformat() if schedule.next_run_at else None,
+    }
+
+
+@router.delete("/schedule/{environment_id}")
+def api_delete_eval_schedule(
+    environment_id: str,
+    api_key: ApiKey = Depends(get_api_key_auth),
+    db: Session = Depends(get_db),
+):
+    """Delete the eval schedule for an environment."""
+    env = db.query(Environment).filter(
+        Environment.id == environment_id,
+    ).first()
+    if not env:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    if env.tenant_id != api_key.tenant_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+
+    schedule = db.query(EvalSchedule).filter(
+        EvalSchedule.environment_id == env.id,
+    ).first()
+    if not schedule:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No schedule found")
+
+    db.delete(schedule)
+    db.commit()
+    return {"deleted": True}

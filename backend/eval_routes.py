@@ -16,6 +16,7 @@ from auth import get_current_user
 from db_models import User, Workspace
 from eval_models import (
     Environment, TestCase, JudgeCriteria, JudgeCustomRule, EvalRun, EvalResult,
+    EvalSchedule,
 )
 
 router = APIRouter(prefix="/api/environments", tags=["environments"])
@@ -920,3 +921,146 @@ def test_target(
         "extracted_answer": answer[:500],
         "response_time_ms": result.get("response_time_ms", 0),
     }
+
+
+# =============================================
+#  EVAL SCHEDULES
+# =============================================
+
+def _serialize_schedule(s: EvalSchedule) -> dict:
+    return {
+        "id": s.id,
+        "environment_id": s.environment_id,
+        "is_enabled": s.is_enabled,
+        "schedule_type": s.schedule_type,
+        "daily_time": s.daily_time,
+        "interval_hours": s.interval_hours,
+        "cron_expression": s.cron_expression,
+        "auto_mine": s.auto_mine,
+        "mine_max_score": s.mine_max_score,
+        "notify_on_regression": s.notify_on_regression,
+        "last_run_id": s.last_run_id,
+        "last_run_at": s.last_run_at.isoformat() if s.last_run_at else None,
+        "last_score": s.last_score,
+        "next_run_at": s.next_run_at.isoformat() if s.next_run_at else None,
+        "run_count": s.run_count or 0,
+        "last_status": s.last_status,
+        "consecutive_failures": s.consecutive_failures or 0,
+        "created_at": s.created_at.isoformat() if s.created_at else None,
+    }
+
+
+@router.get("/{env_id}/schedule")
+def get_eval_schedule(
+    env_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get the eval schedule for an environment (one schedule per env)."""
+    env = _get_env(env_id, user.tenant_id, db)
+    schedule = db.query(EvalSchedule).filter(
+        EvalSchedule.environment_id == env.id,
+    ).first()
+
+    if not schedule:
+        return {"schedule": None}
+
+    return {"schedule": _serialize_schedule(schedule)}
+
+
+@router.post("/{env_id}/schedule")
+def create_or_update_eval_schedule(
+    env_id: str,
+    body: dict,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create or update the eval schedule for an environment."""
+    env = _get_env(env_id, user.tenant_id, db)
+
+    schedule = db.query(EvalSchedule).filter(
+        EvalSchedule.environment_id == env.id,
+    ).first()
+
+    if not schedule:
+        schedule = EvalSchedule(
+            environment_id=env.id,
+            tenant_id=user.tenant_id,
+            created_by=user.id,
+        )
+        db.add(schedule)
+
+    # Update fields
+    if "is_enabled" in body:
+        schedule.is_enabled = bool(body["is_enabled"])
+    if "schedule_type" in body:
+        schedule.schedule_type = body["schedule_type"]
+    if "daily_time" in body:
+        schedule.daily_time = body["daily_time"]
+    if "interval_hours" in body:
+        schedule.interval_hours = max(1, int(body["interval_hours"]))
+    if "cron_expression" in body:
+        schedule.cron_expression = body["cron_expression"]
+    if "auto_mine" in body:
+        schedule.auto_mine = bool(body["auto_mine"])
+    if "mine_max_score" in body:
+        schedule.mine_max_score = int(body["mine_max_score"])
+    if "notify_on_regression" in body:
+        schedule.notify_on_regression = bool(body["notify_on_regression"])
+
+    # Compute next run time
+    from services.eval_schedule_runner import _compute_next_run
+    if schedule.is_enabled:
+        schedule.next_run_at = _compute_next_run(schedule)
+
+    db.commit()
+    db.refresh(schedule)
+
+    return {"schedule": _serialize_schedule(schedule)}
+
+
+@router.delete("/{env_id}/schedule")
+def delete_eval_schedule(
+    env_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete the eval schedule for an environment."""
+    env = _get_env(env_id, user.tenant_id, db)
+    schedule = db.query(EvalSchedule).filter(
+        EvalSchedule.environment_id == env.id,
+    ).first()
+
+    if not schedule:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No schedule found")
+
+    db.delete(schedule)
+    db.commit()
+    return {"deleted": True}
+
+
+@router.post("/{env_id}/schedule/run-now")
+def trigger_schedule_now(
+    env_id: str,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Manually trigger a scheduled eval run immediately."""
+    env = _get_env(env_id, user.tenant_id, db)
+    schedule = db.query(EvalSchedule).filter(
+        EvalSchedule.environment_id == env.id,
+    ).first()
+
+    if not schedule:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No schedule found")
+
+    if schedule.last_status == "running":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Schedule is already running")
+
+    from services.eval_schedule_runner import run_eval_schedule
+
+    schedule_id = schedule.id
+    background_tasks.add_task(run_eval_schedule, schedule_id)
+
+    return {"triggered": True, "schedule_id": schedule_id}

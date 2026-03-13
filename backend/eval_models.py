@@ -249,3 +249,47 @@ class MinedExample(Base):
 
     def __repr__(self):
         return f"<MinedExample {self.failure_type} score={self.original_score}>"
+
+
+# -----------------------------------------
+#  EvalSchedule
+# -----------------------------------------
+
+class EvalSchedule(Base):
+    __tablename__ = "eval_schedules"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    environment_id = Column(String(36), ForeignKey("environments.id", ondelete="CASCADE"), nullable=False)
+    tenant_id = Column(String(36), ForeignKey("tenants.id"), nullable=False)
+    is_enabled = Column(Boolean, default=True)
+
+    # Schedule config
+    schedule_type = Column(String(20), default="daily")    # daily | interval | cron
+    daily_time = Column(String(5), default="09:00")        # HH:MM (UTC)
+    interval_hours = Column(Integer, default=24)            # for interval type
+    cron_expression = Column(String(100), nullable=True)    # for cron type (future)
+
+    # Behavior
+    auto_mine = Column(Boolean, default=False)              # auto-trigger failure mining after run
+    mine_max_score = Column(Integer, default=60)            # threshold for auto-mining
+    notify_on_regression = Column(Boolean, default=True)    # fire webhook on score drop
+
+    # Tracking
+    last_run_id = Column(String(36), nullable=True)
+    last_run_at = Column(DateTime, nullable=True)
+    last_score = Column(Float, nullable=True)
+    next_run_at = Column(DateTime, nullable=True)
+    run_count = Column(Integer, default=0)
+    last_status = Column(String(20), default="idle")        # idle | running | completed | failed
+    consecutive_failures = Column(Integer, default=0)
+
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    environment = relationship("Environment")
+    tenant = relationship("Tenant")
+
+    def __repr__(self):
+        return f"<EvalSchedule env={self.environment_id} type={self.schedule_type} enabled={self.is_enabled}>"

@@ -4,7 +4,7 @@ import {
   FlaskConical, ArrowLeft, Plus, Trash2, Check, X, Play, Bell,
   SlidersHorizontal, ListChecks, BarChart3, Settings, Sparkles, Wand2,
   Globe, Zap, Download, Brain, Loader2, TrendingUp, TrendingDown, AlertTriangle,
-  Activity, Target, GitBranch,
+  Activity, Target, GitBranch, Clock, ToggleLeft, ToggleRight,
 } from 'lucide-react'
 import {
   getEnvironment, updateEnvironment,
@@ -18,6 +18,7 @@ import {
   getAnalyticsDashboard, getRegressions, getCategoryBreakdown,
   getFailurePatterns, getConsistencyAnalysis, getCriteriaBreakdown,
   triggerMining, getMiningJobs, getMiningJobDetail, exportMinedData, deleteMiningJob,
+  getEvalSchedule, saveEvalSchedule, deleteEvalSchedule, triggerScheduleNow,
 } from '../api/eval'
 import { getAgents } from '../api/client'
 
@@ -27,6 +28,7 @@ const TABS = [
   { id: 'criteria', label: 'Judge Criteria', icon: SlidersHorizontal },
   { id: 'results', label: 'Results', icon: BarChart3 },
   { id: 'analytics', label: 'Analytics', icon: Activity },
+  { id: 'schedule', label: 'Schedule', icon: Clock },
   { id: 'training', label: 'Training Data', icon: Brain },
 ]
 
@@ -99,6 +101,20 @@ export default function EnvironmentDetail() {
   const [miningDetail, setMiningDetail] = useState(null)
   const [miningExpanded, setMiningExpanded] = useState(null)
 
+  // Schedule state
+  const [schedule, setSchedule] = useState(null)
+  const [scheduleLoading, setScheduleLoading] = useState(false)
+  const [scheduleSaving, setScheduleSaving] = useState(false)
+  const [scheduleForm, setScheduleForm] = useState({
+    is_enabled: true,
+    schedule_type: 'daily',
+    daily_time: '09:00',
+    interval_hours: 24,
+    auto_mine: false,
+    mine_max_score: 60,
+    notify_on_regression: true,
+  })
+
   // Analytics state
   const [analyticsDash, setAnalyticsDash] = useState(null)
   const [analyticsView, setAnalyticsView] = useState('dashboard')
@@ -137,6 +153,26 @@ export default function EnvironmentDetail() {
     }, 3000)
     return () => clearInterval(interval)
   }, [activeRunId, running, envId])
+
+  // Load schedule when tab switches to schedule
+  useEffect(() => {
+    if (tab !== 'schedule' || !envId) return
+    setScheduleLoading(true)
+    getEvalSchedule(envId).then(res => {
+      setSchedule(res.schedule)
+      if (res.schedule) {
+        setScheduleForm({
+          is_enabled: res.schedule.is_enabled,
+          schedule_type: res.schedule.schedule_type || 'daily',
+          daily_time: res.schedule.daily_time || '09:00',
+          interval_hours: res.schedule.interval_hours || 24,
+          auto_mine: res.schedule.auto_mine || false,
+          mine_max_score: res.schedule.mine_max_score || 60,
+          notify_on_regression: res.schedule.notify_on_regression !== false,
+        })
+      }
+    }).catch(console.error).finally(() => setScheduleLoading(false))
+  }, [tab, envId])
 
   async function loadEnv() {
     try {
@@ -1685,6 +1721,234 @@ export default function EnvironmentDetail() {
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* ═══ SCHEDULE TAB ═══ */}
+      {tab === 'schedule' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+          {/* Schedule Config Card */}
+          <div className="card" style={{ padding: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 16 }}>Automated Eval Schedule</h3>
+                <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
+                  Run eval suites automatically on a schedule. Catch regressions before they reach users.
+                </p>
+              </div>
+              {schedule && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{
+                    fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6,
+                    background: schedule.is_enabled ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+                    color: schedule.is_enabled ? '#22c55e' : '#ef4444',
+                  }}>
+                    {schedule.is_enabled ? 'Active' : 'Paused'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Schedule Type */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Schedule Type</label>
+                <select
+                  value={scheduleForm.schedule_type}
+                  onChange={e => setScheduleForm(f => ({ ...f, schedule_type: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-secondary)', fontSize: 13 }}
+                >
+                  <option value="daily">Daily</option>
+                  <option value="interval">Every N hours</option>
+                </select>
+              </div>
+
+              {scheduleForm.schedule_type === 'daily' ? (
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Time (UTC)</label>
+                  <input
+                    type="time"
+                    value={scheduleForm.daily_time}
+                    onChange={e => setScheduleForm(f => ({ ...f, daily_time: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-secondary)', fontSize: 13 }}
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Interval (hours)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="168"
+                    value={scheduleForm.interval_hours}
+                    onChange={e => setScheduleForm(f => ({ ...f, interval_hours: parseInt(e.target.value) || 24 }))}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-secondary)', fontSize: 13 }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Options */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13 }}>
+                <input
+                  type="checkbox"
+                  checked={scheduleForm.notify_on_regression}
+                  onChange={e => setScheduleForm(f => ({ ...f, notify_on_regression: e.target.checked }))}
+                />
+                <span>Notify on regression (webhook fires when score drops &gt;5 points)</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13 }}>
+                <input
+                  type="checkbox"
+                  checked={scheduleForm.auto_mine}
+                  onChange={e => setScheduleForm(f => ({ ...f, auto_mine: e.target.checked }))}
+                />
+                <span>Auto-mine failures after each run (generate training data from failures)</span>
+              </label>
+              {scheduleForm.auto_mine && (
+                <div style={{ marginLeft: 28 }}>
+                  <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                    Mine failures below score:
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={scheduleForm.mine_max_score}
+                      onChange={e => setScheduleForm(f => ({ ...f, mine_max_score: parseInt(e.target.value) || 60 }))}
+                      style={{ width: 60, marginLeft: 8, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-secondary)', fontSize: 13 }}
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={async () => {
+                  setScheduleSaving(true)
+                  try {
+                    const res = await saveEvalSchedule(envId, scheduleForm)
+                    setSchedule(res.schedule)
+                  } catch (e) { alert(e.message) }
+                  setScheduleSaving(false)
+                }}
+                className="btn btn-primary"
+                disabled={scheduleSaving}
+                style={{ fontSize: 13, padding: '8px 20px' }}
+              >
+                {scheduleSaving ? 'Saving...' : schedule ? 'Update Schedule' : 'Create Schedule'}
+              </button>
+
+              {schedule && (
+                <>
+                  <button
+                    onClick={async () => {
+                      setScheduleSaving(true)
+                      try {
+                        const res = await saveEvalSchedule(envId, { ...scheduleForm, is_enabled: !schedule.is_enabled })
+                        setSchedule(res.schedule)
+                        setScheduleForm(f => ({ ...f, is_enabled: !schedule.is_enabled }))
+                      } catch (e) { alert(e.message) }
+                      setScheduleSaving(false)
+                    }}
+                    className="btn"
+                    style={{ fontSize: 13, padding: '8px 16px' }}
+                  >
+                    {schedule.is_enabled ? 'Pause' : 'Enable'}
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      try {
+                        await triggerScheduleNow(envId)
+                        const res = await getEvalSchedule(envId)
+                        setSchedule(res.schedule)
+                      } catch (e) { alert(e.message) }
+                    }}
+                    className="btn"
+                    style={{ fontSize: 13, padding: '8px 16px' }}
+                    disabled={schedule.last_status === 'running'}
+                  >
+                    <Play size={13} style={{ marginRight: 4 }} />
+                    Run Now
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      if (!confirm('Delete this eval schedule?')) return
+                      try {
+                        await deleteEvalSchedule(envId)
+                        setSchedule(null)
+                      } catch (e) { alert(e.message) }
+                    }}
+                    className="btn"
+                    style={{ fontSize: 13, padding: '8px 16px', color: '#ef4444' }}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Schedule Status Card */}
+          {schedule && (
+            <div className="card" style={{ padding: 24 }}>
+              <h3 style={{ margin: '0 0 16px', fontSize: 16 }}>Schedule Status</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+                <div style={{ padding: 16, borderRadius: 8, background: 'var(--bg-secondary)' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Last Status</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: {
+                    completed: '#22c55e', running: '#3b82f6', failed: '#ef4444', idle: 'var(--text-secondary)',
+                  }[schedule.last_status] || 'var(--text-primary)' }}>
+                    {schedule.last_status || 'Never run'}
+                  </div>
+                </div>
+                <div style={{ padding: 16, borderRadius: 8, background: 'var(--bg-secondary)' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Last Score</div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>
+                    {schedule.last_score != null ? `${schedule.last_score.toFixed(1)}` : 'N/A'}
+                  </div>
+                </div>
+                <div style={{ padding: 16, borderRadius: 8, background: 'var(--bg-secondary)' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Total Runs</div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>{schedule.run_count}</div>
+                </div>
+                <div style={{ padding: 16, borderRadius: 8, background: 'var(--bg-secondary)' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Next Run</div>
+                  <div style={{ fontSize: 12, fontWeight: 500 }}>
+                    {schedule.next_run_at ? new Date(schedule.next_run_at + 'Z').toLocaleString() : 'Not scheduled'}
+                  </div>
+                </div>
+              </div>
+
+              {schedule.last_run_at && (
+                <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
+                  Last run: {new Date(schedule.last_run_at + 'Z').toLocaleString()}
+                  {schedule.consecutive_failures > 0 && (
+                    <span style={{ color: '#ef4444', marginLeft: 8 }}>
+                      ({schedule.consecutive_failures} consecutive failure{schedule.consecutive_failures > 1 ? 's' : ''})
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* How it works */}
+          <div className="card" style={{ padding: 24 }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 16 }}>How Eval Scheduling Works</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+              <div style={{ display: 'flex', gap: 8 }}><span style={{ color: '#3b82f6', fontWeight: 700 }}>1.</span> Set a schedule (daily at a specific time, or every N hours)</div>
+              <div style={{ display: 'flex', gap: 8 }}><span style={{ color: '#3b82f6', fontWeight: 700 }}>2.</span> Cane automatically runs your full eval suite against your agent</div>
+              <div style={{ display: 'flex', gap: 8 }}><span style={{ color: '#3b82f6', fontWeight: 700 }}>3.</span> If scores regress, your webhook fires with the details</div>
+              <div style={{ display: 'flex', gap: 8 }}><span style={{ color: '#3b82f6', fontWeight: 700 }}>4.</span> Optionally auto-mine failures and generate training data</div>
+              <div style={{ display: 'flex', gap: 8 }}><span style={{ color: '#3b82f6', fontWeight: 700 }}>5.</span> Check the Results tab for all scheduled run history</div>
+            </div>
+          </div>
         </div>
       )}
 

@@ -246,3 +246,18 @@ export const exportMinedData = async (envId, jobId, format = 'dpo') => {
 
 export const deleteMiningJob = (envId, jobId) =>
   request(`/environments/${envId}/mining-jobs/${jobId}`, { method: 'DELETE' })
+
+// -- Eval Scheduling --
+export const getEvalSchedule = (envId) => request(`/environments/${envId}/schedule`)
+
+export const saveEvalSchedule = (envId, config) =>
+  request(`/environments/${envId}/schedule`, {
+    method: 'POST',
+    body: JSON.stringify(config),
+  })
+
+export const deleteEvalSchedule = (envId) =>
+  request(`/environments/${envId}/schedule`, { method: 'DELETE' })
+
+export const triggerScheduleNow = (envId) =>
+  request(`/environments/${envId}/schedule/run-now`, { method: 'POST' })

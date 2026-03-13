@@ -53,41 +53,51 @@ export default function Landing() {
         <div className="lp-hero-grid">
           <div className="lp-hero-left">
             <h1 className="lp-reveal">
-              Build, evaluate, and<br />improve AI agents.
+              The feedback loop<br />for AI agents.
             </h1>
             <p className="lp-hero-sub lp-reveal">
-              Agent orchestration, LLM-as-judge evaluation, and post-training pipelines in one developer platform.
+              Your agents run. Cane evaluates them, mines their failures, and generates training data to make them better. Every interaction makes your agents smarter.
             </p>
             <div className="lp-hero-actions lp-reveal">
               <Link to="/register" className="lp-btn-fill">Get started free</Link>
-              <Link to="/guide" className="lp-btn-ghost">Read the docs</Link>
+              <a href="https://github.com/cane-ai/cane-eval" target="_blank" rel="noopener noreferrer" className="lp-btn-ghost">Star on GitHub</a>
             </div>
             <div className="lp-trust-line lp-reveal">
-              <code>pip install cane</code>
+              <code>pip install cane-eval</code>
               <span className="lp-trust-sep">|</span>
-              <span>Open API. Python SDK. Embeddable widget.</span>
+              <span>Open-source eval engine. Free forever.</span>
             </div>
           </div>
           <div className="lp-hero-right lp-reveal">
-            <div className="lp-code-block">
-              <div className="lp-code-header">
-                <span className="lp-code-dot" style={{ background: '#ff5f57' }} />
-                <span className="lp-code-dot" style={{ background: '#febc2e' }} />
-                <span className="lp-code-dot" style={{ background: '#28c840' }} />
-                <span className="lp-code-file">app.py</span>
-              </div>
-              <pre className="lp-code-body">{`from cane import Cane
-
-client = Cane(api_key="cane_xxx")
-
-# Query your agent
-result = client.ask(
-    "What is our refund policy?",
-    workspace_id="ws_abc123"
-)
-
-print(result["answer"])
-print(result["sources"])`}</pre>
+            <div className="lp-flywheel-visual">
+              <svg viewBox="0 0 320 320" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <marker id="flyArrow" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto">
+                    <path d="M0,0 L6,2.5 L0,5" fill="#60a5fa" />
+                  </marker>
+                </defs>
+                {/* Outer ring */}
+                <circle cx="160" cy="160" r="130" fill="none" stroke="rgba(37,99,235,0.12)" strokeWidth="1" />
+                {/* Connecting arcs */}
+                <path d="M 160 30 A 130 130 0 0 1 283 205" fill="none" stroke="rgba(96,165,250,0.25)" strokeWidth="1.5" markerEnd="url(#flyArrow)" />
+                <path d="M 283 205 A 130 130 0 0 1 95 278" fill="none" stroke="rgba(96,165,250,0.25)" strokeWidth="1.5" markerEnd="url(#flyArrow)" />
+                <path d="M 95 278 A 130 130 0 0 1 160 30" fill="none" stroke="rgba(96,165,250,0.25)" strokeWidth="1.5" markerEnd="url(#flyArrow)" />
+                {/* Node: Eval */}
+                <circle cx="160" cy="38" r="28" fill="rgba(37,99,235,0.08)" stroke="rgba(37,99,235,0.3)" strokeWidth="1" />
+                <text x="160" y="35" textAnchor="middle" fill="#60a5fa" fontSize="9" fontWeight="700" fontFamily="Space Grotesk, sans-serif">EVAL</text>
+                <text x="160" y="47" textAnchor="middle" fill="rgba(255,255,255,0.35)" fontSize="7" fontFamily="DM Sans, sans-serif">Score + judge</text>
+                {/* Node: Mine */}
+                <circle cx="275" cy="215" r="28" fill="rgba(37,99,235,0.08)" stroke="rgba(37,99,235,0.3)" strokeWidth="1" />
+                <text x="275" y="212" textAnchor="middle" fill="#60a5fa" fontSize="9" fontWeight="700" fontFamily="Space Grotesk, sans-serif">MINE</text>
+                <text x="275" y="224" textAnchor="middle" fill="rgba(255,255,255,0.35)" fontSize="7" fontFamily="DM Sans, sans-serif">Find failures</text>
+                {/* Node: Train */}
+                <circle cx="85" cy="268" r="28" fill="rgba(37,99,235,0.08)" stroke="rgba(37,99,235,0.3)" strokeWidth="1" />
+                <text x="85" y="265" textAnchor="middle" fill="#60a5fa" fontSize="9" fontWeight="700" fontFamily="Space Grotesk, sans-serif">TRAIN</text>
+                <text x="85" y="277" textAnchor="middle" fill="rgba(255,255,255,0.35)" fontSize="7" fontFamily="DM Sans, sans-serif">Export + tune</text>
+                {/* Center label */}
+                <text x="160" y="155" textAnchor="middle" fill="rgba(255,255,255,0.6)" fontSize="13" fontWeight="700" fontFamily="Space Grotesk, sans-serif" letterSpacing="-0.02em">AGENTS</text>
+                <text x="160" y="172" textAnchor="middle" fill="rgba(255,255,255,0.25)" fontSize="8" fontFamily="DM Sans, sans-serif">get better every loop</text>
+              </svg>
             </div>
           </div>
         </div>
@@ -97,16 +107,45 @@ print(result["sources"])`}</pre>
       <section className="lp-stats lp-reveal">
         <div className="lp-stats-inner">
           {[
+            ['Closed-loop pipeline', 'Eval to training data, automatically'],
+            ['Open-source eval', 'cane-eval on PyPI and GitHub'],
+            ['LLM-as-Judge', 'Automated scoring with weighted criteria'],
             ['4 export formats', 'SFT, DPO, OpenAI, raw JSONL'],
-            ['4-stage retrieval', 'Vector, BM25, RRF, cross-encoder'],
-            ['3 auth modes', 'JWT, OAuth 2.0, scoped API keys'],
-            ['Full audit trail', 'Every inter-agent call logged with ms timing'],
           ].map(([title, desc], i) => (
             <div key={i} className="lp-stat">
               <div className="lp-stat-title">{title}</div>
               <div className="lp-stat-desc">{desc}</div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* How It Works - Flywheel narrative */}
+      <section className="lp-section lp-flywheel-section">
+        <div className="lp-contain">
+          <div className="lp-section-head lp-reveal" style={{ textAlign: 'center' }}>
+            <h2>The agent data flywheel.</h2>
+            <p>Most teams build agents and hope they work. Cane closes the loop. Every failure becomes training data. Every training run makes your agents better. The flywheel spins faster the more you use it.</p>
+          </div>
+
+          <div className="lp-flywheel-steps lp-reveal">
+            {[
+              ['1', 'Agents Run', 'Your agents handle real queries across orchestrated networks with full tracing.'],
+              ['2', 'Eval Scores', 'LLM-as-Judge scores every response on accuracy, completeness, and faithfulness.'],
+              ['3', 'Failures Mined', 'Low-scoring results are classified by failure type and rewritten by an LLM.'],
+              ['4', 'Training Data', 'Mined examples export as DPO preference pairs, SFT, or OpenAI format.'],
+              ['5', 'Models Improve', 'Fine-tune on your own data. Re-evaluate. Watch scores climb.'],
+            ].map(([num, title, desc], i) => (
+              <div key={i} className="lp-flywheel-step lp-reveal">
+                <div className="lp-flywheel-num">{num}</div>
+                <div className="lp-flywheel-content">
+                  <div className="lp-flywheel-title">{title}</div>
+                  <div className="lp-flywheel-desc">{desc}</div>
+                </div>
+                {i < 4 && <div className="lp-flywheel-connector" />}
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -331,16 +370,59 @@ curl -H "Authorization: Bearer cane_xxx" \\
         </div>
       </section>
 
+      {/* Open Source CTA */}
+      <section className="lp-section lp-oss-section">
+        <div className="lp-contain lp-reveal">
+          <div className="lp-oss-grid">
+            <div className="lp-oss-left">
+              <div className="lp-product-label">Open Source</div>
+              <h2>Start with cane-eval. Scale with Cane.</h2>
+              <p>cane-eval is our open-source eval engine. YAML test suites, LLM-as-Judge scoring, regression diffs, and failure mining. Use it standalone or connect it to the full Cane platform when you need orchestration and post-training.</p>
+              <div className="lp-hero-actions" style={{ marginTop: 24 }}>
+                <a href="https://github.com/cane-ai/cane-eval" target="_blank" rel="noopener noreferrer" className="lp-btn-fill">View on GitHub</a>
+                <Link to="/guide" className="lp-btn-ghost">Read the docs</Link>
+              </div>
+            </div>
+            <div className="lp-oss-right">
+              <div className="lp-code-block">
+                <div className="lp-code-header">
+                  <span className="lp-code-dot" style={{ background: '#ff5f57' }} />
+                  <span className="lp-code-dot" style={{ background: '#febc2e' }} />
+                  <span className="lp-code-dot" style={{ background: '#28c840' }} />
+                  <span className="lp-code-file">terminal</span>
+                </div>
+                <pre className="lp-code-body">{`$ pip install cane-eval
+
+$ cane-eval run suite.yaml --target http://localhost:8000/ask
+
+Running 12 test cases...
+
+  Question 1: What is our refund policy?
+  Score: 92/100  PASS
+  Accuracy: 95  Completeness: 88  Faithfulness: 94
+
+  Question 2: How do I cancel my subscription?
+  Score: 47/100  FAIL
+  Accuracy: 40  Completeness: 55  Faithfulness: 45
+  Failure: hallucination
+
+Overall: 87.3 avg | 10 passed | 1 warned | 1 failed`}</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* CTA */}
       <section className="lp-section lp-demo-section">
         <div className="lp-contain lp-reveal" style={{ textAlign: 'center' }}>
-          <h2 style={{ marginBottom: 16 }}>Ship agents to production.</h2>
+          <h2 style={{ marginBottom: 16 }}>Close the loop on agent quality.</h2>
           <p className="lp-demo-sub">
-            Orchestrate. Evaluate. Fine-tune. The complete infrastructure for production AI agents.
+            The complete feedback loop: orchestrate, evaluate, mine failures, generate training data, fine-tune. Your agents get better every cycle.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
             <Link to="/register" className="lp-btn-fill">Get started free</Link>
-            <Link to="/guide" className="lp-btn-ghost">Read the docs</Link>
+            <a href="https://github.com/cane-ai/cane-eval" target="_blank" rel="noopener noreferrer" className="lp-btn-ghost">Try cane-eval</a>
           </div>
         </div>
       </section>
@@ -353,6 +435,7 @@ curl -H "Authorization: Bearer cane_xxx" \\
           <a href="#post-training">Post-Training</a>
           <Link to="/guide">Docs</Link>
           <Link to="/marketplace">Marketplace</Link>
+          <a href="https://github.com/cane-ai/cane-eval" target="_blank" rel="noopener noreferrer">GitHub</a>
           <a href="mailto:hello@cane.fyi">Contact</a>
         </div>
       </footer>
@@ -839,6 +922,112 @@ const landingStyles = `
 
 .lp-arch-link a:hover { color: #93bbfd; }
 
+/* Flywheel hero visual */
+.lp-flywheel-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lp-flywheel-visual svg {
+  width: 100%;
+  max-width: 320px;
+  height: auto;
+}
+
+/* Flywheel section */
+.lp-flywheel-section {
+  background: rgba(37,99,235,0.02);
+}
+
+.lp-flywheel-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.lp-flywheel-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  position: relative;
+  padding-bottom: 32px;
+}
+
+.lp-flywheel-step:last-child { padding-bottom: 0; }
+
+.lp-flywheel-num {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(37,99,235,0.1);
+  border: 1px solid rgba(37,99,235,0.3);
+  color: #60a5fa;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.lp-flywheel-content { flex: 1; padding-top: 4px; }
+
+.lp-flywheel-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 4px;
+  letter-spacing: -0.01em;
+}
+
+.lp-flywheel-desc {
+  font-size: 0.84rem;
+  color: rgba(255,255,255,0.4);
+  line-height: 1.6;
+}
+
+.lp-flywheel-connector {
+  position: absolute;
+  left: 17px;
+  top: 40px;
+  bottom: 0;
+  width: 1px;
+  background: rgba(37,99,235,0.2);
+}
+
+/* Open source section */
+.lp-oss-section {
+  background: rgba(37,99,235,0.02);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.lp-oss-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  align-items: center;
+}
+
+.lp-oss-left h2 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(1.4rem, 2.5vw, 1.8rem);
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.03em;
+  margin-bottom: 12px;
+}
+
+.lp-oss-left p {
+  font-size: 0.9rem;
+  color: rgba(255,255,255,0.4);
+  line-height: 1.7;
+}
+
 /* Demo section */
 .lp-demo-section { border-bottom: none; }
 
@@ -906,5 +1095,7 @@ const landingStyles = `
   .lp-trust-line { flex-direction: column; gap: 8px; }
   .lp-trust-sep { display: none; }
   .lp-code-body { font-size: 0.7rem; }
+  .lp-oss-grid { grid-template-columns: 1fr; gap: 32px; }
+  .lp-flywheel-visual svg { max-width: 240px; }
 }
 `

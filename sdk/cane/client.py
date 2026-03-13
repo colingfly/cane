@@ -310,6 +310,65 @@ class Cane:
             raise CaneAPIError(response.status_code, detail)
         return response.text
 
+    # -- Eval Scheduling --
+
+    def create_eval_schedule(
+        self,
+        environment_id: str,
+        schedule_type: str = "daily",
+        daily_time: str = "09:00",
+        interval_hours: int = 24,
+        auto_mine: bool = False,
+        notify_on_regression: bool = True,
+    ) -> dict:
+        """
+        Create or update an eval schedule for an environment.
+
+        Args:
+            environment_id: The eval environment ID.
+            schedule_type: "daily" or "interval".
+            daily_time: HH:MM (UTC) for daily schedules.
+            interval_hours: Hours between runs for interval schedules.
+            auto_mine: Auto-trigger failure mining after each run.
+            notify_on_regression: Fire webhook when score drops.
+
+        Returns:
+            Schedule info with schedule_id and next_run_at.
+        """
+        from urllib.parse import urlencode
+        params = urlencode({
+            "schedule_type": schedule_type,
+            "daily_time": daily_time,
+            "interval_hours": interval_hours,
+            "auto_mine": str(auto_mine).lower(),
+            "notify_on_regression": str(notify_on_regression).lower(),
+        })
+        return self._request("POST", f"/v1/eval/schedule/{environment_id}?{params}")
+
+    def get_eval_schedule(self, environment_id: str) -> dict:
+        """
+        Get the eval schedule for an environment.
+
+        Args:
+            environment_id: The eval environment ID.
+
+        Returns:
+            Schedule details or None if not configured.
+        """
+        return self._request("GET", f"/v1/eval/schedule/{environment_id}")
+
+    def delete_eval_schedule(self, environment_id: str) -> dict:
+        """
+        Delete the eval schedule for an environment.
+
+        Args:
+            environment_id: The eval environment ID.
+
+        Returns:
+            Confirmation dict.
+        """
+        return self._request("DELETE", f"/v1/eval/schedule/{environment_id}")
+
     def close(self):
         """Close the underlying HTTP client."""
         self._client.close()
