@@ -48,21 +48,17 @@ export default function Landing() {
           <div className="lp-dropdown">
             <span className="lp-dropdown-trigger">Products <span className="lp-chevron">&#9662;</span></span>
             <div className="lp-dropdown-menu"><div className="lp-dropdown-inner">
-              <a href="#rag" className="lp-dropdown-item">
-                <span className="lp-dropdown-title">Cane Agent</span>
-                <span className="lp-dropdown-desc">Build agents on your documents</span>
-              </a>
-              <a href="#orchestrate" className="lp-dropdown-item">
-                <span className="lp-dropdown-title">Cane Orchestrate</span>
-                <span className="lp-dropdown-desc">Connect and route agents</span>
-              </a>
-              <a href="#observe" className="lp-dropdown-item">
-                <span className="lp-dropdown-title">Cane Observe</span>
-                <span className="lp-dropdown-desc">See everything your agents do</span>
+              <a href="#orchestration" className="lp-dropdown-item">
+                <span className="lp-dropdown-title">Orchestration</span>
+                <span className="lp-dropdown-desc">Agent networks, delegation, tracing</span>
               </a>
               <a href="#eval" className="lp-dropdown-item">
-                <span className="lp-dropdown-title">Cane Eval</span>
-                <span className="lp-dropdown-desc">Test and verify agent accuracy</span>
+                <span className="lp-dropdown-title">Eval</span>
+                <span className="lp-dropdown-desc">LLM judge, regression detection, analytics</span>
+              </a>
+              <a href="#post-training" className="lp-dropdown-item">
+                <span className="lp-dropdown-title">Post-Training</span>
+                <span className="lp-dropdown-desc">Dataset export, fine-tuning, lineage</span>
               </a>
             </div></div>
           </div>
@@ -73,26 +69,58 @@ export default function Landing() {
 
       {/* Hero */}
       <section className="lp-hero">
-        <h1 className="lp-reveal">
-          Build, connect, monitor,<br />and verify AI agents.
-        </h1>
-        <p className="lp-hero-sub lp-reveal">
-          RAG pipelines, agent networks, automated evals. One platform, full visibility.
-        </p>
-        <div className="lp-hero-actions lp-reveal">
-          <Link to="/register" className="lp-btn-fill">Get started free</Link>
-          <a href="#rag" className="lp-btn-ghost">See the products</a>
+        <div className="lp-hero-grid">
+          <div className="lp-hero-left">
+            <div className="lp-eyebrow lp-reveal">AI INFRASTRUCTURE PLATFORM</div>
+            <h1 className="lp-reveal">
+              The infrastructure layer<br />for production AI agents.
+            </h1>
+            <p className="lp-hero-sub lp-reveal">
+              Orchestrate agent networks. Evaluate with LLM judges. Export training data and fine-tune. One platform from prototype to production.
+            </p>
+            <div className="lp-hero-actions lp-reveal">
+              <Link to="/register" className="lp-btn-fill">Get started free</Link>
+              <Link to="/guide" className="lp-btn-ghost">Read the docs</Link>
+            </div>
+            <div className="lp-trust-line lp-reveal">
+              <code>pip install cane</code>
+              <span className="lp-trust-sep">|</span>
+              <span>Open API. Python SDK. Embeddable widget.</span>
+            </div>
+          </div>
+          <div className="lp-hero-right lp-reveal">
+            <div className="lp-code-block">
+              <div className="lp-code-header">
+                <span className="lp-code-dot" style={{ background: '#ff5f57' }} />
+                <span className="lp-code-dot" style={{ background: '#febc2e' }} />
+                <span className="lp-code-dot" style={{ background: '#28c840' }} />
+                <span className="lp-code-file">app.py</span>
+              </div>
+              <pre className="lp-code-body">{`from cane import Cane
+
+client = Cane(api_key="cane_xxx")
+
+# Query your agent
+result = client.ask(
+    "What is our refund policy?",
+    workspace_id="ws_abc123"
+)
+
+print(result["answer"])
+print(result["sources"])`}</pre>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Divider stats */}
+      {/* Stats Bar */}
       <section className="lp-stats lp-reveal">
         <div className="lp-stats-inner">
           {[
-            ['Cane Agent', 'Hybrid retrieval with re-ranking. Not just embeddings'],
-            ['Cane Orchestrate', 'Agents discover, call, and delegate to each other'],
-            ['Cane Observe', 'Every call logged. Full audit trail. Live graph'],
-            ['Cane Eval', 'LLM judge scores accuracy, completeness, relevance'],
+            ['4 export formats', 'SFT, DPO, OpenAI, raw JSONL'],
+            ['4-stage retrieval', 'Vector, BM25, RRF, cross-encoder'],
+            ['3 auth modes', 'JWT, OAuth 2.0, scoped API keys'],
+            ['Full audit trail', 'Every inter-agent call logged with ms timing'],
           ].map(([title, desc], i) => (
             <div key={i} className="lp-stat">
               <div className="lp-stat-title">{title}</div>
@@ -102,42 +130,13 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Cane Agent */}
-      <section id="rag" className="lp-section">
+      {/* Pillar 1: Orchestration */}
+      <section id="orchestration" className="lp-section">
         <div className="lp-contain">
           <div className="lp-section-head lp-reveal">
-            <div className="lp-product-label">Cane Agent</div>
-            <h2>Build agents on your documents.</h2>
-            <p>Upload files or sync Google Drive. Cane handles ingestion, retrieval, and deployment.</p>
-          </div>
-          <div className="lp-product-grid">
-            {[
-              ['Hybrid Retrieval', 'Vector search, BM25 keyword matching, Reciprocal Rank Fusion, and cross-encoder re-ranking in a single pass. Four stages of relevance filtering before anything reaches the LLM.'],
-              ['Google Drive Sync', 'OAuth popup, folder picker, incremental sync via the Changes API. Google Docs and Sheets auto-export to text. Encrypted credential storage. Files stay in sync automatically.'],
-              ['Agent Memory', 'Agents extract facts, preferences, and instructions from conversations automatically. Memories persist across sessions and are injected into future prompts. Agents get smarter over time.'],
-              ['Scheduled Runs', 'Configure agents to run autonomously on intervals or daily triggers. Background execution with run history, status tracking, and manual trigger support.'],
-              ['Widget Deployment', 'Embeddable chat widget with full customization. One script tag to deploy on any website. REST API with key-scoped auth and streaming responses.'],
-              ['Agent Marketplace', 'Publish agents with eval scores attached. Others can clone your agent and independently verify accuracy by re-running the test suite on their copy.'],
-            ].map(([title, desc], i) => (
-              <div key={i} className="lp-product-card lp-reveal">
-                <h3>{title}</h3>
-                <p>{desc}</p>
-              </div>
-            ))}
-          </div>
-          <div className="lp-arch-link lp-reveal">
-            <Link to="/architecture">Full architecture deep dive &rarr;</Link>
-          </div>
-        </div>
-      </section>
-
-      {/* Cane Orchestrate */}
-      <section id="orchestrate" className="lp-section">
-        <div className="lp-contain">
-          <div className="lp-section-head lp-reveal">
-            <div className="lp-product-label">Cane Orchestrate</div>
-            <h2>Connect and route agents.</h2>
-            <p>Agent-to-agent delegation, automatic routing, and live web tools. Four autonomous agents are running on this platform right now.</p>
+            <div className="lp-product-label">Orchestration</div>
+            <h2>Connect, route, and trace agent networks.</h2>
+            <p>Agent-to-agent delegation, automatic routing, execution tracing, and external agent registration. Build multi-agent systems with full observability.</p>
           </div>
 
           {/* Network SVG */}
@@ -148,68 +147,41 @@ export default function Landing() {
                   <path d="M0,0 L8,3 L0,6" fill="rgba(255,255,255,0.25)" />
                 </marker>
               </defs>
-
-              {/* Edges */}
               <line x1="410" y1="120" x2="210" y2="185" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" markerEnd="url(#arrow)" />
               <line x1="300" y1="320" x2="210" y2="210" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" markerEnd="url(#arrow)" />
               <line x1="300" y1="320" x2="430" y2="180" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" markerEnd="url(#arrow)" />
-
-              {/* AI News node */}
               <circle cx="190" cy="200" r="36" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
               <circle cx="190" cy="200" r="34" fill="rgba(255,255,255,0.04)" />
               <text x="190" y="196" textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="11" fontWeight="600" fontFamily="Space Grotesk, sans-serif">AI</text>
               <text x="190" y="210" textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="11" fontWeight="600" fontFamily="Space Grotesk, sans-serif">News</text>
               <text x="190" y="252" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="10" fontFamily="DM Sans, sans-serif">Web scraper</text>
-
-              {/* Tweet Generator node */}
               <circle cx="420" cy="140" r="36" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
               <circle cx="420" cy="140" r="34" fill="rgba(255,255,255,0.04)" />
               <text x="420" y="136" textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="11" fontWeight="600" fontFamily="Space Grotesk, sans-serif">Tweet</text>
               <text x="420" y="150" textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="11" fontWeight="600" fontFamily="Space Grotesk, sans-serif">Gen</text>
               <text x="420" y="192" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="10" fontFamily="DM Sans, sans-serif">Content writer</text>
-
-              {/* Lead Researcher node */}
               <circle cx="440" cy="280" r="36" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
               <circle cx="440" cy="280" r="34" fill="rgba(255,255,255,0.04)" />
               <text x="440" y="276" textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="11" fontWeight="600" fontFamily="Space Grotesk, sans-serif">Lead</text>
               <text x="440" y="290" textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="11" fontWeight="600" fontFamily="Space Grotesk, sans-serif">Research</text>
               <text x="440" y="332" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="10" fontFamily="DM Sans, sans-serif">Company intel</text>
-
-              {/* Cold Outreach node */}
               <circle cx="290" cy="330" r="36" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
               <circle cx="290" cy="330" r="34" fill="rgba(255,255,255,0.06)" />
               <text x="290" y="326" textAnchor="middle" fill="rgba(255,255,255,0.6)" fontSize="11" fontWeight="600" fontFamily="Space Grotesk, sans-serif">Cold</text>
               <text x="290" y="340" textAnchor="middle" fill="rgba(255,255,255,0.6)" fontSize="11" fontWeight="600" fontFamily="Space Grotesk, sans-serif">Outreach</text>
               <text x="290" y="382" textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="10" fontFamily="DM Sans, sans-serif">Email writer</text>
-
-              {/* Delegation labels on edges */}
               <text x="305" y="140" textAnchor="middle" fill="rgba(255,255,255,0.15)" fontSize="8" fontFamily="JetBrains Mono, monospace">delegates</text>
               <text x="235" y="275" textAnchor="middle" fill="rgba(255,255,255,0.15)" fontSize="8" fontFamily="JetBrains Mono, monospace">delegates</text>
               <text x="380" y="310" textAnchor="middle" fill="rgba(255,255,255,0.15)" fontSize="8" fontFamily="JetBrains Mono, monospace">delegates</text>
             </svg>
           </div>
 
-          {/* Agent descriptions */}
-          <div className="lp-network-grid lp-reveal">
-            {[
-              ['AI News', 'Scrapes the web for the latest AI headlines using DuckDuckGo search and page scraping. Synthesizes articles into briefings.'],
-              ['Tweet Generator', 'Writes social content by delegating research to AI News. Gets live data, drafts tweet variations with different angles.'],
-              ['Lead Researcher', 'Investigates companies and people by scraping websites, press releases, and LinkedIn. Builds structured research briefs.'],
-              ['Cold Outreach', 'Writes personalized emails by chaining Lead Researcher for company intel and AI News for industry context.'],
-            ].map(([name, desc], i) => (
-              <div key={i} className="lp-network-agent">
-                <h4>{name}</h4>
-                <p>{desc}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="lp-product-grid" style={{ marginTop: 48 }}>
+          <div className="lp-product-grid">
             {[
               ['Agent-to-Agent Delegation', 'Link any agent as a callable tool for another agent. A supervisor delegates questions to specialists and combines their answers. Depth-limited recursion prevents runaway chains.'],
               ['Orchestrator Mode', 'Flip one toggle and an agent becomes a router. It auto-discovers every other agent in your workspace, reads their descriptions, and routes incoming queries to the right specialist.'],
-              ['Live Web Scraping', 'Self-hosted DuckDuckGo search and page scraping. Agents query the web, extract content from URLs, and use the results as context. No external API keys. Runs on your infrastructure.'],
-              ['Webhook Tools & MCP', 'HTTP actions triggered by agent reasoning. Model Context Protocol for connecting agents to Slack, Google Calendar, HubSpot, and more. Pre-built catalog plus custom server support.'],
+              ['External Agent Registry', 'Register any HTTP endpoint as an agent in the Cane network. Bearer, header, or no auth. Your external agents appear in the graph and can be delegated to by any native agent.'],
+              ['Execution Tracing', 'Every inter-agent call is logged with caller, callee, query, response, depth level, and millisecond timing. Reconstruct full session flows. Detect performance hotspots and error patterns.'],
             ].map(([title, desc], i) => (
               <div key={i} className="lp-product-card lp-reveal">
                 <h3>{title}</h3>
@@ -218,50 +190,60 @@ export default function Landing() {
             ))}
           </div>
 
-          <div className="lp-arch-link lp-reveal">
-            <Link to="/agents/network">See the live network &rarr;</Link>
-          </div>
-        </div>
-      </section>
-
-      {/* Cane Observe */}
-      <section id="observe" className="lp-section">
-        <div className="lp-contain">
-          <div className="lp-section-head lp-reveal">
-            <div className="lp-product-label">Cane Observe</div>
-            <h2>See everything your agents do.</h2>
-            <p>Full visibility into every inter-agent call, delegation chain, and response time.</p>
-          </div>
-          <div className="lp-product-grid">
-            {[
-              ['Network Graph', 'Live force-directed visualization of your entire agent network. Nodes are agents, edges are delegation links. The graph updates in real time as agents communicate. See connections, call frequency, and routing patterns at a glance.'],
-              ['Communication Logs', 'Every inter-agent call is logged with full input, output, timing, and the delegation chain. Filter by agent pair, time range, or status. Drill into any call to see the complete request and response.'],
-              ['Audit Trails', 'Chain depth tracking, caller/callee recording, millisecond timing on every hop. Built for compliance teams that need to prove what happened, when, and why. Exportable logs with full provenance.'],
-              ['Analytics Dashboard', 'Per-agent conversation tracking. Volume, response times, channel breakdown, tool usage, and satisfaction scores from user feedback. Spot trends and catch regressions before users notice.'],
-            ].map(([title, desc], i) => (
-              <div key={i} className="lp-product-card lp-reveal">
-                <h3>{title}</h3>
-                <p>{desc}</p>
+          {/* Orchestration code block */}
+          <div className="lp-section-code lp-reveal">
+            <div className="lp-code-block">
+              <div className="lp-code-header">
+                <span className="lp-code-dot" style={{ background: '#ff5f57' }} />
+                <span className="lp-code-dot" style={{ background: '#febc2e' }} />
+                <span className="lp-code-dot" style={{ background: '#28c840' }} />
+                <span className="lp-code-file">orchestrate.py</span>
               </div>
-            ))}
+              <pre className="lp-code-body">{`from cane import Cane
+
+client = Cane(api_key="cane_xxx")
+
+# Register an external agent
+client.register_agent(
+    name="Compliance Check",
+    description="Verify regulatory compliance",
+    endpoint="https://your-api.com/comply",
+    auth_type="bearer",
+    auth_token="sk_xxx"
+)
+
+# Link it as a tool for another agent
+client.link_agent(
+    agent_id="agent_compliance",
+    parent_agent_id="agent_support",
+    tool_name="compliance_check",
+    tool_description="Check regulatory compliance"
+)
+
+# View the full network graph
+graph = client.network()
+print(f"{len(graph['nodes'])} agents, {len(graph['edges'])} links")`}</pre>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Cane Eval */}
+      {/* Pillar 2: Eval */}
       <section id="eval" className="lp-section">
         <div className="lp-contain">
           <div className="lp-section-head lp-reveal">
-            <div className="lp-product-label">Cane Eval</div>
-            <h2>Test and verify agent accuracy.</h2>
-            <p>Automated test suites scored by an LLM judge. Know exactly how good your agents are.</p>
+            <div className="lp-product-label">Eval</div>
+            <h2>Measure, track, and verify agent quality.</h2>
+            <p>LLM-as-judge scoring with weighted criteria. Regression detection across runs. Failure pattern analysis. Consistency tracking. Full analytics pipeline.</p>
           </div>
-          <div className="lp-product-grid">
+          <div className="lp-product-grid lp-product-grid-3">
             {[
-              ['LLM-as-Judge', 'Write test cases with expected answers. Cane runs every question through your agent, then uses an LLM judge to score each response. Four criteria: accuracy, completeness, relevance, and faithfulness.'],
-              ['Custom Weights & Rules', 'Adjust criteria weights to match your priorities. A compliance agent can weight accuracy at 40% and faithfulness at 35%. Add natural-language rules: "Deduct points if the response gives legal advice."'],
-              ['Score Tracking', 'Track scores across runs to catch regressions. You tweak the prompt, re-run, and see exactly how the numbers moved. Pass/warn/fail verdicts on every test case.'],
-              ['Marketplace Verification', 'Publish agents with eval scores attached. Others can clone your agent and independently verify accuracy by re-running the test suite on their copy. Trust through transparency.'],
+              ['LLM-as-Judge', 'Write test cases with expected answers. An LLM judge scores each response on accuracy, completeness, relevance, and faithfulness. Custom criteria weights and natural-language rules.'],
+              ['Regression Detection', 'Compare scores across runs question-by-question. Surface questions where accuracy dropped after a prompt change. Catch regressions before they reach users.'],
+              ['Score Trends', 'Track mean, median, p5, and p95 scores across every run. Visualize improvement or degradation over time. Know exactly how your agent is trending.'],
+              ['Consistency Analysis', 'Measure answer variance across multiple runs of the same questions. Flag volatile questions that produce inconsistent results. Consistency scores from 0 to 100.'],
+              ['Failure Patterns', 'Classify failures into categories: hallucination, incomplete, inaccurate, poor citation, tone issues. See which patterns dominate and get sample questions for each.'],
+              ['Latency Analysis', 'P50, p95, and p99 response times per run. Identify slow questions. Track latency distribution with histogram bucketing. Spot performance bottlenecks.'],
             ].map(([title, desc], i) => (
               <div key={i} className="lp-product-card lp-reveal">
                 <h3>{title}</h3>
@@ -269,14 +251,159 @@ export default function Landing() {
               </div>
             ))}
           </div>
+
+          {/* Eval code block */}
+          <div className="lp-section-code lp-reveal">
+            <div className="lp-code-block">
+              <div className="lp-code-header">
+                <span className="lp-code-dot" style={{ background: '#ff5f57' }} />
+                <span className="lp-code-dot" style={{ background: '#febc2e' }} />
+                <span className="lp-code-dot" style={{ background: '#28c840' }} />
+                <span className="lp-code-file">terminal</span>
+              </div>
+              <pre className="lp-code-body">{`# List available eval suites
+curl -H "Authorization: Bearer cane_xxx" \\
+  https://cane.fyi/v1/eval/suites
+
+# Submit your agent for evaluation
+curl -X POST -H "Authorization: Bearer cane_xxx" \\
+  "https://cane.fyi/v1/eval/run?environment_id=suite_123\\
+  &target_url=https://your-agent.com/ask"
+
+# Get results
+curl -H "Authorization: Bearer cane_xxx" \\
+  https://cane.fyi/v1/eval/run/run_456
+
+# Response:
+# {
+#   "status": "completed",
+#   "overall_score": 87.3,
+#   "passed": 42, "warned": 5, "failed": 3,
+#   "results": [...]
+# }`}</pre>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Stack */}
+      {/* Pillar 3: Post-Training */}
+      <section id="post-training" className="lp-section">
+        <div className="lp-contain">
+          <div className="lp-section-head lp-reveal">
+            <div className="lp-product-label">Post-Training</div>
+            <h2>From eval results to fine-tuned models.</h2>
+            <p>Export high-scoring eval results as training data. Submit fine-tuning jobs. Compare base vs. fine-tuned models. Track model lineage back to the eval suite that produced the data.</p>
+          </div>
+
+          {/* Pipeline visualization */}
+          <div className="lp-pipeline lp-reveal">
+            {[
+              ['Run Evals', 'Score agent responses'],
+              ['Filter by Score', 'Keep 80+ results'],
+              ['Export Dataset', 'SFT, DPO, OpenAI format'],
+              ['Fine-tune', 'Submit to OpenAI API'],
+              ['Re-evaluate', 'Verify improvement'],
+            ].map(([step, desc], i) => (
+              <div key={i} className="lp-pipeline-step">
+                <div className="lp-pipeline-num">{i + 1}</div>
+                <div className="lp-pipeline-text">
+                  <div className="lp-pipeline-title">{step}</div>
+                  <div className="lp-pipeline-desc">{desc}</div>
+                </div>
+                {i < 4 && <div className="lp-pipeline-arrow">&rarr;</div>}
+              </div>
+            ))}
+          </div>
+
+          <div className="lp-product-grid">
+            {[
+              ['Dataset Export', 'Export eval results as JSONL in 4 formats: SFT (prompt/completion), DPO (chosen/rejected preference pairs), OpenAI messages format, or raw with full scores and metadata.'],
+              ['Fine-tuning Pipeline', 'Generate datasets filtered by score threshold, submit fine-tuning jobs to OpenAI, and track training progress. All from within the platform.'],
+              ['Model Comparison', 'Side-by-side comparison of base model vs. fine-tuned model responses. Send the same question to both and see the difference in quality.'],
+              ['Lineage Tracking', 'Every fine-tuned model links back to the eval suite, score threshold, and training examples that produced it. Full provenance from data to deployed model.'],
+            ].map(([title, desc], i) => (
+              <div key={i} className="lp-product-card lp-reveal">
+                <h3>{title}</h3>
+                <p>{desc}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Post-training code block */}
+          <div className="lp-section-code lp-reveal">
+            <div className="lp-code-block">
+              <div className="lp-code-header">
+                <span className="lp-code-dot" style={{ background: '#ff5f57' }} />
+                <span className="lp-code-dot" style={{ background: '#febc2e' }} />
+                <span className="lp-code-dot" style={{ background: '#28c840' }} />
+                <span className="lp-code-file">terminal</span>
+              </div>
+              <pre className="lp-code-body">{`# Export high-scoring results as OpenAI training data
+curl -H "Authorization: Bearer cane_xxx" \\
+  "https://cane.fyi/v1/eval/export/run_456\\
+  ?format=openai&min_score=80"
+
+# Output (JSONL):
+# {"messages": [
+#   {"role": "system", "content": "You are a helpful assistant."},
+#   {"role": "user", "content": "What is our refund policy?"},
+#   {"role": "assistant", "content": "Our refund policy allows..."}
+# ]}`}</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* SDK / API Credibility */}
       <section className="lp-section">
         <div className="lp-contain">
           <div className="lp-section-head lp-reveal">
-            <h2>Stack</h2>
+            <h2>Built for developers.</h2>
+            <p>Python SDK, REST API, and embeddable widget. Three ways to integrate.</p>
+          </div>
+          <div className="lp-sdk-grid lp-reveal">
+            <div className="lp-sdk-col">
+              <div className="lp-sdk-label">Python SDK</div>
+              <div className="lp-code-block lp-code-sm">
+                <pre className="lp-code-body">{`pip install cane
+
+from cane import Cane
+client = Cane(api_key="cane_xxx")
+result = client.ask("Your question")`}</pre>
+              </div>
+            </div>
+            <div className="lp-sdk-col">
+              <div className="lp-sdk-label">REST API</div>
+              <div className="lp-code-block lp-code-sm">
+                <pre className="lp-code-body">{`curl -X POST \\
+  https://cane.fyi/v1/ask \\
+  -H "Authorization: Bearer cane_xxx" \\
+  -d '{"query": "Your question"}'`}</pre>
+              </div>
+            </div>
+            <div className="lp-sdk-col">
+              <div className="lp-sdk-label">Embed Widget</div>
+              <div className="lp-code-block lp-code-sm">
+                <pre className="lp-code-body">{`<script
+  src="https://cane.fyi/widget.js"
+  data-api-key="cane_xxx"
+  data-agent-name="Support"
+  data-color="#2563eb">
+</script>`}</pre>
+              </div>
+            </div>
+          </div>
+          <div className="lp-arch-link lp-reveal">
+            <Link to="/guide">Full API and SDK reference &rarr;</Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Architecture */}
+      <section className="lp-section">
+        <div className="lp-contain">
+          <div className="lp-section-head lp-reveal">
+            <h2>Architecture</h2>
           </div>
           <div className="lp-stack-row lp-reveal">
             {[
@@ -299,13 +426,13 @@ export default function Landing() {
       {/* CTA */}
       <section className="lp-section lp-demo-section">
         <div className="lp-contain lp-reveal" style={{ textAlign: 'center' }}>
-          <h2 style={{ marginBottom: 16 }}>Ready to build?</h2>
+          <h2 style={{ marginBottom: 16 }}>Ship agents to production.</h2>
           <p className="lp-demo-sub">
-            Four products. One platform. Build agents on your documents, connect them into a network, monitor everything, and verify accuracy. Start free.
+            Orchestrate. Evaluate. Fine-tune. The complete infrastructure for production AI agents.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
             <Link to="/register" className="lp-btn-fill">Get started free</Link>
-            <Link to="/agents/network" className="lp-btn-ghost">View the agent network</Link>
+            <Link to="/guide" className="lp-btn-ghost">Read the docs</Link>
           </div>
         </div>
       </section>
@@ -317,11 +444,9 @@ export default function Landing() {
           <span className="lp-footer-copy">Built by Colin</span>
         </div>
         <div className="lp-footer-links">
-          <a href="#rag">RAG</a>
-          <a href="#orchestrate">Orchestrate</a>
-          <a href="#observe">Observe</a>
+          <a href="#orchestration">Orchestration</a>
           <a href="#eval">Eval</a>
-          <Link to="/demo">Demo</Link>
+          <a href="#post-training">Post-Training</a>
           <Link to="/guide">Docs</Link>
           <Link to="/marketplace">Marketplace</Link>
           <a href="mailto:hello@cane.fyi">Contact</a>
@@ -389,9 +514,7 @@ const landingStyles = `
 .lp-nav-cta:hover { background: #3b82f6 !important; }
 
 /* Dropdown */
-.lp-dropdown {
-  position: relative;
-}
+.lp-dropdown { position: relative; }
 
 .lp-dropdown-trigger {
   display: flex;
@@ -405,9 +528,7 @@ const landingStyles = `
   transition: transform 0.2s;
 }
 
-.lp-dropdown:hover .lp-chevron {
-  transform: rotate(180deg);
-}
+.lp-dropdown:hover .lp-chevron { transform: rotate(180deg); }
 
 .lp-dropdown-menu {
   position: absolute;
@@ -444,9 +565,7 @@ const landingStyles = `
   transition: background 0.1s;
 }
 
-.lp-dropdown-item:hover {
-  background: rgba(37,99,235,0.08);
-}
+.lp-dropdown-item:hover { background: rgba(37,99,235,0.08); }
 
 .lp-dropdown-title {
   font-family: 'Space Grotesk', sans-serif;
@@ -464,31 +583,71 @@ const landingStyles = `
 
 /* Hero */
 .lp-hero {
-  padding: 180px 48px 120px;
-  max-width: 900px;
+  padding: 160px 48px 100px;
+  max-width: 1100px;
   margin: 0 auto;
+}
+
+.lp-hero-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 64px;
+  align-items: center;
+}
+
+.lp-eyebrow {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #60a5fa;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 20px;
 }
 
 .lp-hero h1 {
   font-family: 'Space Grotesk', sans-serif;
-  font-size: clamp(2.8rem, 5.5vw, 4.2rem);
+  font-size: clamp(2.2rem, 4vw, 3.2rem);
   font-weight: 700;
   color: #fff;
   letter-spacing: -0.035em;
   line-height: 1.1;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
 
 .lp-hero-sub {
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   color: rgba(255,255,255,0.45);
-  max-width: 560px;
+  max-width: 480px;
   line-height: 1.7;
-  margin-bottom: 40px;
+  margin-bottom: 32px;
 }
 
-.lp-hero-actions { display: flex; gap: 12px; }
+.lp-hero-actions { display: flex; gap: 12px; margin-bottom: 32px; }
 
+.lp-trust-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.3);
+}
+
+.lp-trust-line code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  color: #60a5fa;
+  background: rgba(37,99,235,0.1);
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid rgba(37,99,235,0.15);
+}
+
+.lp-trust-sep {
+  color: rgba(255,255,255,0.12);
+}
+
+/* Buttons */
 .lp-btn-fill {
   display: inline-block;
   padding: 12px 28px;
@@ -521,6 +680,58 @@ const landingStyles = `
 .lp-btn-ghost:hover {
   border-color: rgba(37,99,235,0.3);
   color: rgba(255,255,255,0.7);
+}
+
+/* Code blocks */
+.lp-code-block {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.lp-code-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 16px;
+  background: rgba(255,255,255,0.03);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.lp-code-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.lp-code-file {
+  margin-left: 8px;
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.3);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.lp-code-body {
+  padding: 20px;
+  margin: 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  line-height: 1.7;
+  color: rgba(255,255,255,0.6);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.lp-code-sm .lp-code-body {
+  padding: 16px;
+  font-size: 0.72rem;
+  line-height: 1.6;
+}
+
+.lp-section-code {
+  margin-top: 48px;
+  max-width: 640px;
 }
 
 /* Stats bar */
@@ -604,6 +815,10 @@ const landingStyles = `
   border: 1px solid rgba(255,255,255,0.06);
 }
 
+.lp-product-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
 .lp-product-card {
   padding: 36px 32px;
   background: #000;
@@ -635,32 +850,85 @@ const landingStyles = `
   height: auto;
 }
 
-.lp-network-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1px;
-  background: rgba(255,255,255,0.06);
+/* Pipeline visualization */
+.lp-pipeline {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  margin-bottom: 56px;
+  padding: 32px;
+  background: rgba(255,255,255,0.02);
   border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  overflow-x: auto;
 }
 
-.lp-network-agent {
-  padding: 28px 24px;
-  background: #000;
+.lp-pipeline-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
 }
 
-.lp-network-agent h4 {
+.lp-pipeline-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(37,99,235,0.15);
+  border: 1px solid rgba(37,99,235,0.3);
+  color: #60a5fa;
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 0.88rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.lp-pipeline-text {
+  min-width: 0;
+}
+
+.lp-pipeline-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.82rem;
   font-weight: 600;
   color: #fff;
-  margin-bottom: 8px;
   letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 
-.lp-network-agent p {
+.lp-pipeline-desc {
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.3);
+  white-space: nowrap;
+}
+
+.lp-pipeline-arrow {
+  color: rgba(255,255,255,0.15);
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  margin: 0 8px;
+}
+
+/* SDK grid */
+.lp-sdk-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.lp-sdk-col {}
+
+.lp-sdk-label {
+  font-family: 'Space Grotesk', sans-serif;
   font-size: 0.78rem;
-  color: rgba(255,255,255,0.35);
-  line-height: 1.6;
+  font-weight: 600;
+  color: rgba(255,255,255,0.5);
+  margin-bottom: 12px;
+  letter-spacing: -0.01em;
 }
 
 .lp-arch-link {
@@ -776,15 +1044,21 @@ const landingStyles = `
   .lp-nav { padding: 0 24px; }
   .lp-nav-links a:not(.lp-nav-cta), .lp-dropdown { display: none; }
   .lp-hero { padding: 140px 24px 80px; }
-  .lp-hero h1 { font-size: 2.2rem; }
+  .lp-hero-grid { grid-template-columns: 1fr; gap: 40px; }
+  .lp-hero h1 { font-size: 2rem; }
   .lp-section { padding: 64px 24px; }
   .lp-stats-inner { grid-template-columns: 1fr 1fr; }
   .lp-stat { padding: 24px 0; }
-  .lp-product-grid { grid-template-columns: 1fr; }
-  .lp-network-grid { grid-template-columns: 1fr 1fr; }
+  .lp-product-grid, .lp-product-grid-3 { grid-template-columns: 1fr; }
+  .lp-sdk-grid { grid-template-columns: 1fr; }
+  .lp-pipeline { flex-direction: column; gap: 16px; }
+  .lp-pipeline-arrow { transform: rotate(90deg); margin: 0; }
   .lp-stack-item { flex: 1 1 100%; }
   .lp-footer { flex-direction: column; gap: 20px; text-align: center; }
   .lp-footer-left { flex-direction: column; gap: 4px; align-items: center; }
   .lp-footer-links { flex-wrap: wrap; justify-content: center; }
+  .lp-trust-line { flex-direction: column; gap: 8px; }
+  .lp-trust-sep { display: none; }
+  .lp-code-body { font-size: 0.7rem; }
 }
 `
