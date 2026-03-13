@@ -60,7 +60,7 @@ export default function Landing() {
             </p>
             <div className="lp-hero-actions lp-reveal">
               <Link to="/register" className="lp-btn-fill">Get started free</Link>
-              <a href="https://github.com/cane-ai/cane-eval" target="_blank" rel="noopener noreferrer" className="lp-btn-ghost">Star on GitHub</a>
+              <a href="https://github.com/colingfly/cane-eval" target="_blank" rel="noopener noreferrer" className="lp-btn-ghost">Star on GitHub</a>
             </div>
             <div className="lp-trust-line lp-reveal">
               <code>pip install cane-eval</code>
@@ -379,7 +379,7 @@ curl -H "Authorization: Bearer cane_xxx" \\
               <h2>Start with cane-eval. Scale with Cane.</h2>
               <p>cane-eval is our open-source eval engine. YAML test suites, LLM-as-Judge scoring, regression diffs, and failure mining. Use it standalone or connect it to the full Cane platform when you need orchestration and post-training.</p>
               <div className="lp-hero-actions" style={{ marginTop: 24 }}>
-                <a href="https://github.com/cane-ai/cane-eval" target="_blank" rel="noopener noreferrer" className="lp-btn-fill">View on GitHub</a>
+                <a href="https://github.com/colingfly/cane-eval" target="_blank" rel="noopener noreferrer" className="lp-btn-fill">View on GitHub</a>
                 <Link to="/guide" className="lp-btn-ghost">Read the docs</Link>
               </div>
             </div>
@@ -422,7 +422,7 @@ Overall: 87.3 avg | 10 passed | 1 warned | 1 failed`}</pre>
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
             <Link to="/register" className="lp-btn-fill">Get started free</Link>
-            <a href="https://github.com/cane-ai/cane-eval" target="_blank" rel="noopener noreferrer" className="lp-btn-ghost">Try cane-eval</a>
+            <a href="https://github.com/colingfly/cane-eval" target="_blank" rel="noopener noreferrer" className="lp-btn-ghost">Try cane-eval</a>
           </div>
         </div>
       </section>
@@ -435,7 +435,7 @@ Overall: 87.3 avg | 10 passed | 1 warned | 1 failed`}</pre>
           <a href="#post-training">Post-Training</a>
           <Link to="/guide">Docs</Link>
           <Link to="/marketplace">Marketplace</Link>
-          <a href="https://github.com/cane-ai/cane-eval" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <a href="https://github.com/colingfly/cane-eval" target="_blank" rel="noopener noreferrer">GitHub</a>
           <a href="mailto:hello@cane.fyi">Contact</a>
         </div>
       </footer>
