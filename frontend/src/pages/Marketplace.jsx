@@ -41,6 +41,29 @@ function ScoreBadge({ score, size = 'md' }) {
   )
 }
 
+function VerificationBadge({ level, size = 'md' }) {
+  if (!level || level === 'unverified') return null
+  const config = {
+    verified: { bg: 'rgba(34, 197, 94, 0.12)', color: '#22c55e', label: 'Verified' },
+    tested: { bg: 'rgba(234, 179, 8, 0.12)', color: '#eab308', label: 'Tested' },
+  }
+  const c = config[level]
+  if (!c) return null
+  const sm = size === 'sm'
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: sm ? 3 : 4,
+      padding: sm ? '2px 6px' : '3px 10px', borderRadius: 5,
+      background: c.bg, color: c.color,
+      fontWeight: 700, fontSize: sm ? '0.6rem' : '0.68rem',
+      textTransform: 'uppercase', letterSpacing: '0.04em',
+      fontFamily: 'var(--font-mono)',
+    }}>
+      <Shield size={sm ? 9 : 11} /> {c.label}
+    </span>
+  )
+}
+
 function FeaturedCard({ listing, onClick }) {
   const [hovered, setHovered] = useState(false)
   const tags = listing.tags || []
@@ -83,7 +106,10 @@ function FeaturedCard({ listing, onClick }) {
             by {listing.publisher_name}
           </div>
         </div>
-        <ScoreBadge score={listing.overall_score} size="lg" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <VerificationBadge level={listing.badge_level} />
+          <ScoreBadge score={listing.overall_score} size="lg" />
+        </div>
       </div>
 
       <div style={{
@@ -201,7 +227,10 @@ function ListingCard({ listing, onClick }) {
             by {listing.publisher_name}
           </div>
         </div>
-        <ScoreBadge score={listing.overall_score} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <VerificationBadge level={listing.badge_level} size="sm" />
+          <ScoreBadge score={listing.overall_score} />
+        </div>
       </div>
 
       <div style={{

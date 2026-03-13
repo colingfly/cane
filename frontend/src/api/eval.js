@@ -101,3 +101,6 @@ export const deleteRun = (envId, runId) => request(`/environments/${envId}/runs/
 
 // -- Webhook --
 export const testWebhook = (envId) => request(`/environments/${envId}/webhook/test`, { method: 'POST' })
+
+// -- External Agent Target --
+export const testTarget = (envId) => request(`/environments/${envId}/target/test`, { method: 'POST' })

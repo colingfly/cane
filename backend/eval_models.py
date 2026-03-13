@@ -40,6 +40,16 @@ class Environment(Base):
     webhook_url = Column(String(500), nullable=True, default="")
     webhook_headers = Column(Text, nullable=True, default="{}")
     webhook_enabled = Column(Boolean, default=False)
+
+    # External agent targeting (eval-as-a-service)
+    target_type = Column(String(20), default="internal")       # "internal" | "external"
+    target_url = Column(String(500), nullable=True, default="")
+    target_method = Column(String(10), default="POST")
+    target_headers = Column(Text, nullable=True, default="{}")
+    target_payload_template = Column(Text, nullable=True, default='{"message": "{{question}}"}')
+    target_response_path = Column(String(255), nullable=True, default="response")
+    is_public = Column(Boolean, default=False)                 # public eval suite for API access
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -140,6 +150,8 @@ class EvalRun(Base):
     overall_score = Column(Float, nullable=True)
     agent_prompt = Column(Text, nullable=True)       # snapshot
     criteria_snapshot = Column(Text, nullable=True)   # JSON snapshot
+    target_snapshot = Column(Text, nullable=True)    # JSON snapshot of target config
+    api_key_id = Column(String(36), nullable=True)   # if triggered via public API
     triggered_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

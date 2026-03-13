@@ -3,13 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   FlaskConical, ArrowLeft, Plus, Trash2, Check, X, Play, Bell,
   SlidersHorizontal, ListChecks, BarChart3, Settings, Sparkles, Wand2,
+  Globe, Zap,
 } from 'lucide-react'
 import {
   getEnvironment, updateEnvironment,
   addTestCase, updateTestCase, deleteTestCase,
   updateCriteria, addCustomRule, deleteCustomRule,
   getRuns, triggerRun, getRunDetail, deleteRun,
-  generateTestCases, testWebhook,
+  generateTestCases, testWebhook, testTarget,
 } from '../api/eval'
 import { getAgents } from '../api/client'
 
@@ -57,6 +58,17 @@ export default function EnvironmentDetail() {
   const [webhookTesting, setWebhookTesting] = useState(false)
   const [webhookTestResult, setWebhookTestResult] = useState(null)
 
+  // External agent target state
+  const [targetType, setTargetType] = useState('internal')
+  const [targetUrl, setTargetUrl] = useState('')
+  const [targetMethod, setTargetMethod] = useState('POST')
+  const [targetHeaders, setTargetHeaders] = useState('{}')
+  const [targetPayloadTemplate, setTargetPayloadTemplate] = useState('{"message": "{{question}}"}')
+  const [targetResponsePath, setTargetResponsePath] = useState('response')
+  const [isPublic, setIsPublic] = useState(false)
+  const [targetTesting, setTargetTesting] = useState(false)
+  const [targetTestResult, setTargetTestResult] = useState(null)
+
   // Run state
   const [running, setRunning] = useState(false)
   const [activeRunId, setActiveRunId] = useState(null)
@@ -97,6 +109,13 @@ export default function EnvironmentDetail() {
       setWebhookUrl(envRes.webhook_url || '')
       setWebhookHeaders(envRes.webhook_headers || '{}')
       setWebhookEnabled(envRes.webhook_enabled || false)
+      setTargetType(envRes.target_type || 'internal')
+      setTargetUrl(envRes.target_url || '')
+      setTargetMethod(envRes.target_method || 'POST')
+      setTargetHeaders(envRes.target_headers || '{}')
+      setTargetPayloadTemplate(envRes.target_payload_template || '{"message": "{{question}}"}')
+      setTargetResponsePath(envRes.target_response_path || 'response')
+      setIsPublic(envRes.is_public || false)
     } catch (err) {
       console.error(err)
     } finally {
@@ -114,6 +133,13 @@ export default function EnvironmentDetail() {
       if (webhookUrl !== (env.webhook_url || '')) data.webhook_url = webhookUrl
       if (webhookHeaders !== (env.webhook_headers || '{}')) data.webhook_headers = webhookHeaders
       if (webhookEnabled !== (env.webhook_enabled || false)) data.webhook_enabled = webhookEnabled
+      if (targetType !== (env.target_type || 'internal')) data.target_type = targetType
+      if (targetUrl !== (env.target_url || '')) data.target_url = targetUrl
+      if (targetMethod !== (env.target_method || 'POST')) data.target_method = targetMethod
+      if (targetHeaders !== (env.target_headers || '{}')) data.target_headers = targetHeaders
+      if (targetPayloadTemplate !== (env.target_payload_template || '{"message": "{{question}}"}')) data.target_payload_template = targetPayloadTemplate
+      if (targetResponsePath !== (env.target_response_path || 'response')) data.target_response_path = targetResponsePath
+      if (isPublic !== (env.is_public || false)) data.is_public = isPublic
       if (Object.keys(data).length > 0) {
         const updated = await updateEnvironment(envId, data)
         setEnv(updated)
@@ -359,6 +385,159 @@ export default function EnvironmentDetail() {
           >
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
+
+          {/* ─── Agent Target ─── */}
+          <div style={{ marginTop: 32, borderTop: '1px solid var(--border)', paddingTop: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Globe size={16} style={{ color: 'var(--cane-600)' }} />
+                  Agent Target
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                  Evaluate a Cane agent or any external agent via HTTP endpoint.
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', padding: '8px 16px', borderRadius: 8, border: targetType === 'internal' ? '2px solid var(--cane-600)' : '1px solid var(--border)', background: targetType === 'internal' ? 'rgba(37, 99, 235, 0.08)' : 'transparent' }}>
+                <input type="radio" name="targetType" checked={targetType === 'internal'} onChange={() => setTargetType('internal')} style={{ display: 'none' }} />
+                <Zap size={14} />
+                <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>Cane Agent</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', padding: '8px 16px', borderRadius: 8, border: targetType === 'external' ? '2px solid var(--cane-600)' : '1px solid var(--border)', background: targetType === 'external' ? 'rgba(37, 99, 235, 0.08)' : 'transparent' }}>
+                <input type="radio" name="targetType" checked={targetType === 'external'} onChange={() => setTargetType('external')} style={{ display: 'none' }} />
+                <Globe size={14} />
+                <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>External Agent (HTTP)</span>
+              </label>
+            </div>
+
+            {targetType === 'external' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12 }}>
+                  <div className="form-group">
+                    <label>Endpoint URL</label>
+                    <input
+                      className="form-input"
+                      value={targetUrl}
+                      onChange={e => { setTargetUrl(e.target.value); setTargetTestResult(null) }}
+                      placeholder="https://api.example.com/v1/chat"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Method</label>
+                    <select className="form-input" value={targetMethod} onChange={e => setTargetMethod(e.target.value)} style={{ width: 100 }}>
+                      <option value="POST">POST</option>
+                      <option value="GET">GET</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Auth Headers (JSON)</label>
+                  <textarea
+                    className="form-input"
+                    value={targetHeaders}
+                    onChange={e => setTargetHeaders(e.target.value)}
+                    placeholder='{"Authorization": "Bearer your-api-key"}'
+                    rows={2}
+                    style={{ fontFamily: 'monospace', fontSize: '0.82rem' }}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Payload Template</label>
+                  <textarea
+                    className="form-input"
+                    value={targetPayloadTemplate}
+                    onChange={e => setTargetPayloadTemplate(e.target.value)}
+                    rows={3}
+                    style={{ fontFamily: 'monospace', fontSize: '0.82rem' }}
+                  />
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
+                    Use {'{{question}}'} as the placeholder for the test case question.
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Response Path</label>
+                  <input
+                    className="form-input"
+                    value={targetResponsePath}
+                    onChange={e => setTargetResponsePath(e.target.value)}
+                    placeholder="response"
+                  />
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
+                    Dot-notation path to extract the answer from the JSON response. Example: data.choices.0.message.content
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={async () => {
+                      setTargetTesting(true)
+                      setTargetTestResult(null)
+                      try {
+                        await updateEnvironment(envId, {
+                          target_type: targetType,
+                          target_url: targetUrl,
+                          target_method: targetMethod,
+                          target_headers: targetHeaders,
+                          target_payload_template: targetPayloadTemplate,
+                          target_response_path: targetResponsePath,
+                        })
+                        const res = await testTarget(envId)
+                        setTargetTestResult({ ok: true, answer: res.extracted_answer, time: res.response_time_ms })
+                      } catch (err) {
+                        setTargetTestResult({ ok: false, error: err.message })
+                      } finally {
+                        setTargetTesting(false)
+                      }
+                    }}
+                    disabled={targetTesting || !targetUrl.trim()}
+                    style={{ fontSize: '0.82rem' }}
+                  >
+                    {targetTesting ? 'Testing...' : 'Test Connection'}
+                  </button>
+                  {targetTestResult && (
+                    <span style={{
+                      fontSize: '0.82rem',
+                      color: targetTestResult.ok ? '#16a34a' : '#dc2626',
+                      fontWeight: 600,
+                    }}>
+                      {targetTestResult.ok
+                        ? `Connected (${targetTestResult.time}ms)`
+                        : `Failed: ${targetTestResult.error}`
+                      }
+                    </span>
+                  )}
+                </div>
+                {targetTestResult?.ok && targetTestResult.answer && (
+                  <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: 8, padding: 12, fontSize: '0.82rem' }}>
+                    <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--text-muted)' }}>Extracted Response:</div>
+                    <div style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                      {targetTestResult.answer}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Public eval suite toggle */}
+            <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={isPublic}
+                onChange={e => setIsPublic(e.target.checked)}
+                style={{ width: 16, height: 16 }}
+                id="is-public"
+              />
+              <label htmlFor="is-public" style={{ fontSize: '0.85rem', cursor: 'pointer' }}>
+                <span style={{ fontWeight: 600 }}>Public eval suite</span>
+                <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
+                  Allow anyone with an API key to run evaluations against this suite
+                </span>
+              </label>
+            </div>
+          </div>
 
           {/* ─── Webhook Notifications ─── */}
           <div style={{ marginTop: 32, borderTop: '1px solid var(--border)', paddingTop: 24 }}>

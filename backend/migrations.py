@@ -27,6 +27,9 @@ def run_all():
     _migrate_orchestrator_mode_column()
     _migrate_external_agents_table()
     _migrate_environment_webhook_columns()
+    _migrate_eval_target_columns()
+    _migrate_eval_run_api_columns()
+    _migrate_marketplace_badge_columns()
 
 
 def _migrate_agent_columns():
@@ -690,3 +693,77 @@ def _migrate_environment_webhook_columns():
             print("  [DB] Environment webhook columns already present")
     except Exception as e:
         print(f"  [DB] Environment webhook migration skipped: {e}")
+
+
+def _migrate_eval_target_columns():
+    """Add external agent target columns to environments table."""
+    insp = inspect(engine)
+    try:
+        cols = {c["name"] for c in insp.get_columns("environments")}
+        target_cols = {
+            "target_type": "ALTER TABLE environments ADD COLUMN target_type VARCHAR(20) DEFAULT 'internal'",
+            "target_url": "ALTER TABLE environments ADD COLUMN target_url VARCHAR(500) NULL DEFAULT ''",
+            "target_method": "ALTER TABLE environments ADD COLUMN target_method VARCHAR(10) DEFAULT 'POST'",
+            "target_headers": "ALTER TABLE environments ADD COLUMN target_headers TEXT NULL",
+            "target_payload_template": "ALTER TABLE environments ADD COLUMN target_payload_template TEXT NULL",
+            "target_response_path": "ALTER TABLE environments ADD COLUMN target_response_path VARCHAR(255) DEFAULT 'response'",
+            "is_public": "ALTER TABLE environments ADD COLUMN is_public TINYINT(1) DEFAULT 0",
+        }
+        added = []
+        for col_name, sql in target_cols.items():
+            if col_name not in cols:
+                with engine.begin() as conn:
+                    conn.execute(text(sql))
+                added.append(col_name)
+        if added:
+            print(f"  [DB] Eval target columns added: {', '.join(added)}")
+        else:
+            print("  [DB] Eval target columns already present")
+    except Exception as e:
+        print(f"  [DB] Eval target migration skipped: {e}")
+
+
+def _migrate_eval_run_api_columns():
+    """Add target_snapshot and api_key_id columns to eval_runs table."""
+    insp = inspect(engine)
+    try:
+        cols = {c["name"] for c in insp.get_columns("eval_runs")}
+        run_cols = {
+            "target_snapshot": "ALTER TABLE eval_runs ADD COLUMN target_snapshot TEXT NULL",
+            "api_key_id": "ALTER TABLE eval_runs ADD COLUMN api_key_id VARCHAR(36) NULL",
+        }
+        added = []
+        for col_name, sql in run_cols.items():
+            if col_name not in cols:
+                with engine.begin() as conn:
+                    conn.execute(text(sql))
+                added.append(col_name)
+        if added:
+            print(f"  [DB] Eval run API columns added: {', '.join(added)}")
+        else:
+            print("  [DB] Eval run API columns already present")
+    except Exception as e:
+        print(f"  [DB] Eval run API migration skipped: {e}")
+
+
+def _migrate_marketplace_badge_columns():
+    """Add badge columns to marketplace_listings table."""
+    insp = inspect(engine)
+    try:
+        cols = {c["name"] for c in insp.get_columns("marketplace_listings")}
+        badge_cols = {
+            "badge_level": "ALTER TABLE marketplace_listings ADD COLUMN badge_level VARCHAR(20) DEFAULT 'unverified'",
+            "badge_updated_at": "ALTER TABLE marketplace_listings ADD COLUMN badge_updated_at DATETIME NULL",
+        }
+        added = []
+        for col_name, sql in badge_cols.items():
+            if col_name not in cols:
+                with engine.begin() as conn:
+                    conn.execute(text(sql))
+                added.append(col_name)
+        if added:
+            print(f"  [DB] Marketplace badge columns added: {', '.join(added)}")
+        else:
+            print("  [DB] Marketplace badge columns already present")
+    except Exception as e:
+        print(f"  [DB] Marketplace badge migration skipped: {e}")

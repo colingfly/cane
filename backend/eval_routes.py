@@ -61,6 +61,13 @@ def _serialize_env(env: Environment, include_details=False) -> dict:
         "webhook_url": env.webhook_url or "",
         "webhook_headers": env.webhook_headers or "{}",
         "webhook_enabled": bool(env.webhook_enabled),
+        "target_type": getattr(env, "target_type", "internal") or "internal",
+        "target_url": getattr(env, "target_url", "") or "",
+        "target_method": getattr(env, "target_method", "POST") or "POST",
+        "target_headers": getattr(env, "target_headers", "{}") or "{}",
+        "target_payload_template": getattr(env, "target_payload_template", '{"message": "{{question}}"}') or '{"message": "{{question}}"}',
+        "target_response_path": getattr(env, "target_response_path", "response") or "response",
+        "is_public": bool(getattr(env, "is_public", False)),
         "created_at": env.created_at.isoformat() if env.created_at else None,
         "updated_at": env.updated_at.isoformat() if env.updated_at else None,
     }
@@ -209,6 +216,13 @@ def update_environment(
     webhook_url: str = None,
     webhook_headers: str = None,
     webhook_enabled: bool = None,
+    target_type: str = None,
+    target_url: str = None,
+    target_method: str = None,
+    target_headers: str = None,
+    target_payload_template: str = None,
+    target_response_path: str = None,
+    is_public: bool = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -225,6 +239,20 @@ def update_environment(
         env.webhook_headers = webhook_headers.strip()
     if webhook_enabled is not None:
         env.webhook_enabled = webhook_enabled
+    if target_type is not None:
+        env.target_type = target_type.strip()
+    if target_url is not None:
+        env.target_url = target_url.strip()
+    if target_method is not None:
+        env.target_method = target_method.strip().upper()
+    if target_headers is not None:
+        env.target_headers = target_headers.strip()
+    if target_payload_template is not None:
+        env.target_payload_template = target_payload_template
+    if target_response_path is not None:
+        env.target_response_path = target_response_path.strip()
+    if is_public is not None:
+        env.is_public = is_public
     if workspace_id is not None:
         ws = db.query(Workspace).filter(
             Workspace.id == workspace_id,
@@ -667,9 +695,21 @@ def trigger_run(
     if active:
         raise HTTPException(status.HTTP_409_CONFLICT, "An evaluation is already running for this environment")
 
-    # Snapshot the agent prompt
-    ws = db.query(Workspace).filter(Workspace.id == env.workspace_id).first()
-    agent_prompt = ws.system_prompt if ws else ""
+    # Snapshot the agent prompt (skip for external targets)
+    is_external = getattr(env, "target_type", "internal") == "external" and getattr(env, "target_url", "")
+    if is_external:
+        agent_prompt = "(external agent)"
+        target_snapshot = json.dumps({
+            "target_type": "external",
+            "target_url": env.target_url,
+            "target_method": getattr(env, "target_method", "POST"),
+            "target_payload_template": getattr(env, "target_payload_template", '{"message": "{{question}}"}'),
+            "target_response_path": getattr(env, "target_response_path", "response"),
+        })
+    else:
+        ws = db.query(Workspace).filter(Workspace.id == env.workspace_id).first()
+        agent_prompt = ws.system_prompt if ws else ""
+        target_snapshot = None
 
     # Snapshot criteria
     criteria_snapshot = json.dumps([
@@ -685,6 +725,7 @@ def trigger_run(
         total_cases=len(env.test_cases),
         agent_prompt=agent_prompt,
         criteria_snapshot=criteria_snapshot,
+        target_snapshot=target_snapshot,
         triggered_by=user.id,
     )
     db.add(run)
@@ -831,3 +872,51 @@ def test_webhook(
             return {"ok": True, "status_code": resp.status}
     except Exception as e:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Webhook failed: {str(e)[:200]}")
+
+
+# ═══════════════════════════════════════════
+#  EXTERNAL AGENT TARGET TEST
+# ═══════════════════════════════════════════
+
+@router.post("/{env_id}/target/test")
+def test_target(
+    env_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Send a sample question to the external agent endpoint to verify connectivity."""
+    env = _get_env(env_id, user.tenant_id, db)
+
+    target_url = getattr(env, "target_url", "") or ""
+    if not target_url:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No target URL configured")
+
+    target_method = getattr(env, "target_method", "POST") or "POST"
+    target_headers = getattr(env, "target_headers", "{}") or "{}"
+    target_payload_template = getattr(env, "target_payload_template", '{"message": "{{question}}"}') or '{"message": "{{question}}"}'
+    target_response_path = getattr(env, "target_response_path", "response") or "response"
+
+    sample_question = "What is 2 + 2? (This is a connectivity test from Cane.)"
+
+    from eval_engine import _get_external_agent_answer
+    result = _get_external_agent_answer(
+        question=sample_question,
+        target_url=target_url,
+        target_method=target_method,
+        target_headers=target_headers,
+        target_payload_template=target_payload_template,
+        target_response_path=target_response_path,
+    )
+
+    answer = result.get("answer", "")
+    is_error = answer.startswith("Error calling external agent:")
+
+    if is_error:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, answer)
+
+    return {
+        "ok": True,
+        "sample_question": sample_question,
+        "extracted_answer": answer[:500],
+        "response_time_ms": result.get("response_time_ms", 0),
+    }

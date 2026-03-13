@@ -118,6 +118,8 @@ from routes.memory_routes import router as memory_router
 from conversation_routes import router as conversation_router
 from routes.collaboration import router as collaboration_router
 from routes.web_tools import router as web_tools_router
+from routes.eval_api import router as eval_api_router
+from routes.badges import router as badges_router
 
 app.include_router(auth_router)
 app.include_router(documents_router)
@@ -144,6 +146,8 @@ app.include_router(schedule_router)
 app.include_router(memory_router)
 app.include_router(conversation_router)
 app.include_router(web_tools_router)
+app.include_router(eval_api_router)
+app.include_router(badges_router)
 
 
 # ── Background sync loop for Live Connectors ──

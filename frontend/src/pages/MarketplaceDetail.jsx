@@ -268,8 +268,21 @@ export default function MarketplaceDetail() {
             }}>
               Performance Card
             </span>
+            {listing.badge_level && listing.badge_level !== 'unverified' && (
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '2px 8px', borderRadius: 5,
+                background: listing.badge_level === 'verified' ? 'rgba(34, 197, 94, 0.12)' : 'rgba(234, 179, 8, 0.12)',
+                color: listing.badge_level === 'verified' ? '#22c55e' : '#eab308',
+                fontWeight: 700, fontSize: '0.65rem', textTransform: 'uppercase',
+                letterSpacing: '0.04em', fontFamily: 'var(--font-mono)',
+              }}>
+                <Shield size={10} />
+                {listing.badge_level === 'verified' ? 'Cane Verified' : 'Cane Tested'}
+              </span>
+            )}
             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
-              Verified by eval · {evalData.total_cases || 0} test cases
+              {evalData.total_cases || 0} test cases
             </span>
           </div>
 

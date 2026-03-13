@@ -111,6 +111,87 @@ def _get_agent_answer(question: str, workspace_id: str, tenant_id: str, system_p
     }
 
 
+# ─── External agent answer (eval-as-a-service) ───
+
+def _extract_by_path(data, path: str):
+    """Extract a value from a nested dict using dot notation: 'data.response.text'"""
+    if not path:
+        return str(data) if data else ""
+    parts = path.split(".")
+    current = data
+    for part in parts:
+        if isinstance(current, dict):
+            current = current.get(part, "")
+        else:
+            return str(current)
+    return str(current) if current else ""
+
+
+def _get_external_agent_answer(question: str, target_url: str, target_method: str,
+                                target_headers: str, target_payload_template: str,
+                                target_response_path: str) -> dict:
+    """
+    Query an external agent via HTTP endpoint.
+    Replaces {{question}} in the payload template and extracts the answer
+    from the response using dot-notation path.
+    Returns {answer, sources, response_time_ms} (same shape as _get_agent_answer).
+    """
+    start = time.time()
+
+    try:
+        # Build payload from template
+        payload_str = target_payload_template.replace("{{question}}", question)
+        payload_bytes = payload_str.encode("utf-8")
+
+        # Parse headers
+        try:
+            headers = json.loads(target_headers) if target_headers else {}
+        except (json.JSONDecodeError, TypeError):
+            headers = {}
+        headers.setdefault("Content-Type", "application/json")
+
+        method = (target_method or "POST").upper()
+
+        req = urllib.request.Request(
+            target_url,
+            data=payload_bytes if method == "POST" else None,
+            headers=headers,
+            method=method,
+        )
+
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            body = resp.read().decode("utf-8")
+
+        # Parse response and extract answer
+        try:
+            resp_data = json.loads(body)
+            answer = _extract_by_path(resp_data, target_response_path)
+        except json.JSONDecodeError:
+            # If response is plain text, use it directly
+            answer = body.strip()
+
+        if not answer:
+            answer = "(External agent returned an empty response)"
+
+        elapsed = int((time.time() - start) * 1000)
+        print(f"  [Eval] External agent responded in {elapsed}ms ({len(answer)} chars)")
+
+        return {
+            "answer": answer,
+            "sources": [],
+            "response_time_ms": elapsed,
+        }
+
+    except Exception as e:
+        elapsed = int((time.time() - start) * 1000)
+        print(f"  [Eval] External agent error: {e}")
+        return {
+            "answer": f"Error calling external agent: {str(e)}",
+            "sources": [],
+            "response_time_ms": elapsed,
+        }
+
+
 # ─── Judge scoring ───
 
 JUDGE_SYSTEM = """You are an expert evaluator assessing an AI agent's response quality.
@@ -266,6 +347,20 @@ def execute_eval_run(run_id: str, db: Session):
     ).all()
     custom_rules = [r.rule_text for r in rules]
 
+    # Snapshot target config for reproducibility
+    is_external = getattr(env, "target_type", "internal") == "external" and getattr(env, "target_url", "")
+    if is_external:
+        run.target_snapshot = json.dumps({
+            "target_type": "external",
+            "target_url": env.target_url,
+            "target_method": getattr(env, "target_method", "POST"),
+            "target_payload_template": getattr(env, "target_payload_template", '{"message": "{{question}}"}'),
+            "target_response_path": getattr(env, "target_response_path", "response"),
+        })
+        print(f"  [Eval] Target: external -> {env.target_url}")
+    else:
+        print(f"  [Eval] Target: internal agent (workspace={workspace_id})")
+
     # Mark running
     run.status = "running"
     run.started_at = datetime.utcnow()
@@ -277,14 +372,24 @@ def execute_eval_run(run_id: str, db: Session):
         for tc in test_cases:
             print(f"  [Eval] Running test case: {tc.question[:60]}...")
 
-            # Step 1: Get agent answer
+            # Step 1: Get agent answer (internal or external)
             try:
-                agent_result = _get_agent_answer(
-                    question=tc.question,
-                    workspace_id=workspace_id,
-                    tenant_id=run.tenant_id,
-                    system_prompt=run.agent_prompt or "",
-                )
+                if is_external:
+                    agent_result = _get_external_agent_answer(
+                        question=tc.question,
+                        target_url=env.target_url,
+                        target_method=getattr(env, "target_method", "POST"),
+                        target_headers=getattr(env, "target_headers", "{}"),
+                        target_payload_template=getattr(env, "target_payload_template", '{"message": "{{question}}"}'),
+                        target_response_path=getattr(env, "target_response_path", "response"),
+                    )
+                else:
+                    agent_result = _get_agent_answer(
+                        question=tc.question,
+                        workspace_id=workspace_id,
+                        tenant_id=run.tenant_id,
+                        system_prompt=run.agent_prompt or "",
+                    )
             except Exception as e:
                 print(f"  [Eval] Agent error: {e}")
                 agent_result = {

@@ -82,6 +82,10 @@ class MarketplaceListing(Base):
     verify_count = Column(Integer, default=0)
     avg_verify_score = Column(Float, nullable=True)          # avg re-verify across all clones
 
+    # ─── Verification badge ───
+    badge_level = Column(String(20), default="unverified")   # "verified" | "tested" | "unverified"
+    badge_updated_at = Column(DateTime, nullable=True)
+
     # ─── Status ───
     status = Column(String(20), default="active")            # "active" | "delisted"
     is_featured = Column(Boolean, default=False)

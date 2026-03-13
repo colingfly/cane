@@ -48,6 +48,7 @@ def _listing_to_dict(l: MarketplaceListing, detail=False) -> dict:
         "publisher_name": l.publisher_name,
         "is_featured": l.is_featured,
         "tool_count": l.tool_count or 0,
+        "badge_level": getattr(l, "badge_level", "unverified") or "unverified",
         "created_at": l.created_at.isoformat() if l.created_at else None,
     }
 
@@ -296,6 +297,8 @@ def publish_agent(
         test_case_count=test_case_count,
         tools_snapshot=tools_snapshot,
         tool_count=len(agent_tools),
+        badge_level="verified" if overall_score and overall_score >= 80 else ("tested" if overall_score and overall_score >= 60 else "unverified"),
+        badge_updated_at=datetime.utcnow() if overall_score else None,
     )
 
     db.add(listing)

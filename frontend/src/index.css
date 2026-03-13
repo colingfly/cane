@@ -113,7 +113,7 @@ a:hover { color: #fff; }
 
 .sidebar-brand {
   padding: 0 24px 32px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid rgba(37, 99, 235, 0.2);
   margin-bottom: 8px;
 }
 
@@ -123,6 +123,10 @@ a:hover { color: #fff; }
   font-size: 1.5rem;
   letter-spacing: -0.02em;
   color: var(--cane-100);
+  background: linear-gradient(135deg, #ffffff 60%, #60a5fa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .sidebar-brand .tenant-name {
@@ -161,6 +165,8 @@ a:hover { color: #fff; }
 .sidebar-nav a.active {
   background: rgba(37,99,235,0.12);
   color: #fff;
+  border-left: 2px solid #2563eb;
+  padding-left: 10px;
 }
 
 .sidebar-nav a svg {
@@ -240,7 +246,7 @@ a:hover { color: #fff; }
 }
 
 .card:hover {
-  border-color: var(--border-hover);
+  border-color: rgba(37, 99, 235, 0.2);
   box-shadow: var(--shadow);
 }
 
@@ -729,8 +735,8 @@ select.search-mode-btn optgroup {
 }
 
 .stat-card:hover {
-  border-color: var(--border-hover);
-  box-shadow: var(--shadow);
+  border-color: rgba(37, 99, 235, 0.2);
+  box-shadow: 0 2px 12px rgba(37, 99, 235, 0.08);
 }
 
 .stat-card .stat-value {
