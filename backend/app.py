@@ -126,6 +126,7 @@ from finetune_routes import router as finetune_router
 from routes.eval_analytics import router as eval_analytics_router
 from routes.agent_versions import router as agent_versions_router
 from routes.execution_tracing import router as execution_tracing_router
+from routes.rca_routes import router as rca_router
 
 app.include_router(auth_router)
 app.include_router(documents_router)
@@ -160,6 +161,7 @@ app.include_router(finetune_router)
 app.include_router(eval_analytics_router)
 app.include_router(agent_versions_router)
 app.include_router(execution_tracing_router)
+app.include_router(rca_router)
 
 
 # ── Background sync loop for Live Connectors ──

@@ -4,7 +4,7 @@ import {
   FlaskConical, ArrowLeft, Plus, Trash2, Check, X, Play, Bell,
   SlidersHorizontal, ListChecks, BarChart3, Settings, Sparkles, Wand2,
   Globe, Zap, Download, Brain, Loader2, TrendingUp, TrendingDown, AlertTriangle,
-  Activity, Target, GitBranch, Clock, ToggleLeft, ToggleRight,
+  Activity, Target, GitBranch, Clock, ToggleLeft, ToggleRight, Search,
 } from 'lucide-react'
 import {
   getEnvironment, updateEnvironment,
@@ -19,6 +19,7 @@ import {
   getFailurePatterns, getConsistencyAnalysis, getCriteriaBreakdown,
   triggerMining, getMiningJobs, getMiningJobDetail, exportMinedData, deleteMiningJob,
   getEvalSchedule, saveEvalSchedule, deleteEvalSchedule, triggerScheduleNow,
+  runBatchRCA, runTargetedRCA,
 } from '../api/eval'
 import { getAgents } from '../api/client'
 
@@ -124,6 +125,13 @@ export default function EnvironmentDetail() {
   const [consistency, setConsistency] = useState(null)
   const [criteriaBreakdown, setCriteriaBreakdown] = useState(null)
   const [analyticsLoading, setAnalyticsLoading] = useState(false)
+
+  // Root Cause Analysis state
+  const [rcaResult, setRcaResult] = useState(null)
+  const [rcaLoading, setRcaLoading] = useState(false)
+  const [rcaMaxScore, setRcaMaxScore] = useState(60)
+  const [rcaTargeted, setRcaTargeted] = useState(null)
+  const [rcaTargetedLoading, setRcaTargetedLoading] = useState(null)
 
   // Run state
   const [running, setRunning] = useState(false)
@@ -1239,7 +1247,26 @@ export default function EnvironmentDetail() {
                           </div>
                         )}
 
-                        <div style={{ fontSize: '0.58rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Score Breakdown</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                          <div style={{ fontSize: '0.58rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Score Breakdown</div>
+                          {r.status === 'fail' && (
+                            <button className="btn btn-ghost btn-sm"
+                              disabled={rcaTargetedLoading === r.id}
+                              onClick={async (e) => {
+                                e.stopPropagation()
+                                setRcaTargetedLoading(r.id)
+                                try {
+                                  const res = await runTargetedRCA(envId, r.id)
+                                  setRcaTargeted(res)
+                                } catch (err) { console.error(err) }
+                                finally { setRcaTargetedLoading(null) }
+                              }}
+                              style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: 4 }}>
+                              {rcaTargetedLoading === r.id ? <Loader2 size={12} className="spin" /> : <Search size={12} />}
+                              Deep Analyze
+                            </button>
+                          )}
+                        </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                           {Object.entries(r.criteria_scores || {}).map(([key, val]) => {
                             const score = typeof val === 'object' ? val.score : val
@@ -1261,6 +1288,40 @@ export default function EnvironmentDetail() {
                             )
                           })}
                         </div>
+
+                        {/* Targeted RCA Result */}
+                        {rcaTargeted && rcaTargeted.result_id === r.id && (
+                          <div style={{ marginTop: 14, padding: 14, background: 'rgba(37,99,235,0.03)', borderRadius: 8, border: '1px solid rgba(37,99,235,0.1)' }}>
+                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Root Cause Analysis</div>
+                            <div style={{ fontSize: '0.78rem', lineHeight: 1.6, marginBottom: 10, color: 'var(--text-primary)' }}>{rcaTargeted.diagnosis}</div>
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                              <span style={{ fontSize: '0.65rem', padding: '2px 8px', borderRadius: 99, background: 'rgba(37,99,235,0.08)', color: '#2563eb', fontWeight: 600 }}>
+                                {(rcaTargeted.likely_cause || '').replace(/_/g, ' ')}
+                              </span>
+                              {rcaTargeted.confidence != null && (
+                                <span style={{ fontSize: '0.65rem', padding: '2px 8px', borderRadius: 99, background: 'rgba(107,114,128,0.08)', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                  {rcaTargeted.confidence}% confidence
+                                </span>
+                              )}
+                            </div>
+                            {rcaTargeted.fix_actions?.length > 0 && (
+                              <div>
+                                <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#16a34a', marginBottom: 4 }}>Fix Actions:</div>
+                                {rcaTargeted.fix_actions.map((a, j) => (
+                                  <div key={j} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: '0.75rem' }}>
+                                    <span style={{
+                                      fontSize: '0.6rem', fontWeight: 700, padding: '1px 6px', borderRadius: 4, textTransform: 'uppercase',
+                                      background: a.priority === 'high' ? 'rgba(220,38,38,0.08)' : a.priority === 'medium' ? 'rgba(217,119,6,0.08)' : 'rgba(37,99,235,0.08)',
+                                      color: a.priority === 'high' ? '#dc2626' : a.priority === 'medium' ? '#d97706' : '#2563eb',
+                                    }}>{a.priority}</span>
+                                    <span style={{ color: 'var(--text-secondary)' }}>{a.action}</span>
+                                    {a.effort && <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>({a.effort})</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1362,6 +1423,7 @@ export default function EnvironmentDetail() {
               { id: 'failures', label: 'Failure Patterns', icon: TrendingDown },
               { id: 'consistency', label: 'Consistency', icon: GitBranch },
               { id: 'criteria', label: 'Criteria Deep Dive', icon: SlidersHorizontal },
+              { id: 'rca', label: 'Root Cause', icon: Search },
             ].map(v => (
               <button key={v.id} className={`btn btn-sm ${analyticsView === v.id ? 'btn-primary' : 'btn-ghost'}`}
                 onClick={async () => {
@@ -1386,6 +1448,8 @@ export default function EnvironmentDetail() {
                     } else if (v.id === 'criteria') {
                       const c = await getCriteriaBreakdown(envId)
                       setCriteriaBreakdown(c)
+                    } else if (v.id === 'rca') {
+                      // Don't auto-load, user triggers manually
                     }
                   } catch (err) { console.error(err) }
                   finally { setAnalyticsLoading(false) }
@@ -1717,6 +1781,145 @@ export default function EnvironmentDetail() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Root Cause Analysis View */}
+              {analyticsView === 'rca' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {/* RCA Trigger Card */}
+                  <div className="card" style={{ padding: 20 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                      <div>
+                        <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0 }}>Root Cause Analysis</h4>
+                        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                          AI analyzes your failing eval results to find patterns and actionable root causes.
+                        </p>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Analyze failures scoring below:</label>
+                      <input type="number" min={0} max={100} value={rcaMaxScore}
+                        onChange={e => setRcaMaxScore(Number(e.target.value))}
+                        style={{ width: 60, padding: '6px 8px', fontSize: '0.82rem', borderRadius: 6, border: '1px solid var(--border-light)', background: 'var(--bg-secondary)' }}
+                      />
+                      <button className="btn btn-primary btn-sm" disabled={rcaLoading}
+                        onClick={async () => {
+                          setRcaLoading(true)
+                          setRcaResult(null)
+                          try {
+                            const res = await runBatchRCA(envId, rcaMaxScore)
+                            setRcaResult(res)
+                          } catch (err) { console.error(err); alert(err.message) }
+                          finally { setRcaLoading(false) }
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {rcaLoading ? <Loader2 size={14} className="spin" /> : <Search size={14} />}
+                        {rcaLoading ? 'Analyzing...' : 'Run Analysis'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* RCA Results */}
+                  {rcaResult && (
+                    <>
+                      {/* Summary */}
+                      <div className="card" style={{ padding: 20, borderLeft: '3px solid #2563eb' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                          <h4 style={{ fontSize: '0.85rem', fontWeight: 700, margin: 0, color: '#2563eb' }}>Analysis Summary</h4>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 99, background: 'rgba(37,99,235,0.08)', color: '#2563eb', fontWeight: 600 }}>
+                              {rcaResult.total_analyzed} failures analyzed
+                            </span>
+                            {rcaResult.avg_failure_score != null && (
+                              <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 99, background: 'rgba(220,38,38,0.08)', color: '#dc2626', fontWeight: 600 }}>
+                                avg score: {rcaResult.avg_failure_score}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <p style={{ fontSize: '0.82rem', lineHeight: 1.6, margin: '0 0 12px', color: 'var(--text-primary)' }}>{rcaResult.summary}</p>
+                        {rcaResult.top_recommendation && (
+                          <div style={{ padding: 12, background: 'rgba(37,99,235,0.04)', borderRadius: 8, border: '1px solid rgba(37,99,235,0.1)' }}>
+                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Top Recommendation</div>
+                            <div style={{ fontSize: '0.82rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>{rcaResult.top_recommendation}</div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Root Causes */}
+                      {rcaResult.root_causes?.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                          {rcaResult.root_causes.map((rc, i) => {
+                            const severityColors = { critical: '#dc2626', high: '#ea580c', medium: '#d97706', low: '#2563eb' }
+                            const categoryLabels = {
+                              knowledge_gap: 'Knowledge Gap', prompt_issue: 'Prompt Issue',
+                              source_gap: 'Source Gap', behavior_pattern: 'Behavior Pattern',
+                              data_quality: 'Data Quality',
+                            }
+                            return (
+                              <div key={i} className="card" style={{ padding: 20, borderLeft: `3px solid ${severityColors[rc.severity] || '#6b7280'}` }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                                  <h4 style={{ fontSize: '0.85rem', fontWeight: 700, margin: 0 }}>{rc.title}</h4>
+                                  <div style={{ display: 'flex', gap: 6 }}>
+                                    <span style={{
+                                      fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px', borderRadius: 99, textTransform: 'uppercase',
+                                      background: `${severityColors[rc.severity] || '#6b7280'}15`,
+                                      color: severityColors[rc.severity] || '#6b7280',
+                                    }}>{rc.severity}</span>
+                                    <span style={{
+                                      fontSize: '0.65rem', fontWeight: 600, padding: '2px 8px', borderRadius: 99,
+                                      background: 'rgba(107,114,128,0.08)', color: 'var(--text-muted)',
+                                    }}>{categoryLabels[rc.category] || rc.category}</span>
+                                  </div>
+                                </div>
+                                <p style={{ fontSize: '0.8rem', lineHeight: 1.6, margin: '0 0 10px', color: 'var(--text-secondary)' }}>{rc.description}</p>
+
+                                {rc.evidence?.length > 0 && (
+                                  <div style={{ marginBottom: 10 }}>
+                                    <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>Evidence:</div>
+                                    {rc.evidence.map((e, j) => (
+                                      <div key={j} style={{ fontSize: '0.75rem', color: 'var(--text-muted)', padding: '2px 0', paddingLeft: 12, borderLeft: '2px solid var(--border-light)' }}>{e}</div>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {rc.recommendation && (
+                                  <div style={{ padding: 10, background: 'rgba(22,163,74,0.04)', borderRadius: 6, border: '1px solid rgba(22,163,74,0.1)' }}>
+                                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#16a34a', marginBottom: 2 }}>Recommendation</div>
+                                    <div style={{ fontSize: '0.78rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>{rc.recommendation}</div>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+
+                      {rcaResult.total_analyzed === 0 && (
+                        <div className="card" style={{ padding: 32, textAlign: 'center' }}>
+                          <Check size={24} style={{ color: '#16a34a', marginBottom: 8 }} />
+                          <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>No failures found</div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>All results scored above your threshold. Try increasing the score cutoff.</div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Empty state */}
+                  {!rcaResult && !rcaLoading && (
+                    <div className="card" style={{ padding: 40, textAlign: 'center' }}>
+                      <Search size={28} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
+                      <h3 style={{ margin: '0 0 8px', fontSize: '0.95rem' }}>AI-Powered Root Cause Analysis</h3>
+                      <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', maxWidth: 480, margin: '0 auto 16px' }}>
+                        Goes beyond failure classification to find the underlying reasons your agent fails.
+                        Identifies knowledge gaps, prompt issues, source gaps, and behavior patterns.
+                      </p>
+                      <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                        Click "Run Analysis" above to get started.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </>

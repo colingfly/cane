@@ -369,6 +369,45 @@ class Cane:
         """
         return self._request("DELETE", f"/v1/eval/schedule/{environment_id}")
 
+    # -- Root Cause Analysis --
+
+    def root_cause_analysis(
+        self,
+        environment_id: str,
+        max_score: float = 60,
+        max_failures: int = 30,
+    ) -> dict:
+        """
+        Run AI-powered root cause analysis across eval failures.
+
+        Analyzes patterns across failing results to identify actionable root causes
+        like knowledge gaps, prompt issues, source gaps, and behavior patterns.
+
+        Args:
+            environment_id: The eval environment to analyze.
+            max_score: Analyze results scoring at or below this threshold (0-100).
+            max_failures: Max number of failures to include (1-50).
+
+        Returns:
+            dict with root_causes, summary, top_recommendation, and metadata.
+        """
+        from urllib.parse import urlencode
+        params = urlencode({"max_score": max_score, "max_failures": max_failures})
+        return self._request("POST", f"/v1/eval/rca/{environment_id}?{params}")
+
+    def root_cause_analysis_targeted(self, environment_id: str, result_id: str) -> dict:
+        """
+        Run deep root cause analysis on a single failing eval result.
+
+        Args:
+            environment_id: The eval environment ID.
+            result_id: The specific EvalResult ID to analyze.
+
+        Returns:
+            dict with diagnosis, likely_cause, contributing_factors, and fix_actions.
+        """
+        return self._request("POST", f"/v1/eval/rca/{environment_id}/{result_id}")
+
     def close(self):
         """Close the underlying HTTP client."""
         self._client.close()

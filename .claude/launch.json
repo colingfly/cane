@@ -3,9 +3,9 @@
   "configurations": [
     {
       "name": "frontend",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "port": 5173,
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite"],
+      "port": 5174,
       "cwd": "frontend"
     }
   ]

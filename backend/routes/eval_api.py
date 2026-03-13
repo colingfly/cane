@@ -534,3 +534,60 @@ def api_delete_eval_schedule(
     db.delete(schedule)
     db.commit()
     return {"deleted": True}
+
+
+# ── Root Cause Analysis (public API) ──
+
+@router.post("/rca/{environment_id}")
+def api_batch_rca(
+    environment_id: str,
+    max_score: float = Query(60, ge=0, le=100),
+    max_failures: int = Query(30, ge=1, le=50),
+    api_key=Depends(get_api_key),
+    db: Session = Depends(get_db),
+):
+    """Run AI-powered root cause analysis on eval failures."""
+    env = db.query(Environment).filter(
+        Environment.id == environment_id,
+    ).first()
+    if not env:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    if env.tenant_id != api_key.tenant_id and not env.is_public:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+
+    from root_cause_analysis import run_batch_rca
+    result = run_batch_rca(
+        environment_id=env.id,
+        db=db,
+        max_score=max_score,
+        max_failures=max_failures,
+    )
+    return result
+
+
+@router.post("/rca/{environment_id}/{result_id}")
+def api_targeted_rca(
+    environment_id: str,
+    result_id: str,
+    api_key=Depends(get_api_key),
+    db: Session = Depends(get_db),
+):
+    """Run deep root cause analysis on a single failing eval result."""
+    env = db.query(Environment).filter(
+        Environment.id == environment_id,
+    ).first()
+    if not env:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    if env.tenant_id != api_key.tenant_id and not env.is_public:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+
+    # Verify result belongs to this environment
+    result = db.query(EvalResult).join(EvalRun).filter(
+        EvalResult.id == result_id,
+        EvalRun.environment_id == env.id,
+    ).first()
+    if not result:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Eval result not found")
+
+    from root_cause_analysis import run_targeted_rca
+    return run_targeted_rca(result_id=result_id, db=db)

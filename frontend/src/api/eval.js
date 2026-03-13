@@ -261,3 +261,12 @@ export const deleteEvalSchedule = (envId) =>
 
 export const triggerScheduleNow = (envId) =>
   request(`/environments/${envId}/schedule/run-now`, { method: 'POST' })
+
+// -- Root Cause Analysis --
+export const runBatchRCA = (envId, maxScore = 60, maxFailures = 30) => {
+  const params = new URLSearchParams({ max_score: maxScore.toString(), max_failures: maxFailures.toString() })
+  return request(`/environments/${envId}/rca?${params}`, { method: 'POST' })
+}
+
+export const runTargetedRCA = (envId, resultId) =>
+  request(`/environments/${envId}/rca/${resultId}`, { method: 'POST' })
