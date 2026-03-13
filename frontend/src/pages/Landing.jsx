@@ -16,26 +16,6 @@ export default function Landing() {
     return () => els?.forEach(el => observer.unobserve(el))
   }, [])
 
-  useEffect(() => {
-    const script = document.createElement('script')
-    script.src = 'https://cane.fyi/widget.js'
-    script.setAttribute('data-api-key', 'cane_d26764c44d6887c7b0820033388c6810b6c9fed3bdf91989')
-    script.setAttribute('data-agent-name', 'Cane')
-    script.setAttribute('data-color', '#2563eb')
-    script.setAttribute('data-position', 'right')
-    script.setAttribute('data-greeting', "Ask me anything about Cane: how it works, the architecture, what it can do.")
-    script.setAttribute('data-subtitle', 'Live agent')
-    script.setAttribute('data-placeholder', 'Ask a question...')
-    script.setAttribute('data-auto-open', '8')
-    script.setAttribute('data-border-radius', '16')
-    script.setAttribute('data-workspace-id', '826e009f-ddb9-42a0-9c4e-89e88f6ed8e2')
-    document.body.appendChild(script)
-    return () => {
-      document.body.removeChild(script)
-      const widgetEl = document.getElementById('cane-widget-host')
-      if (widgetEl) widgetEl.remove()
-    }
-  }, [])
 
   return (
     <div ref={containerRef} className="lp">
@@ -72,7 +52,7 @@ export default function Landing() {
         <div className="lp-hero-grid">
           <div className="lp-hero-left">
             <h1 className="lp-reveal">
-              Build for the<br />agentic economy.
+              Infrastructure for<br />reliable AI agents.
             </h1>
             <p className="lp-hero-sub lp-reveal">
               Orchestrate agent networks. Evaluate with LLM judges. Export training data and fine-tune. One platform from prototype to production.
