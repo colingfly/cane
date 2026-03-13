@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   FlaskConical, ArrowLeft, Plus, Trash2, Check, X, Play, Bell,
   SlidersHorizontal, ListChecks, BarChart3, Settings, Sparkles, Wand2,
-  Globe, Zap,
+  Globe, Zap, Download, Brain, Loader2,
 } from 'lucide-react'
 import {
   getEnvironment, updateEnvironment,
@@ -11,6 +11,9 @@ import {
   updateCriteria, addCustomRule, deleteCustomRule,
   getRuns, triggerRun, getRunDetail, deleteRun,
   generateTestCases, testWebhook, testTarget,
+  exportRun, getExportStats,
+  generateDataset, submitFinetune, listFinetuneJobs,
+  getFinetuneStatus, cancelFinetune, getFinetuneEvents,
 } from '../api/eval'
 import { getAgents } from '../api/client'
 
@@ -19,6 +22,7 @@ const TABS = [
   { id: 'cases', label: 'Test Cases', icon: ListChecks },
   { id: 'criteria', label: 'Judge Criteria', icon: SlidersHorizontal },
   { id: 'results', label: 'Results', icon: BarChart3 },
+  { id: 'training', label: 'Training Data', icon: Brain },
 ]
 
 export default function EnvironmentDetail() {
@@ -68,6 +72,20 @@ export default function EnvironmentDetail() {
   const [isPublic, setIsPublic] = useState(false)
   const [targetTesting, setTargetTesting] = useState(false)
   const [targetTestResult, setTargetTestResult] = useState(null)
+
+  // Training data state
+  const [exportStats, setExportStats] = useState(null)
+  const [exportFormat, setExportFormat] = useState('openai')
+  const [exportMinScore, setExportMinScore] = useState(80)
+  const [exporting, setExporting] = useState(false)
+  const [datasetPreview, setDatasetPreview] = useState(null)
+  const [ftModel, setFtModel] = useState('gpt-4o-mini-2024-07-18')
+  const [ftEpochs, setFtEpochs] = useState(3)
+  const [ftMinScore, setFtMinScore] = useState(80)
+  const [ftSubmitting, setFtSubmitting] = useState(false)
+  const [ftJobs, setFtJobs] = useState([])
+  const [ftJobDetail, setFtJobDetail] = useState(null)
+  const [ftPolling, setFtPolling] = useState(null)
 
   // Run state
   const [running, setRunning] = useState(false)
@@ -1051,6 +1069,30 @@ export default function EnvironmentDetail() {
                 </div>
               )}
 
+              {/* Export button */}
+              {runDetail.status === 'completed' && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12, gap: 8 }}>
+                  <button
+                    className="btn btn-ghost"
+                    onClick={async () => {
+                      try {
+                        const text = await exportRun(envId, runDetail.id, 'openai', 80)
+                        const blob = new Blob([text], { type: 'application/jsonl' })
+                        const url = URL.createObjectURL(blob)
+                        const a = document.createElement('a')
+                        a.href = url
+                        a.download = `training_data_${new Date().toISOString().slice(0, 10)}.jsonl`
+                        a.click()
+                        URL.revokeObjectURL(url)
+                      } catch (err) { alert(err.message) }
+                    }}
+                    style={{ fontSize: '0.72rem', padding: '4px 12px' }}
+                  >
+                    <Download size={12} style={{ marginRight: 4 }} /> Export as Training Data
+                  </button>
+                </div>
+              )}
+
               {/* Individual results — table style */}
               <div style={{ border: '1px solid var(--rule)', borderRadius: 8, overflow: 'hidden', background: 'var(--bg-card)' }}>
                 {/* Table header */}
@@ -1247,6 +1289,301 @@ export default function EnvironmentDetail() {
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* ═══ TRAINING DATA TAB ═══ */}
+      {tab === 'training' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+          {/* Export Stats Card */}
+          <div className="card" style={{ padding: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <div>
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, marginBottom: 4 }}>Training Data Pipeline</h3>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: 0 }}>
+                  Export eval results as fine-tuning datasets or submit directly to OpenAI
+                </p>
+              </div>
+              <button className="btn btn-ghost" onClick={async () => {
+                try {
+                  const stats = await getExportStats(envId)
+                  setExportStats(stats)
+                } catch (err) { alert(err.message) }
+              }} style={{ fontSize: '0.78rem' }}>
+                Refresh Stats
+              </button>
+            </div>
+
+            {exportStats ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+                {[
+                  { label: 'Total Results', value: exportStats.total_results },
+                  { label: 'SFT Ready (80+)', value: exportStats.sft_ready, color: 'var(--success)' },
+                  { label: 'DPO Pairs', value: exportStats.dpo_pair_potential, color: '#2563eb' },
+                  { label: 'Completed Runs', value: exportStats.completed_runs },
+                ].map(s => (
+                  <div key={s.label} className="stat-card" style={{ padding: 14, textAlign: 'center' }}>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: 'var(--font-display)', color: s.color || 'var(--text-primary)' }}>{s.value}</div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, marginTop: 2 }}>{s.label}</div>
+                  </div>
+                ))}
+
+                {/* Score distribution */}
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <div style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Score Distribution</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {Object.entries(exportStats.score_distribution || {}).map(([label, count]) => (
+                      <div key={label} style={{
+                        flex: 1, padding: '8px 10px', borderRadius: 6,
+                        background: 'var(--bg-card)', border: '1px solid var(--rule-light)', textAlign: 'center',
+                      }}>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 700 }}>{count}</div>
+                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                Click "Refresh Stats" to see how much training data is available from your eval runs.
+              </div>
+            )}
+          </div>
+
+          {/* Export Section */}
+          <div className="card" style={{ padding: 24 }}>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0, marginBottom: 4 }}>
+              <Download size={16} style={{ marginRight: 8, verticalAlign: 'middle', opacity: 0.6 }} />
+              Export Dataset
+            </h3>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 16px' }}>
+              Download training data from your eval runs in standard fine-tuning formats
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 12, alignItems: 'end' }}>
+              <div>
+                <label style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Format</label>
+                <select className="input" value={exportFormat} onChange={e => setExportFormat(e.target.value)} style={{ fontSize: '0.82rem' }}>
+                  <option value="openai">OpenAI Fine-tune</option>
+                  <option value="sft">SFT (prompt/completion)</option>
+                  <option value="dpo">DPO (preference pairs)</option>
+                  <option value="raw">Raw (full eval data)</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Min Score</label>
+                <input className="input" type="number" min="0" max="100" value={exportMinScore}
+                  onChange={e => setExportMinScore(Number(e.target.value))}
+                  style={{ fontSize: '0.82rem' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Source Run</label>
+                <select className="input" id="export-run-select" style={{ fontSize: '0.82rem' }}>
+                  {(env?.runs || []).filter(r => r.status === 'completed').map(r => (
+                    <option key={r.id} value={r.id}>
+                      {r.created_at ? new Date(r.created_at).toLocaleDateString() : 'Run'} (score: {Math.round(r.overall_score || 0)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                className="btn"
+                disabled={exporting}
+                onClick={async () => {
+                  const sel = document.getElementById('export-run-select')
+                  if (!sel?.value) return alert('Select a completed run first')
+                  setExporting(true)
+                  try {
+                    const res = await exportRun(envId, sel.value, exportFormat, exportMinScore)
+                    // Trigger file download
+                    const blob = new Blob([typeof res === 'string' ? res : JSON.stringify(res)], { type: 'application/jsonl' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `${exportFormat}_${new Date().toISOString().slice(0, 10)}.jsonl`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                  } catch (err) { alert(err.message) }
+                  setExporting(false)
+                }}
+                style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}
+              >
+                {exporting ? <><Loader2 size={14} className="spin" style={{ marginRight: 6 }} /> Exporting...</> : <><Download size={14} style={{ marginRight: 6 }} /> Export</>}
+              </button>
+            </div>
+          </div>
+
+          {/* Fine-tune Section */}
+          <div className="card" style={{ padding: 24 }}>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0, marginBottom: 4 }}>
+              <Brain size={16} style={{ marginRight: 8, verticalAlign: 'middle', opacity: 0.6 }} />
+              Fine-tune Model
+            </h3>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 16px' }}>
+              Train a custom model using high-scoring eval results via OpenAI's fine-tuning API
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+              <div>
+                <label style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Base Model</label>
+                <select className="input" value={ftModel} onChange={e => setFtModel(e.target.value)} style={{ fontSize: '0.82rem' }}>
+                  <option value="gpt-4o-mini-2024-07-18">GPT-4o Mini</option>
+                  <option value="gpt-4o-2024-08-06">GPT-4o</option>
+                  <option value="gpt-3.5-turbo-0125">GPT-3.5 Turbo</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Min Score Threshold</label>
+                <input className="input" type="number" min="0" max="100" value={ftMinScore}
+                  onChange={e => setFtMinScore(Number(e.target.value))} style={{ fontSize: '0.82rem' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Epochs</label>
+                <input className="input" type="number" min="1" max="10" value={ftEpochs}
+                  onChange={e => setFtEpochs(Number(e.target.value))} style={{ fontSize: '0.82rem' }}
+                />
+              </div>
+            </div>
+
+            {/* Preview + Submit */}
+            <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+              <button
+                className="btn btn-ghost"
+                onClick={async () => {
+                  try {
+                    const data = await generateDataset(envId, 'openai', ftMinScore)
+                    setDatasetPreview(data)
+                  } catch (err) { alert(err.message) }
+                }}
+                style={{ fontSize: '0.8rem' }}
+              >
+                Preview Dataset
+              </button>
+              <button
+                className="btn"
+                disabled={ftSubmitting}
+                onClick={async () => {
+                  if (!confirm(`Submit fine-tune job?\n\nModel: ${ftModel}\nMin score: ${ftMinScore}\nEpochs: ${ftEpochs}\n\nThis will incur OpenAI fine-tuning costs.`)) return
+                  setFtSubmitting(true)
+                  try {
+                    const result = await submitFinetune(envId, ftModel, ftMinScore, ftEpochs)
+                    alert(`Fine-tune job submitted!\n\nJob ID: ${result.job_id}\nTraining examples: ${result.training_examples}\nStatus: ${result.status}`)
+                    setDatasetPreview(null)
+                    // Refresh jobs list
+                    const jobs = await listFinetuneJobs()
+                    setFtJobs(jobs.jobs || [])
+                  } catch (err) { alert(err.message) }
+                  setFtSubmitting(false)
+                }}
+                style={{ fontSize: '0.8rem', background: '#2563eb' }}
+              >
+                {ftSubmitting ? <><Loader2 size={14} className="spin" style={{ marginRight: 6 }} /> Submitting...</> : <><Brain size={14} style={{ marginRight: 6 }} /> Submit Fine-tune Job</>}
+              </button>
+            </div>
+
+            {/* Dataset preview */}
+            {datasetPreview && (
+              <div style={{ marginBottom: 20, padding: 16, background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--rule-light)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>Dataset Preview</span>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{datasetPreview.total_examples} training examples</span>
+                </div>
+                {(datasetPreview.dataset_preview || []).slice(0, 2).map((ex, i) => (
+                  <div key={i} style={{ marginBottom: 10, padding: 10, background: 'var(--paper)', borderRadius: 6, border: '1px solid var(--rule-light)' }}>
+                    <div style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Example {i + 1}</div>
+                    {(ex.messages || []).filter(m => m.role !== 'system').map((m, j) => (
+                      <div key={j} style={{ fontSize: '0.75rem', marginBottom: 4, color: m.role === 'user' ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                        <strong style={{ textTransform: 'capitalize', fontSize: '0.65rem', color: 'var(--text-muted)' }}>{m.role}:</strong>{' '}
+                        {(m.content || '').slice(0, 150)}{m.content?.length > 150 ? '...' : ''}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Fine-tune Jobs */}
+            <div style={{ borderTop: '1px solid var(--rule-light)', paddingTop: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>Fine-tune Jobs</span>
+                <button className="btn btn-ghost" onClick={async () => {
+                  try {
+                    const jobs = await listFinetuneJobs()
+                    setFtJobs(jobs.jobs || [])
+                  } catch (err) { alert(err.message) }
+                }} style={{ fontSize: '0.72rem', padding: '4px 10px' }}>Refresh</button>
+              </div>
+
+              {ftJobs.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {ftJobs.map(j => (
+                    <div key={j.job_id} style={{
+                      padding: '12px 16px', borderRadius: 8, background: 'var(--bg-card)',
+                      border: '1px solid var(--rule-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    }}>
+                      <div>
+                        <div style={{ fontSize: '0.78rem', fontWeight: 600, marginBottom: 2 }}>
+                          {j.fine_tuned_model || j.model}
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                          {j.job_id?.slice(0, 20)}... {j.trained_tokens ? `| ${j.trained_tokens.toLocaleString()} tokens` : ''}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{
+                          padding: '2px 8px', borderRadius: 12, fontSize: '0.68rem', fontWeight: 600, textTransform: 'uppercase',
+                          background: j.status === 'succeeded' ? 'rgba(74,222,128,0.1)' : j.status === 'failed' ? 'rgba(248,113,113,0.1)' : 'var(--accent-muted)',
+                          color: j.status === 'succeeded' ? 'var(--success)' : j.status === 'failed' ? 'var(--error)' : 'var(--warning)',
+                        }}>{j.status}</span>
+                        {j.status === 'running' && (
+                          <button className="btn btn-ghost" onClick={async () => {
+                            if (confirm('Cancel this fine-tune job?')) {
+                              try {
+                                await cancelFinetune(j.job_id)
+                                const jobs = await listFinetuneJobs()
+                                setFtJobs(jobs.jobs || [])
+                              } catch (err) { alert(err.message) }
+                            }
+                          }} style={{ fontSize: '0.68rem', padding: '2px 8px', color: 'var(--error)' }}>Cancel</button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: 16, color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                  No fine-tune jobs yet. Configure settings above and submit a job.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* How it works */}
+          <div className="card" style={{ padding: 20, background: 'var(--bg-card)', border: '1px solid var(--rule-light)' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, marginBottom: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>How the Training Pipeline Works</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+              {[
+                { step: '1', title: 'Run Evals', desc: 'Evaluate your agent against test cases with LLM-as-judge scoring' },
+                { step: '2', title: 'Filter Quality', desc: 'High-scoring responses (80+) become training examples automatically' },
+                { step: '3', title: 'Fine-tune', desc: 'Submit to OpenAI to train a custom model on your best responses' },
+                { step: '4', title: 'Re-evaluate', desc: 'Run evals on the fine-tuned model to measure improvement' },
+              ].map(s => (
+                <div key={s.step} style={{ textAlign: 'center' }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: '50%', background: 'rgba(37,99,235,0.1)',
+                    color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '0.75rem', fontWeight: 800, margin: '0 auto 8px',
+                  }}>{s.step}</div>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: 4 }}>{s.title}</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>{s.desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -881,7 +881,7 @@ select.search-mode-btn optgroup {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.spinning { animation: spin 0.8s linear infinite; }
+.spinning, .spin { animation: spin 0.8s linear infinite; }
 
 .loading-center {
   display: flex;

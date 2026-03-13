@@ -104,3 +104,52 @@ export const testWebhook = (envId) => request(`/environments/${envId}/webhook/te
 
 // -- External Agent Target --
 export const testTarget = (envId) => request(`/environments/${envId}/target/test`, { method: 'POST' })
+
+// -- Dataset Export --
+export const exportRun = async (envId, runId, format = 'sft', minScore = 0) => {
+  const token = getToken()
+  const params = new URLSearchParams({ format, min_score: minScore.toString() })
+  const res = await fetch(`/api/environments/${envId}/runs/${runId}/export?${params}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Export failed: ${res.status}`)
+  }
+  const text = await res.text()
+  return text
+}
+
+export const exportCrossRunDpo = (envId, minChosen = 80, maxRejected = 60) => {
+  const params = new URLSearchParams({ min_chosen_score: minChosen.toString(), max_rejected_score: maxRejected.toString() })
+  return request(`/environments/${envId}/export/cross-run?${params}`)
+}
+
+export const getExportStats = (envId) => request(`/environments/${envId}/export/stats`)
+
+// -- Fine-tuning --
+export const generateDataset = (envId, format = 'openai', minScore = 80) => {
+  const params = new URLSearchParams({ environment_id: envId, format, min_score: minScore.toString() })
+  return request(`/finetune/generate-dataset?${params}`, { method: 'POST' })
+}
+
+export const submitFinetune = (envId, model = 'gpt-4o-mini-2024-07-18', minScore = 80, nEpochs = 3) => {
+  const params = new URLSearchParams({
+    environment_id: envId, model, min_score: minScore.toString(), n_epochs: nEpochs.toString(),
+  })
+  return request(`/finetune/submit?${params}`, { method: 'POST' })
+}
+
+export const getFinetuneStatus = (jobId) => request(`/finetune/jobs/${jobId}`)
+
+export const listFinetuneJobs = () => request('/finetune/jobs')
+
+export const cancelFinetune = (jobId) => request(`/finetune/jobs/${jobId}/cancel`, { method: 'POST' })
+
+export const getFinetuneEvents = (jobId) => request(`/finetune/jobs/${jobId}/events`)
+
+export const compareModels = (question, baseModel, ftModel, systemPrompt = '') => {
+  const params = new URLSearchParams({ question, base_model: baseModel, fine_tuned_model: ftModel })
+  if (systemPrompt) params.set('system_prompt', systemPrompt)
+  return request(`/finetune/compare?${params}`, { method: 'POST' })
+}

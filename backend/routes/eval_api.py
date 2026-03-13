@@ -221,3 +221,40 @@ def get_eval_results(
             for r in results
         ],
     }
+
+
+# ── Export eval run as training data ──
+
+@router.get("/export/{run_id}")
+def api_export_run(
+    run_id: str,
+    format: str = Query("sft", regex="^(sft|dpo|openai|raw)$"),
+    min_score: float = Query(0, ge=0, le=100),
+    api_key: ApiKey = Depends(get_api_key_auth),
+    db: Session = Depends(get_db),
+):
+    """Export eval run results as fine-tuning training data (JSONL)."""
+    run = db.query(EvalRun).filter(EvalRun.id == run_id).first()
+    if not run:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Run not found")
+
+    if run.api_key_id != api_key.id and run.tenant_id != api_key.tenant_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+
+    if run.status != "completed":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Run must be completed")
+
+    env = db.query(Environment).filter(Environment.id == run.environment_id).first()
+    results = db.query(EvalResult).filter(EvalResult.eval_run_id == run.id).all()
+    filtered = [r for r in results if r.overall_score is not None and r.overall_score >= min_score]
+
+    from routes.eval_export import _export_sft, _export_dpo, _export_openai, _export_raw
+
+    if format == "sft":
+        return _export_sft(filtered, run, env)
+    elif format == "dpo":
+        return _export_dpo(results, run, env, min_score)
+    elif format == "openai":
+        return _export_openai(filtered, run, env)
+    else:
+        return _export_raw(filtered, run, env)
