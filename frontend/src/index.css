@@ -16,11 +16,11 @@
   --cane-100: rgba(255,255,255,0.06);
   --cane-50:  rgba(255,255,255,0.03);
 
-  /* Accent — white (no color) */
-  --accent: #ffffff;
-  --accent-light: rgba(255,255,255,0.85);
-  --accent-muted: rgba(255,255,255,0.06);
-  --accent-hover: rgba(255,255,255,0.7);
+  /* Accent — blue */
+  --accent: #2563eb;
+  --accent-light: #60a5fa;
+  --accent-muted: rgba(37,99,235,0.1);
+  --accent-hover: #3b82f6;
 
   /* Functional */
   --bg: #000000;
@@ -61,7 +61,7 @@
   --shadow-sm: none;
   --shadow: 0 2px 8px rgba(0,0,0,0.3);
   --shadow-lg: 0 8px 30px rgba(0,0,0,0.4);
-  --shadow-focus: 0 0 0 2px rgba(255,255,255,0.15);
+  --shadow-focus: 0 0 0 2px rgba(37,99,235,0.35);
 }
 
 /* ── Reset ── */
@@ -159,7 +159,7 @@ a:hover { color: #fff; }
 }
 
 .sidebar-nav a.active {
-  background: rgba(255,255,255,0.08);
+  background: rgba(37,99,235,0.12);
   color: #fff;
 }
 
@@ -272,12 +272,12 @@ a:hover { color: #fff; }
 }
 
 .btn-primary {
-  background: #fff;
-  color: #000;
+  background: #2563eb;
+  color: #fff;
 }
 
 .btn-primary:hover {
-  opacity: 0.85;
+  background: #3b82f6;
   transform: translateY(-1px);
 }
 
@@ -421,8 +421,8 @@ select.search-mode-btn optgroup {
 }
 
 .search-mode-btn.active {
-  background: rgba(255,255,255,0.1);
-  border-color: rgba(255,255,255,0.2);
+  background: rgba(37,99,235,0.15);
+  border-color: rgba(37,99,235,0.3);
   color: #fff;
 }
 
@@ -842,7 +842,7 @@ select.search-mode-btn optgroup {
 
 .workspace-tab.active {
   color: #fff;
-  border-bottom-color: #fff;
+  border-bottom-color: #2563eb;
 }
 
 /* ── Empty states ── */

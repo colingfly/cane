@@ -36,7 +36,7 @@ export default function Login() {
         }}>
           <div className="login-brand">
             <h1>Cane</h1>
-            <p>Operational Intelligence</p>
+            <p>Agentic AI Platform</p>
           </div>
 
           <form onSubmit={onSubmit}>

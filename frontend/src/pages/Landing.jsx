@@ -77,7 +77,7 @@ export default function Landing() {
           Build, connect, monitor,<br />and verify AI agents.
         </h1>
         <p className="lp-hero-sub lp-reveal">
-          The platform for teams that run on AI agents. From RAG pipelines to agent networks to automated evals, all in one place.
+          RAG pipelines, agent networks, automated evals. One platform, full visibility.
         </p>
         <div className="lp-hero-actions lp-reveal">
           <Link to="/register" className="lp-btn-fill">Get started free</Link>
@@ -380,13 +380,13 @@ const landingStyles = `
 
 .lp-nav-cta {
   color: #fff !important;
-  background: rgba(255,255,255,0.08);
+  background: #2563eb;
   padding: 6px 16px;
   border-radius: 6px;
   transition: background 0.15s !important;
 }
 
-.lp-nav-cta:hover { background: rgba(255,255,255,0.14) !important; }
+.lp-nav-cta:hover { background: #3b82f6 !important; }
 
 /* Dropdown */
 .lp-dropdown {
@@ -445,7 +445,7 @@ const landingStyles = `
 }
 
 .lp-dropdown-item:hover {
-  background: rgba(255,255,255,0.06);
+  background: rgba(37,99,235,0.08);
 }
 
 .lp-dropdown-title {
@@ -492,17 +492,17 @@ const landingStyles = `
 .lp-btn-fill {
   display: inline-block;
   padding: 12px 28px;
-  background: #fff;
-  color: #000;
+  background: #2563eb;
+  color: #fff;
   font-size: 0.88rem;
   font-weight: 600;
   border-radius: 8px;
   text-decoration: none;
-  transition: opacity 0.15s;
+  transition: all 0.15s;
   font-family: 'DM Sans', sans-serif;
 }
 
-.lp-btn-fill:hover { opacity: 0.85; color: #000; }
+.lp-btn-fill:hover { background: #3b82f6; color: #fff; }
 
 .lp-btn-ghost {
   display: inline-block;
@@ -519,7 +519,7 @@ const landingStyles = `
 }
 
 .lp-btn-ghost:hover {
-  border-color: rgba(255,255,255,0.2);
+  border-color: rgba(37,99,235,0.3);
   color: rgba(255,255,255,0.7);
 }
 
@@ -549,7 +549,7 @@ const landingStyles = `
   font-family: 'Space Grotesk', sans-serif;
   font-size: 0.88rem;
   font-weight: 600;
-  color: #fff;
+  color: #60a5fa;
   margin-bottom: 4px;
   letter-spacing: -0.01em;
 }
@@ -589,7 +589,7 @@ const landingStyles = `
   font-family: 'Space Grotesk', sans-serif;
   font-size: 0.68rem;
   font-weight: 700;
-  color: rgba(255,255,255,0.25);
+  color: #60a5fa;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   margin-bottom: 12px;
@@ -669,14 +669,14 @@ const landingStyles = `
 }
 
 .lp-arch-link a {
-  color: rgba(255,255,255,0.35);
+  color: #60a5fa;
   text-decoration: none;
   font-size: 0.85rem;
   font-weight: 500;
   transition: color 0.15s;
 }
 
-.lp-arch-link a:hover { color: rgba(255,255,255,0.7); }
+.lp-arch-link a:hover { color: #93bbfd; }
 
 /* Stack */
 .lp-stack-row {
