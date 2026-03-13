@@ -224,6 +224,9 @@ const SECTIONS = [
       { id: 'api-eval-suites', label: 'GET /v1/eval/suites' },
       { id: 'api-eval-run', label: 'POST /v1/eval/run' },
       { id: 'api-eval-results', label: 'GET /v1/eval/run/{id}' },
+      { id: 'api-mine', label: 'POST /v1/eval/mine' },
+      { id: 'api-mine-status', label: 'GET /v1/eval/mine/{id}' },
+      { id: 'api-mine-export', label: 'GET /v1/eval/mine/{id}/export' },
     ],
   },
   {
@@ -240,6 +243,9 @@ const SECTIONS = [
       { id: 'sdk-delete', label: 'delete_agent()' },
       { id: 'sdk-network', label: 'network()' },
       { id: 'sdk-log', label: 'log()' },
+      { id: 'sdk-mine', label: 'mine_failures()' },
+      { id: 'sdk-mining-job', label: 'mining_job()' },
+      { id: 'sdk-export-mined', label: 'export_mined()' },
     ],
   },
 ]
@@ -262,6 +268,9 @@ function SectionContent({ id }) {
     case 'api-eval-suites': return <ApiEvalSuitesSection />
     case 'api-eval-run': return <ApiEvalRunSection />
     case 'api-eval-results': return <ApiEvalResultsSection />
+    case 'api-mine': return <ApiMineSection />
+    case 'api-mine-status': return <ApiMineStatusSection />
+    case 'api-mine-export': return <ApiMineExportSection />
     case 'sdk-install': return <SdkInstallSection />
     case 'sdk-cane': return <SdkCaneSection />
     case 'sdk-ask': return <SdkAskSection />
@@ -273,6 +282,9 @@ function SectionContent({ id }) {
     case 'sdk-delete': return <SdkDeleteSection />
     case 'sdk-network': return <SdkNetworkSection />
     case 'sdk-log': return <SdkLogSection />
+    case 'sdk-mine': return <SdkMineSection />
+    case 'sdk-mining-job': return <SdkMiningJobSection />
+    case 'sdk-export-mined': return <SdkExportMinedSection />
     default: return <ApiOverviewSection />
   }
 }
@@ -690,6 +702,84 @@ function ApiEvalResultsSection() {
   )
 }
 
+function ApiMineSection() {
+  return (
+    <EndpointBlock
+      method="POST"
+      path="/v1/eval/mine"
+      desc="Trigger failure mining on eval results. Automatically generates improved answers for low-scoring responses using LLM rewrite, producing DPO training pairs."
+      auth="Bearer token (API key)"
+      params={[
+        { name: 'environment_id', type: 'string', required: true, desc: 'Environment to mine failures from' },
+        { name: 'max_score', type: 'float', required: false, desc: 'Mine results scoring at or below this threshold (0-100, default 60)' },
+        { name: 'run_ids', type: 'string', required: false, desc: 'JSON array of specific run IDs to mine. Defaults to all completed runs.' },
+        { name: 'strategy', type: 'string', required: false, desc: 'Rewrite strategy. Currently "llm_rewrite" (default).' },
+        { name: 'max_examples', type: 'integer', required: false, desc: 'Maximum failures to process (1-500, default 100)' },
+      ]}
+      request={`curl -X POST "https://cane.fyi/v1/eval/mine?environment_id=env_abc&max_score=60" \\
+  -H "Authorization: Bearer cane_xxx"`}
+      response={`{
+  "job_id": "job_abc123",
+  "status": "pending",
+  "environment_id": "env_abc"
+}`}
+    />
+  )
+}
+
+function ApiMineStatusSection() {
+  return (
+    <EndpointBlock
+      method="GET"
+      path="/v1/eval/mine/{job_id}"
+      desc="Get mining job status, failure type distribution, and mined examples with before/after comparisons."
+      auth="Bearer token (API key)"
+      request={`curl "https://cane.fyi/v1/eval/mine/job_abc123" \\
+  -H "Authorization: Bearer cane_xxx"`}
+      response={`{
+  "job_id": "job_abc123",
+  "status": "completed",
+  "total_failures": 15,
+  "total_mined": 12,
+  "failure_type_distribution": {
+    "hallucination": 5,
+    "incomplete": 4,
+    "factual_error": 3
+  },
+  "examples": [
+    {
+      "id": "ex_001",
+      "failure_type": "hallucination",
+      "prompt": "What is our refund policy?",
+      "original_answer": "Refunds are not allowed.",
+      "improved_answer": "Our refund policy allows returns within 30 days...",
+      "original_score": 25.0,
+      "estimated_improved_score": 88.0
+    }
+  ]
+}`}
+    />
+  )
+}
+
+function ApiMineExportSection() {
+  return (
+    <EndpointBlock
+      method="GET"
+      path="/v1/eval/mine/{job_id}/export"
+      desc="Export mined training data as JSONL. DPO format pairs improved (chosen) answers against original (rejected) answers."
+      auth="Bearer token (API key)"
+      params={[
+        { name: 'format', type: 'string', required: false, desc: '"dpo" (default) or "sft"' },
+      ]}
+      request={`curl "https://cane.fyi/v1/eval/mine/job_abc123/export?format=dpo" \\
+  -H "Authorization: Bearer cane_xxx"`}
+      response={`{"prompt":"What is our refund policy?","chosen":"Our refund policy allows returns within 30 days...","rejected":"Refunds are not allowed.","chosen_score":88.0,"rejected_score":25.0,"failure_type":"hallucination"}
+{"prompt":"How do I reset my password?","chosen":"To reset your password, go to Settings > Security...","rejected":"Contact support.","chosen_score":92.0,"rejected_score":35.0,"failure_type":"incomplete"}`}
+    />
+  )
+}
+
 /* ── SDK Reference ── */
 
 function SdkInstallSection() {
@@ -891,6 +981,77 @@ function SdkLogSection() {
     response="Yes, order is compliant.",
     duration_ms=450
 )`}
+    />
+  )
+}
+
+function SdkMineSection() {
+  return (
+    <SdkMethod
+      signature="client.mine_failures(environment_id, run_ids=None, max_score=60, strategy='llm_rewrite', max_examples=100)"
+      desc="Trigger failure mining on eval results. Low-scoring responses are rewritten by a strong LLM to generate DPO training pairs automatically."
+      params={[
+        { name: 'environment_id', type: 'str', required: true, desc: 'Environment to mine failures from' },
+        { name: 'run_ids', type: 'list', required: false, desc: 'Specific run IDs to mine. Defaults to all completed runs.' },
+        { name: 'max_score', type: 'float', required: false, desc: 'Mine results scoring at or below this (default 60)' },
+        { name: 'strategy', type: 'str', required: false, desc: 'Rewrite strategy (default "llm_rewrite")' },
+        { name: 'max_examples', type: 'int', required: false, desc: 'Max failures to process (default 100)' },
+      ]}
+      returns='dict with job_id and status ("pending")'
+      example={`job = client.mine_failures(
+    environment_id="env_abc123",
+    max_score=60,
+    max_examples=50
+)
+print(job["job_id"])  # "job_xyz789"`}
+    />
+  )
+}
+
+function SdkMiningJobSection() {
+  return (
+    <SdkMethod
+      signature="client.mining_job(job_id)"
+      desc="Get mining job status, failure type distribution, and mined examples with before/after answer comparisons."
+      params={[
+        { name: 'job_id', type: 'str', required: true, desc: 'Mining job ID' },
+      ]}
+      returns="dict with status, failure_type_distribution, and examples list"
+      example={`result = client.mining_job("job_xyz789")
+print(result["status"])         # "completed"
+print(result["total_mined"])    # 12
+print(result["failure_type_distribution"])
+# {"hallucination": 5, "incomplete": 4, "factual_error": 3}
+
+for ex in result["examples"]:
+    print(f"{ex['failure_type']}: {ex['original_score']} -> ~{ex['estimated_improved_score']}")`}
+    />
+  )
+}
+
+function SdkExportMinedSection() {
+  return (
+    <SdkMethod
+      signature='client.export_mined(job_id, format="dpo")'
+      desc="Export mined training data as JSONL string. DPO format pairs improved (chosen) answers against original (rejected) answers."
+      params={[
+        { name: 'job_id', type: 'str', required: true, desc: 'Completed mining job ID' },
+        { name: 'format', type: 'str', required: false, desc: '"dpo" (default) or "sft"' },
+      ]}
+      returns="JSONL string of training examples"
+      example={`# Export as DPO training data
+jsonl = client.export_mined("job_xyz789", format="dpo")
+
+# Save to file
+with open("training_data.jsonl", "w") as f:
+    f.write(jsonl)
+
+# Or parse individual examples
+import json
+for line in jsonl.strip().split("\\n"):
+    example = json.loads(line)
+    print(f"Chosen: {example['chosen'][:50]}...")
+    print(f"Rejected: {example['rejected'][:50]}...")`}
     />
   )
 }

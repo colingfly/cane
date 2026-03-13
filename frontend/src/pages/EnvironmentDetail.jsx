@@ -17,6 +17,7 @@ import {
   getFinetuneStatus, cancelFinetune, getFinetuneEvents,
   getAnalyticsDashboard, getRegressions, getCategoryBreakdown,
   getFailurePatterns, getConsistencyAnalysis, getCriteriaBreakdown,
+  triggerMining, getMiningJobs, getMiningJobDetail, exportMinedData, deleteMiningJob,
 } from '../api/eval'
 import { getAgents } from '../api/client'
 
@@ -90,6 +91,13 @@ export default function EnvironmentDetail() {
   const [ftJobs, setFtJobs] = useState([])
   const [ftJobDetail, setFtJobDetail] = useState(null)
   const [ftPolling, setFtPolling] = useState(null)
+
+  // Mining state
+  const [miningJobs, setMiningJobs] = useState([])
+  const [miningMaxScore, setMiningMaxScore] = useState(60)
+  const [miningRunning, setMiningRunning] = useState(false)
+  const [miningDetail, setMiningDetail] = useState(null)
+  const [miningExpanded, setMiningExpanded] = useState(null)
 
   // Analytics state
   const [analyticsDash, setAnalyticsDash] = useState(null)
@@ -1950,20 +1958,249 @@ export default function EnvironmentDetail() {
             </div>
           </div>
 
+          {/* ── Failure Mining ── */}
+          <div className="card" style={{ padding: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <div>
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, marginBottom: 4 }}>
+                  <Sparkles size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6, color: '#f59e0b' }} />
+                  Failure Mining
+                </h3>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: 0 }}>
+                  Automatically turn agent mistakes into training data. Low-scoring responses get rewritten by a strong LLM.
+                </p>
+              </div>
+              <button className="btn btn-ghost" onClick={async () => {
+                try {
+                  const data = await getMiningJobs(envId)
+                  setMiningJobs(data.jobs || [])
+                } catch {}
+              }}>
+                Refresh
+              </button>
+            </div>
+
+            {/* Mine trigger */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, padding: 16, background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: 8 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 600, marginBottom: 4 }}>Mine results scoring below</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input
+                    type="range" min="20" max="80" step="5"
+                    value={miningMaxScore}
+                    onChange={e => setMiningMaxScore(Number(e.target.value))}
+                    style={{ width: 120 }}
+                  />
+                  <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text)', minWidth: 32 }}>{miningMaxScore}</span>
+                </div>
+              </div>
+              <button
+                className="btn btn-primary"
+                disabled={miningRunning}
+                onClick={async () => {
+                  setMiningRunning(true)
+                  try {
+                    const result = await triggerMining(envId, miningMaxScore)
+                    // Start polling
+                    const poll = setInterval(async () => {
+                      try {
+                        const jobs = await getMiningJobs(envId)
+                        setMiningJobs(jobs.jobs || [])
+                        const active = (jobs.jobs || []).find(j => j.status === 'pending' || j.status === 'running')
+                        if (!active) {
+                          clearInterval(poll)
+                          setMiningRunning(false)
+                        }
+                      } catch { clearInterval(poll); setMiningRunning(false) }
+                    }, 3000)
+                    // Immediate refresh
+                    const jobs = await getMiningJobs(envId)
+                    setMiningJobs(jobs.jobs || [])
+                  } catch (err) {
+                    alert(err.message || 'Failed to start mining')
+                    setMiningRunning(false)
+                  }
+                }}
+              >
+                {miningRunning ? <><Loader2 size={14} className="spin" /> Mining...</> : <><Wand2 size={14} /> Mine Failures</>}
+              </button>
+            </div>
+
+            {/* Mining jobs list */}
+            {miningJobs.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {miningJobs.map(job => (
+                  <div key={job.id} style={{
+                    padding: '12px 16px', background: 'var(--paper)', border: '1px solid var(--rule)',
+                    borderRadius: 8, cursor: 'pointer',
+                  }} onClick={async () => {
+                    if (miningExpanded === job.id) { setMiningExpanded(null); setMiningDetail(null); return }
+                    try {
+                      const detail = await getMiningJobDetail(envId, job.id)
+                      setMiningDetail(detail)
+                      setMiningExpanded(job.id)
+                    } catch {}
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{
+                          fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+                          background: job.status === 'completed' ? 'rgba(34,197,94,0.1)' : job.status === 'running' ? 'rgba(59,130,246,0.1)' : job.status === 'failed' ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.06)',
+                          color: job.status === 'completed' ? '#22c55e' : job.status === 'running' ? '#3b82f6' : job.status === 'failed' ? '#ef4444' : 'var(--text-muted)',
+                        }}>
+                          {job.status}
+                        </span>
+                        <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>
+                          {job.total_mined} / {job.total_failures} mined
+                        </span>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                          threshold: {(job.config || {}).max_score || 60}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                          {job.created_at ? new Date(job.created_at).toLocaleDateString() : ''}
+                        </span>
+                        {job.status === 'completed' && (
+                          <>
+                            <button className="btn btn-ghost" style={{ fontSize: '0.7rem', padding: '3px 8px' }} onClick={async (e) => {
+                              e.stopPropagation()
+                              try {
+                                const data = await exportMinedData(envId, job.id, 'dpo')
+                                const blob = new Blob([data], { type: 'application/jsonl' })
+                                const url = URL.createObjectURL(blob)
+                                const a = document.createElement('a')
+                                a.href = url; a.download = `mined_dpo_${new Date().toISOString().slice(0, 10)}.jsonl`
+                                a.click(); URL.revokeObjectURL(url)
+                              } catch (err) { alert(err.message) }
+                            }}>
+                              <Download size={12} /> DPO
+                            </button>
+                            <button className="btn btn-ghost" style={{ fontSize: '0.7rem', padding: '3px 8px' }} onClick={async (e) => {
+                              e.stopPropagation()
+                              try {
+                                const data = await exportMinedData(envId, job.id, 'sft')
+                                const blob = new Blob([data], { type: 'application/jsonl' })
+                                const url = URL.createObjectURL(blob)
+                                const a = document.createElement('a')
+                                a.href = url; a.download = `mined_sft_${new Date().toISOString().slice(0, 10)}.jsonl`
+                                a.click(); URL.revokeObjectURL(url)
+                              } catch (err) { alert(err.message) }
+                            }}>
+                              <Download size={12} /> SFT
+                            </button>
+                          </>
+                        )}
+                        {job.status === 'completed' && (
+                          <button className="btn btn-ghost" style={{ fontSize: '0.7rem', padding: '3px 8px', color: '#ef4444' }} onClick={async (e) => {
+                            e.stopPropagation()
+                            if (!confirm('Delete this mining job and all its results?')) return
+                            try {
+                              await deleteMiningJob(envId, job.id)
+                              setMiningJobs(prev => prev.filter(j => j.id !== job.id))
+                            } catch (err) { alert(err.message) }
+                          }}>
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Expanded detail */}
+                    {miningExpanded === job.id && miningDetail && (
+                      <div style={{ marginTop: 16, borderTop: '1px solid var(--rule)', paddingTop: 16 }}>
+                        {/* Failure type distribution */}
+                        {miningDetail.failure_type_distribution && Object.keys(miningDetail.failure_type_distribution).length > 0 && (
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+                            {Object.entries(miningDetail.failure_type_distribution).map(([type, count]) => (
+                              <span key={type} style={{
+                                fontSize: '0.7rem', fontWeight: 600, padding: '3px 10px', borderRadius: 12,
+                                background: type === 'hallucination' ? 'rgba(239,68,68,0.1)' : type === 'incomplete' ? 'rgba(234,179,8,0.1)' : type === 'factual_error' ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.06)',
+                                color: type === 'hallucination' ? '#ef4444' : type === 'incomplete' ? '#eab308' : type === 'factual_error' ? '#f87171' : 'var(--text-secondary)',
+                              }}>
+                                {type.replace(/_/g, ' ')}: {count}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Examples */}
+                        {(miningDetail.examples || []).slice(0, 10).map((ex, i) => (
+                          <div key={ex.id} style={{
+                            marginBottom: 12, padding: '12px 14px', background: 'rgba(255,255,255,0.02)',
+                            border: '1px solid var(--rule)', borderRadius: 6,
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                              <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text)' }}>
+                                {ex.prompt?.slice(0, 80)}{ex.prompt?.length > 80 ? '...' : ''}
+                              </span>
+                              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                <span style={{
+                                  fontSize: '0.65rem', fontWeight: 700, padding: '1px 6px', borderRadius: 4,
+                                  background: 'rgba(239,68,68,0.1)', color: '#ef4444',
+                                }}>
+                                  {ex.failure_type?.replace(/_/g, ' ')}
+                                </span>
+                                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                  {ex.original_score?.toFixed(0)} {ex.estimated_improved_score ? `\u2192 ~${ex.estimated_improved_score.toFixed(0)}` : ''}
+                                </span>
+                              </div>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                              <div>
+                                <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Original (Rejected)</div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.5, maxHeight: 80, overflow: 'hidden' }}>
+                                  {ex.original_answer?.slice(0, 200)}{ex.original_answer?.length > 200 ? '...' : ''}
+                                </div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Improved (Chosen)</div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.5, maxHeight: 80, overflow: 'hidden' }}>
+                                  {ex.improved_answer?.slice(0, 200)}{ex.improved_answer?.length > 200 ? '...' : ''}
+                                </div>
+                              </div>
+                            </div>
+                            {ex.improvement_reasoning && (
+                              <div style={{ marginTop: 6, fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                {ex.improvement_reasoning}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        {(miningDetail.examples || []).length > 10 && (
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textAlign: 'center', padding: 8 }}>
+                            Showing 10 of {miningDetail.examples.length} examples. Export to see all.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {miningJobs.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                No mining jobs yet. Run evals first, then mine failures to generate training data.
+              </div>
+            )}
+          </div>
+
           {/* How it works */}
           <div className="card" style={{ padding: 20, background: 'var(--bg-card)', border: '1px solid var(--rule-light)' }}>
             <div style={{ fontSize: '0.75rem', fontWeight: 700, marginBottom: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>How the Training Pipeline Works</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
               {[
-                { step: '1', title: 'Run Evals', desc: 'Evaluate your agent against test cases with LLM-as-judge scoring' },
-                { step: '2', title: 'Filter Quality', desc: 'High-scoring responses (80+) become training examples automatically' },
-                { step: '3', title: 'Fine-tune', desc: 'Submit to OpenAI to train a custom model on your best responses' },
-                { step: '4', title: 'Re-evaluate', desc: 'Run evals on the fine-tuned model to measure improvement' },
+                { step: '1', title: 'Run Evals', desc: 'Evaluate your agent with LLM-as-judge scoring' },
+                { step: '2', title: 'Filter Quality', desc: 'High-scoring responses (80+) become training examples' },
+                { step: '3', title: 'Mine Failures', desc: 'Low-scoring responses get rewritten into training data' },
+                { step: '4', title: 'Fine-tune', desc: 'Submit DPO/SFT datasets to train improved models' },
+                { step: '5', title: 'Re-evaluate', desc: 'Run evals on fine-tuned models to measure gains' },
               ].map(s => (
                 <div key={s.step} style={{ textAlign: 'center' }}>
                   <div style={{
-                    width: 28, height: 28, borderRadius: '50%', background: 'rgba(37,99,235,0.1)',
-                    color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    width: 28, height: 28, borderRadius: '50%', background: s.step === '3' ? 'rgba(245,158,11,0.15)' : 'rgba(37,99,235,0.1)',
+                    color: s.step === '3' ? '#f59e0b' : '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: '0.75rem', fontWeight: 800, margin: '0 auto 8px',
                   }}>{s.step}</div>
                   <div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: 4 }}>{s.title}</div>

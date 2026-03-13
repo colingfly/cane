@@ -19,6 +19,7 @@ from auth import get_api_key_auth
 from db_models import ApiKey
 from eval_models import (
     Environment, TestCase, JudgeCriteria, JudgeCustomRule, EvalRun, EvalResult,
+    MiningJob, MinedExample,
 )
 
 router = APIRouter(prefix="/v1/eval", tags=["eval-api"])
@@ -258,3 +259,156 @@ def api_export_run(
         return _export_openai(filtered, run, env)
     else:
         return _export_raw(filtered, run, env)
+
+
+# ── Failure Mining (public API) ──
+
+@router.post("/mine", status_code=202)
+def api_trigger_mining(
+    environment_id: str,
+    max_score: float = Query(60, ge=0, le=100),
+    run_ids: str = Query(None),
+    strategy: str = Query("llm_rewrite"),
+    max_examples: int = Query(100, ge=1, le=500),
+    background_tasks: BackgroundTasks = None,
+    api_key: ApiKey = Depends(get_api_key_auth),
+    db: Session = Depends(get_db),
+):
+    """Trigger failure mining on eval results. Generates improved answers for low-scoring responses."""
+    env = db.query(Environment).filter(
+        Environment.id == environment_id,
+        Environment.is_active == True,
+    ).first()
+    if not env:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+
+    if not env.is_public and env.tenant_id != api_key.tenant_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "This environment is not public")
+
+    # Check for already-running mining job
+    active = db.query(MiningJob).filter(
+        MiningJob.environment_id == env.id,
+        MiningJob.api_key_id == api_key.id,
+        MiningJob.status.in_(["pending", "running"]),
+    ).first()
+    if active:
+        raise HTTPException(status.HTTP_409_CONFLICT, "A mining job is already running")
+
+    source_run_ids = None
+    if run_ids:
+        try:
+            source_run_ids = json.loads(run_ids)
+        except json.JSONDecodeError:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "run_ids must be a valid JSON array")
+
+    config = json.dumps({
+        "min_score": 0,
+        "max_score": max_score,
+        "strategy": strategy,
+        "max_examples": max_examples,
+    })
+
+    job = MiningJob(
+        environment_id=env.id,
+        tenant_id=env.tenant_id,
+        status="pending",
+        source_run_ids=json.dumps(source_run_ids) if source_run_ids else None,
+        config=config,
+        api_key_id=api_key.id,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    from failure_mining import execute_mining_job
+
+    def _run_mining():
+        session = SessionLocal()
+        try:
+            execute_mining_job(job.id, session)
+        finally:
+            session.close()
+
+    background_tasks.add_task(_run_mining)
+
+    return {
+        "job_id": job.id,
+        "status": "pending",
+        "environment_id": env.id,
+    }
+
+
+@router.get("/mine/{job_id}")
+def api_get_mining_job(
+    job_id: str,
+    api_key: ApiKey = Depends(get_api_key_auth),
+    db: Session = Depends(get_db),
+):
+    """Get mining job status and results."""
+    job = db.query(MiningJob).filter(MiningJob.id == job_id).first()
+    if not job:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Mining job not found")
+
+    if job.tenant_id != api_key.tenant_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+
+    examples = db.query(MinedExample).filter(
+        MinedExample.mining_job_id == job.id,
+    ).order_by(MinedExample.created_at).all()
+
+    from collections import Counter
+    type_counts = Counter(ex.failure_type for ex in examples)
+
+    return {
+        "job_id": job.id,
+        "status": job.status,
+        "total_failures": job.total_failures,
+        "total_mined": job.total_mined,
+        "error_message": job.error_message,
+        "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+        "failure_type_distribution": dict(type_counts),
+        "examples": [
+            {
+                "id": ex.id,
+                "failure_type": ex.failure_type,
+                "prompt": ex.prompt,
+                "original_answer": ex.original_answer,
+                "improved_answer": ex.improved_answer,
+                "original_score": ex.original_score,
+                "estimated_improved_score": ex.estimated_improved_score,
+            }
+            for ex in examples
+        ],
+    }
+
+
+@router.get("/mine/{job_id}/export")
+def api_export_mining_job(
+    job_id: str,
+    format: str = Query("dpo", regex="^(dpo|sft)$"),
+    api_key: ApiKey = Depends(get_api_key_auth),
+    db: Session = Depends(get_db),
+):
+    """Export mined training data as JSONL."""
+    job = db.query(MiningJob).filter(MiningJob.id == job_id).first()
+    if not job:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Mining job not found")
+
+    if job.tenant_id != api_key.tenant_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+
+    if job.status != "completed":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Mining job must be completed")
+
+    from failure_mining import export_mined_examples
+    from datetime import datetime
+
+    content = export_mined_examples(job.id, db, format)
+
+    return Response(
+        content=content,
+        media_type="application/jsonl",
+        headers={
+            "Content-Disposition": f'attachment; filename="mined_{format}_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.jsonl"',
+        },
+    )

@@ -219,3 +219,30 @@ export const getSessionTrace = (workspaceId, sessionId) =>
 
 export const getTraceAnalytics = (workspaceId, days = 30) =>
   request(`/agents/${workspaceId}/traces/analytics?days=${days}`)
+
+// -- Failure Mining --
+export const triggerMining = (envId, maxScore = 60, maxExamples = 100) => {
+  const params = new URLSearchParams({ max_score: maxScore.toString(), max_examples: maxExamples.toString() })
+  return request(`/environments/${envId}/mine?${params}`, { method: 'POST' })
+}
+
+export const getMiningJobs = (envId) => request(`/environments/${envId}/mining-jobs`)
+
+export const getMiningJobDetail = (envId, jobId) =>
+  request(`/environments/${envId}/mining-jobs/${jobId}`)
+
+export const exportMinedData = async (envId, jobId, format = 'dpo') => {
+  const token = getToken()
+  const params = new URLSearchParams({ format })
+  const res = await fetch(`${API_BASE}/environments/${envId}/mining-jobs/${jobId}/export?${params}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Export failed: ${res.status}`)
+  }
+  return res.text()
+}
+
+export const deleteMiningJob = (envId, jobId) =>
+  request(`/environments/${envId}/mining-jobs/${jobId}`, { method: 'DELETE' })

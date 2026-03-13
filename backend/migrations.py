@@ -32,6 +32,7 @@ def run_all():
     _migrate_marketplace_badge_columns()
     _migrate_agent_versions_table()
     _migrate_finetune_jobs_table()
+    _migrate_mining_tables()
 
 
 def _migrate_agent_columns():
@@ -832,3 +833,68 @@ def _migrate_finetune_jobs_table():
             print(f"  [DB] finetune_jobs migration failed: {e}")
     else:
         print("  [DB] finetune_jobs table already exists")
+
+
+def _migrate_mining_tables():
+    """Create mining_jobs and mined_examples tables for failure mining pipeline."""
+    insp = inspect(engine)
+
+    if "mining_jobs" not in insp.get_table_names():
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("""
+                    CREATE TABLE mining_jobs (
+                        id VARCHAR(36) PRIMARY KEY,
+                        environment_id VARCHAR(36) NOT NULL,
+                        tenant_id VARCHAR(36) NOT NULL,
+                        status VARCHAR(20) DEFAULT 'pending',
+                        source_run_ids TEXT NULL,
+                        config TEXT NULL,
+                        total_failures INT DEFAULT 0,
+                        total_mined INT DEFAULT 0,
+                        error_message TEXT NULL,
+                        created_by VARCHAR(36) NULL,
+                        api_key_id VARCHAR(36) NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        completed_at DATETIME NULL,
+                        FOREIGN KEY (environment_id) REFERENCES environments(id),
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+                        INDEX idx_mining_tenant (tenant_id, created_at),
+                        INDEX idx_mining_env (environment_id)
+                    )
+                """))
+            print("  [DB] mining_jobs table created")
+        except Exception as e:
+            print(f"  [DB] mining_jobs migration failed: {e}")
+    else:
+        print("  [DB] mining_jobs table already exists")
+
+    if "mined_examples" not in insp.get_table_names():
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("""
+                    CREATE TABLE mined_examples (
+                        id VARCHAR(36) PRIMARY KEY,
+                        mining_job_id VARCHAR(36) NOT NULL,
+                        eval_result_id VARCHAR(36) NULL,
+                        failure_type VARCHAR(50) DEFAULT 'other',
+                        original_answer TEXT NULL,
+                        improved_answer TEXT NULL,
+                        improvement_reasoning TEXT NULL,
+                        prompt TEXT NULL,
+                        expected_answer TEXT NULL,
+                        sources_context TEXT NULL,
+                        original_score FLOAT DEFAULT 0,
+                        estimated_improved_score FLOAT NULL,
+                        export_format VARCHAR(10) DEFAULT 'dpo',
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (mining_job_id) REFERENCES mining_jobs(id) ON DELETE CASCADE,
+                        INDEX idx_mined_job (mining_job_id),
+                        INDEX idx_mined_failure_type (failure_type)
+                    )
+                """))
+            print("  [DB] mined_examples table created")
+        except Exception as e:
+            print(f"  [DB] mined_examples migration failed: {e}")
+    else:
+        print("  [DB] mined_examples table already exists")

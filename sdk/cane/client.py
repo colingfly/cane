@@ -238,6 +238,78 @@ class Cane:
             "status": status,
         })
 
+    # ── Failure Mining ──
+
+    def mine_failures(
+        self,
+        environment_id: str,
+        run_ids: list = None,
+        max_score: float = 60,
+        strategy: str = "llm_rewrite",
+        max_examples: int = 100,
+    ) -> dict:
+        """
+        Trigger failure mining on eval results. Generates improved answers
+        for low-scoring responses to create DPO training pairs.
+
+        Args:
+            environment_id: ID of the eval environment to mine.
+            run_ids: Optional list of specific run IDs to mine. Defaults to all completed runs.
+            max_score: Mine results scoring at or below this threshold (0-100, default 60).
+            strategy: Rewrite strategy. Currently only "llm_rewrite" is supported.
+            max_examples: Maximum number of failures to process (default 100).
+
+        Returns:
+            dict with job_id and status ("pending"). Poll with mining_job() to check progress.
+        """
+        import json
+        from urllib.parse import urlencode
+        params = {
+            "environment_id": environment_id,
+            "max_score": max_score,
+            "strategy": strategy,
+            "max_examples": max_examples,
+        }
+        if run_ids:
+            params["run_ids"] = json.dumps(run_ids)
+        qs = urlencode(params)
+        return self._request("POST", f"/v1/eval/mine?{qs}")
+
+    def mining_job(self, job_id: str) -> dict:
+        """
+        Get mining job status and results.
+
+        Args:
+            job_id: ID of the mining job.
+
+        Returns:
+            dict with job status, failure type distribution, and mined examples.
+        """
+        return self._request("GET", f"/v1/eval/mine/{job_id}")
+
+    def export_mined(self, job_id: str, format: str = "dpo") -> str:
+        """
+        Export mined training data as JSONL.
+
+        Args:
+            job_id: ID of the completed mining job.
+            format: Export format - "dpo" or "sft" (default "dpo").
+
+        Returns:
+            JSONL string of training examples.
+        """
+        response = self._client.get(
+            f"{self._base_url}/v1/eval/mine/{job_id}/export",
+            params={"format": format},
+        )
+        if response.status_code >= 400:
+            try:
+                detail = response.json().get("detail", response.text)
+            except Exception:
+                detail = response.text
+            raise CaneAPIError(response.status_code, detail)
+        return response.text
+
     def close(self):
         """Close the underlying HTTP client."""
         self._client.close()

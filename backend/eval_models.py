@@ -191,3 +191,61 @@ class EvalResult(Base):
 
     def __repr__(self):
         return f"<EvalResult {self.status} score={self.overall_score}>"
+
+
+# -----------------------------------------
+#  MiningJob
+# -----------------------------------------
+
+class MiningJob(Base):
+    __tablename__ = "mining_jobs"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    environment_id = Column(String(36), ForeignKey("environments.id"), nullable=False)
+    tenant_id = Column(String(36), ForeignKey("tenants.id"), nullable=False)
+    status = Column(String(20), default="pending")  # pending | running | completed | failed
+    source_run_ids = Column(Text, nullable=True)     # JSON array of run IDs
+    config = Column(Text, nullable=True)             # JSON: min_score, max_score, strategy, model, max_examples
+    total_failures = Column(Integer, default=0)
+    total_mined = Column(Integer, default=0)
+    error_message = Column(Text, nullable=True)
+    created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    api_key_id = Column(String(36), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+
+    environment = relationship("Environment")
+    tenant = relationship("Tenant")
+    examples = relationship("MinedExample", back_populates="mining_job", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<MiningJob {self.status} mined={self.total_mined}/{self.total_failures}>"
+
+
+# -----------------------------------------
+#  MinedExample
+# -----------------------------------------
+
+class MinedExample(Base):
+    __tablename__ = "mined_examples"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    mining_job_id = Column(String(36), ForeignKey("mining_jobs.id", ondelete="CASCADE"), nullable=False)
+    eval_result_id = Column(String(36), ForeignKey("eval_results.id"), nullable=True)
+    failure_type = Column(String(50), default="other")   # hallucination | incomplete | off_topic | wrong_format | factual_error | other
+    original_answer = Column(Text, nullable=True)
+    improved_answer = Column(Text, nullable=True)
+    improvement_reasoning = Column(Text, nullable=True)
+    prompt = Column(Text, nullable=True)                 # the question
+    expected_answer = Column(Text, nullable=True)
+    sources_context = Column(Text, nullable=True)
+    original_score = Column(Float, default=0)
+    estimated_improved_score = Column(Float, nullable=True)
+    export_format = Column(String(10), default="dpo")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    mining_job = relationship("MiningJob", back_populates="examples")
+    eval_result = relationship("EvalResult")
+
+    def __repr__(self):
+        return f"<MinedExample {self.failure_type} score={self.original_score}>"
