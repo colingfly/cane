@@ -153,3 +153,69 @@ export const compareModels = (question, baseModel, ftModel, systemPrompt = '') =
   if (systemPrompt) params.set('system_prompt', systemPrompt)
   return request(`/finetune/compare?${params}`, { method: 'POST' })
 }
+
+// -- Eval Analytics --
+export const getAnalyticsDashboard = (envId) => request(`/environments/${envId}/analytics/dashboard`)
+
+export const getScoreTrends = (envId) => request(`/environments/${envId}/analytics/trends`)
+
+export const getRegressions = (envId, baseRunId, compareRunId, threshold = 10) => {
+  const params = new URLSearchParams({ threshold: threshold.toString() })
+  if (baseRunId) params.set('base_run_id', baseRunId)
+  if (compareRunId) params.set('compare_run_id', compareRunId)
+  return request(`/environments/${envId}/analytics/regressions?${params}`)
+}
+
+export const getCategoryBreakdown = (envId, runId) => {
+  const params = runId ? `?run_id=${runId}` : ''
+  return request(`/environments/${envId}/analytics/categories${params}`)
+}
+
+export const getLatencyAnalysis = (envId, runId) => {
+  const params = runId ? `?run_id=${runId}` : ''
+  return request(`/environments/${envId}/analytics/latency${params}`)
+}
+
+export const getFailurePatterns = (envId, runId) => {
+  const params = runId ? `?run_id=${runId}` : ''
+  return request(`/environments/${envId}/analytics/failure-patterns${params}`)
+}
+
+export const getConsistencyAnalysis = (envId) => request(`/environments/${envId}/analytics/consistency`)
+
+export const getDriftAnalysis = (envId) => request(`/environments/${envId}/analytics/drift`)
+
+export const getCriteriaBreakdown = (envId, runId) => {
+  const params = runId ? `?run_id=${runId}` : ''
+  return request(`/environments/${envId}/analytics/criteria-breakdown${params}`)
+}
+
+// -- Fine-tune Lineage --
+export const getFinetuneLineage = (envId) => {
+  const params = envId ? `?environment_id=${envId}` : ''
+  return request(`/finetune/lineage${params}`)
+}
+
+// -- Agent Versioning --
+export const createAgentVersion = (workspaceId, label = '') => {
+  const params = label ? `?label=${encodeURIComponent(label)}` : ''
+  return request(`/agents/${workspaceId}/versions${params}`, { method: 'POST' })
+}
+
+export const getAgentVersions = (workspaceId) => request(`/agents/${workspaceId}/versions`)
+
+export const getAgentVersion = (workspaceId, versionId) =>
+  request(`/agents/${workspaceId}/versions/${versionId}`)
+
+export const rollbackAgentVersion = (workspaceId, versionId) =>
+  request(`/agents/${workspaceId}/versions/${versionId}/rollback`, { method: 'POST' })
+
+// -- Execution Tracing --
+export const getAgentTraces = (workspaceId, limit = 50) =>
+  request(`/agents/${workspaceId}/traces?limit=${limit}`)
+
+export const getSessionTrace = (workspaceId, sessionId) =>
+  request(`/agents/${workspaceId}/traces/session/${sessionId}`)
+
+export const getTraceAnalytics = (workspaceId, days = 30) =>
+  request(`/agents/${workspaceId}/traces/analytics?days=${days}`)

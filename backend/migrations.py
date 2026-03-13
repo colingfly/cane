@@ -30,6 +30,8 @@ def run_all():
     _migrate_eval_target_columns()
     _migrate_eval_run_api_columns()
     _migrate_marketplace_badge_columns()
+    _migrate_agent_versions_table()
+    _migrate_finetune_jobs_table()
 
 
 def _migrate_agent_columns():
@@ -767,3 +769,66 @@ def _migrate_marketplace_badge_columns():
             print("  [DB] Marketplace badge columns already present")
     except Exception as e:
         print(f"  [DB] Marketplace badge migration skipped: {e}")
+
+
+def _migrate_agent_versions_table():
+    """Create agent_versions table for agent config versioning."""
+    insp = inspect(engine)
+    if "agent_versions" not in insp.get_table_names():
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("""
+                    CREATE TABLE agent_versions (
+                        id VARCHAR(36) PRIMARY KEY,
+                        workspace_id VARCHAR(36) NOT NULL,
+                        tenant_id VARCHAR(36) NOT NULL,
+                        version_number INT NOT NULL,
+                        label VARCHAR(255) DEFAULT '',
+                        config_snapshot TEXT NOT NULL,
+                        changes TEXT DEFAULT '[]',
+                        created_by VARCHAR(36) NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+                        INDEX idx_versions_workspace (workspace_id, version_number)
+                    )
+                """))
+            print("  [DB] agent_versions table created")
+        except Exception as e:
+            print(f"  [DB] agent_versions migration failed: {e}")
+    else:
+        print("  [DB] agent_versions table already exists")
+
+
+def _migrate_finetune_jobs_table():
+    """Create finetune_jobs table for fine-tune lineage tracking."""
+    insp = inspect(engine)
+    if "finetune_jobs" not in insp.get_table_names():
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("""
+                    CREATE TABLE finetune_jobs (
+                        id VARCHAR(36) PRIMARY KEY,
+                        tenant_id VARCHAR(36) NOT NULL,
+                        environment_id VARCHAR(36) NULL,
+                        openai_job_id VARCHAR(100) DEFAULT '',
+                        base_model VARCHAR(100) DEFAULT '',
+                        fine_tuned_model VARCHAR(255) DEFAULT '',
+                        training_file_id VARCHAR(100) DEFAULT '',
+                        training_examples INT DEFAULT 0,
+                        n_epochs INT DEFAULT 3,
+                        min_score FLOAT DEFAULT 80,
+                        status VARCHAR(50) DEFAULT 'pending',
+                        created_by VARCHAR(36) NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+                        INDEX idx_finetune_tenant (tenant_id, created_at),
+                        INDEX idx_finetune_env (environment_id)
+                    )
+                """))
+            print("  [DB] finetune_jobs table created")
+        except Exception as e:
+            print(f"  [DB] finetune_jobs migration failed: {e}")
+    else:
+        print("  [DB] finetune_jobs table already exists")

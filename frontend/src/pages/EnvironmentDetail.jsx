@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   FlaskConical, ArrowLeft, Plus, Trash2, Check, X, Play, Bell,
   SlidersHorizontal, ListChecks, BarChart3, Settings, Sparkles, Wand2,
-  Globe, Zap, Download, Brain, Loader2,
+  Globe, Zap, Download, Brain, Loader2, TrendingUp, TrendingDown, AlertTriangle,
+  Activity, Target, GitBranch,
 } from 'lucide-react'
 import {
   getEnvironment, updateEnvironment,
@@ -14,6 +15,8 @@ import {
   exportRun, getExportStats,
   generateDataset, submitFinetune, listFinetuneJobs,
   getFinetuneStatus, cancelFinetune, getFinetuneEvents,
+  getAnalyticsDashboard, getRegressions, getCategoryBreakdown,
+  getFailurePatterns, getConsistencyAnalysis, getCriteriaBreakdown,
 } from '../api/eval'
 import { getAgents } from '../api/client'
 
@@ -22,6 +25,7 @@ const TABS = [
   { id: 'cases', label: 'Test Cases', icon: ListChecks },
   { id: 'criteria', label: 'Judge Criteria', icon: SlidersHorizontal },
   { id: 'results', label: 'Results', icon: BarChart3 },
+  { id: 'analytics', label: 'Analytics', icon: Activity },
   { id: 'training', label: 'Training Data', icon: Brain },
 ]
 
@@ -86,6 +90,16 @@ export default function EnvironmentDetail() {
   const [ftJobs, setFtJobs] = useState([])
   const [ftJobDetail, setFtJobDetail] = useState(null)
   const [ftPolling, setFtPolling] = useState(null)
+
+  // Analytics state
+  const [analyticsDash, setAnalyticsDash] = useState(null)
+  const [analyticsView, setAnalyticsView] = useState('dashboard')
+  const [regressions, setRegressions] = useState(null)
+  const [categories, setCategories] = useState(null)
+  const [failurePatterns, setFailurePatterns] = useState(null)
+  const [consistency, setConsistency] = useState(null)
+  const [criteriaBreakdown, setCriteriaBreakdown] = useState(null)
+  const [analyticsLoading, setAnalyticsLoading] = useState(false)
 
   // Run state
   const [running, setRunning] = useState(false)
@@ -1285,6 +1299,380 @@ export default function EnvironmentDetail() {
                   <BarChart3 size={28} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
                   <h3>No runs yet</h3>
                   <p>Add test cases and configure criteria, then hit Run Evaluation.</p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ═══ ANALYTICS TAB ═══ */}
+      {tab === 'analytics' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {/* Analytics Nav */}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {[
+              { id: 'dashboard', label: 'Dashboard', icon: Activity },
+              { id: 'regressions', label: 'Regressions', icon: AlertTriangle },
+              { id: 'categories', label: 'Categories', icon: Target },
+              { id: 'failures', label: 'Failure Patterns', icon: TrendingDown },
+              { id: 'consistency', label: 'Consistency', icon: GitBranch },
+              { id: 'criteria', label: 'Criteria Deep Dive', icon: SlidersHorizontal },
+            ].map(v => (
+              <button key={v.id} className={`btn btn-sm ${analyticsView === v.id ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={async () => {
+                  setAnalyticsView(v.id)
+                  setAnalyticsLoading(true)
+                  try {
+                    if (v.id === 'dashboard') {
+                      const d = await getAnalyticsDashboard(envId)
+                      setAnalyticsDash(d)
+                    } else if (v.id === 'regressions') {
+                      const r = await getRegressions(envId)
+                      setRegressions(r)
+                    } else if (v.id === 'categories') {
+                      const c = await getCategoryBreakdown(envId)
+                      setCategories(c)
+                    } else if (v.id === 'failures') {
+                      const f = await getFailurePatterns(envId)
+                      setFailurePatterns(f)
+                    } else if (v.id === 'consistency') {
+                      const c = await getConsistencyAnalysis(envId)
+                      setConsistency(c)
+                    } else if (v.id === 'criteria') {
+                      const c = await getCriteriaBreakdown(envId)
+                      setCriteriaBreakdown(c)
+                    }
+                  } catch (err) { console.error(err) }
+                  finally { setAnalyticsLoading(false) }
+                }}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem' }}>
+                <v.icon size={14} /> {v.label}
+              </button>
+            ))}
+          </div>
+
+          {analyticsLoading ? (
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+              <Loader2 size={24} className="spin" style={{ marginBottom: 8 }} />
+              <div style={{ fontSize: '0.85rem' }}>Loading analytics...</div>
+            </div>
+          ) : (
+            <>
+              {/* Dashboard View */}
+              {analyticsView === 'dashboard' && analyticsDash && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  {!analyticsDash.has_data ? (
+                    <div className="card" style={{ padding: 40, textAlign: 'center' }}>
+                      <Activity size={28} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
+                      <h3>No analytics data yet</h3>
+                      <p style={{ color: 'var(--text-muted)' }}>Run at least one evaluation to see analytics.</p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* KPI Row */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16 }}>
+                        {[
+                          { label: 'Latest Score', value: `${analyticsDash.latest_run?.score || 0}`, color: (analyticsDash.latest_run?.score || 0) >= 80 ? '#16a34a' : (analyticsDash.latest_run?.score || 0) >= 60 ? '#d97706' : '#dc2626' },
+                          { label: 'Pass Rate', value: `${analyticsDash.pass_rate || 0}%`, color: '#2563eb' },
+                          { label: 'Total Runs', value: `${analyticsDash.total_runs}`, color: '#7c3aed' },
+                          { label: 'Regressions', value: `${analyticsDash.regressions_detected}`, color: analyticsDash.regressions_detected > 0 ? '#dc2626' : '#16a34a' },
+                          { label: 'Avg Latency', value: `${analyticsDash.latency_stats?.mean || 0}ms`, color: '#0891b2' },
+                          { label: 'Median Score', value: `${analyticsDash.score_stats?.median || 0}`, color: '#059669' },
+                        ].map(kpi => (
+                          <div key={kpi.label} className="card" style={{ padding: 16, textAlign: 'center' }}>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{kpi.label}</div>
+                            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: kpi.color }}>{kpi.value}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Score Trend */}
+                      {analyticsDash.score_trend?.length > 1 && (
+                        <div className="card" style={{ padding: 20 }}>
+                          <h4 style={{ fontSize: '0.85rem', fontWeight: 700, margin: '0 0 16px 0' }}>Score Trend (Last {analyticsDash.score_trend.length} Runs)</h4>
+                          <div style={{ display: 'flex', alignItems: 'end', gap: 4, height: 120 }}>
+                            {analyticsDash.score_trend.map((t, i) => {
+                              const h = Math.max(8, (t.score || 0) / 100 * 100)
+                              const color = (t.score || 0) >= 80 ? '#16a34a' : (t.score || 0) >= 60 ? '#d97706' : '#dc2626'
+                              return (
+                                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                                  <div style={{ fontSize: '0.65rem', fontWeight: 700, color }}>{t.score}</div>
+                                  <div style={{ width: '100%', height: `${h}%`, background: color, borderRadius: 4, minHeight: 8, opacity: 0.8 }} title={`Run ${i + 1}: ${t.score}`} />
+                                  <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                                    {t.created_at ? new Date(t.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Top Failure Criteria */}
+                      {analyticsDash.top_failure_criteria?.length > 0 && (
+                        <div className="card" style={{ padding: 20 }}>
+                          <h4 style={{ fontSize: '0.85rem', fontWeight: 700, margin: '0 0 12px 0' }}>Top Failure Criteria</h4>
+                          {analyticsDash.top_failure_criteria.map(fc => (
+                            <div key={fc.criteria} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border-light)' }}>
+                              <span style={{ fontSize: '0.8rem', fontWeight: 600, textTransform: 'capitalize' }}>{fc.criteria.replace(/_/g, ' ')}</span>
+                              <span style={{ fontSize: '0.78rem', color: '#dc2626', fontWeight: 700 }}>{fc.count} failures</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Dashboard auto-load */}
+              {analyticsView === 'dashboard' && !analyticsDash && !analyticsLoading && (
+                <div className="card" style={{ padding: 40, textAlign: 'center' }}>
+                  <button className="btn btn-primary" onClick={async () => {
+                    setAnalyticsLoading(true)
+                    try { setAnalyticsDash(await getAnalyticsDashboard(envId)) }
+                    catch (err) { console.error(err) }
+                    finally { setAnalyticsLoading(false) }
+                  }}>
+                    <Activity size={16} /> Load Analytics Dashboard
+                  </button>
+                </div>
+              )}
+
+              {/* Regressions View */}
+              {analyticsView === 'regressions' && regressions && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div className="card" style={{ padding: 20 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                      <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0 }}>Regression Detection</h4>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                        Overall: <span style={{ fontWeight: 700, color: regressions.score_delta >= 0 ? '#16a34a' : '#dc2626' }}>
+                          {regressions.score_delta >= 0 ? '+' : ''}{regressions.score_delta}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                      <div style={{ textAlign: 'center', padding: 12, background: 'rgba(220,38,38,0.06)', borderRadius: 8 }}>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#dc2626' }}>{regressions.summary.regressions}</div>
+                        <div style={{ fontSize: '0.7rem', color: '#dc2626', fontWeight: 600 }}>Regressions</div>
+                      </div>
+                      <div style={{ textAlign: 'center', padding: 12, background: 'rgba(22,163,74,0.06)', borderRadius: 8 }}>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#16a34a' }}>{regressions.summary.improvements}</div>
+                        <div style={{ fontSize: '0.7rem', color: '#16a34a', fontWeight: 600 }}>Improvements</div>
+                      </div>
+                      <div style={{ textAlign: 'center', padding: 12, background: 'rgba(107,114,128,0.06)', borderRadius: 8 }}>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-muted)' }}>{regressions.summary.stable}</div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Stable</div>
+                      </div>
+                      <div style={{ textAlign: 'center', padding: 12, background: 'rgba(37,99,235,0.06)', borderRadius: 8 }}>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#2563eb' }}>{regressions.summary.new_questions}</div>
+                        <div style={{ fontSize: '0.7rem', color: '#2563eb', fontWeight: 600 }}>New Questions</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {regressions.regressions?.length > 0 && (
+                    <div className="card" style={{ padding: 20 }}>
+                      <h4 style={{ fontSize: '0.85rem', fontWeight: 700, margin: '0 0 12px 0', color: '#dc2626', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <TrendingDown size={16} /> Regressions (score dropped)
+                      </h4>
+                      {regressions.regressions.map((r, i) => (
+                        <div key={i} style={{ padding: '10px 0', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                          <div style={{ flex: 1, fontSize: '0.78rem', lineHeight: 1.4 }}>{r.question}</div>
+                          <div style={{ display: 'flex', gap: 12, alignItems: 'center', whiteSpace: 'nowrap' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{r.base_score}</span>
+                            <span style={{ fontSize: '0.75rem' }}>&#8594;</span>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#dc2626' }}>{r.compare_score}</span>
+                            <span style={{ fontSize: '0.7rem', color: '#dc2626', fontWeight: 700, background: 'rgba(220,38,38,0.08)', padding: '2px 8px', borderRadius: 99 }}>{r.delta}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {regressions.improvements?.length > 0 && (
+                    <div className="card" style={{ padding: 20 }}>
+                      <h4 style={{ fontSize: '0.85rem', fontWeight: 700, margin: '0 0 12px 0', color: '#16a34a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <TrendingUp size={16} /> Improvements (score increased)
+                      </h4>
+                      {regressions.improvements.slice(0, 10).map((r, i) => (
+                        <div key={i} style={{ padding: '10px 0', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                          <div style={{ flex: 1, fontSize: '0.78rem', lineHeight: 1.4 }}>{r.question}</div>
+                          <div style={{ display: 'flex', gap: 12, alignItems: 'center', whiteSpace: 'nowrap' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{r.base_score}</span>
+                            <span style={{ fontSize: '0.75rem' }}>&#8594;</span>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#16a34a' }}>{r.compare_score}</span>
+                            <span style={{ fontSize: '0.7rem', color: '#16a34a', fontWeight: 700, background: 'rgba(22,163,74,0.08)', padding: '2px 8px', borderRadius: 99 }}>+{r.delta}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Categories View */}
+              {analyticsView === 'categories' && categories && (
+                <div className="card" style={{ padding: 20 }}>
+                  <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: '0 0 16px 0' }}>Performance by Category</h4>
+                  {categories.categories?.length > 0 ? (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '2px solid var(--border-light)' }}>
+                            <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 700 }}>Tag</th>
+                            <th style={{ textAlign: 'center', padding: '8px 12px', fontWeight: 700 }}>Count</th>
+                            <th style={{ textAlign: 'center', padding: '8px 12px', fontWeight: 700 }}>Mean Score</th>
+                            <th style={{ textAlign: 'center', padding: '8px 12px', fontWeight: 700 }}>Pass Rate</th>
+                            <th style={{ textAlign: 'center', padding: '8px 12px', fontWeight: 700 }}>Fail Rate</th>
+                            <th style={{ textAlign: 'center', padding: '8px 12px', fontWeight: 700 }}>Avg Latency</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {categories.categories.map(cat => (
+                            <tr key={cat.tag} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                              <td style={{ padding: '8px 12px', fontWeight: 600 }}>
+                                <span style={{ background: 'rgba(37,99,235,0.08)', padding: '2px 10px', borderRadius: 99, fontSize: '0.72rem' }}>{cat.tag}</span>
+                              </td>
+                              <td style={{ textAlign: 'center', padding: '8px 12px' }}>{cat.count}</td>
+                              <td style={{ textAlign: 'center', padding: '8px 12px', fontWeight: 700, color: cat.mean_score >= 80 ? '#16a34a' : cat.mean_score >= 60 ? '#d97706' : '#dc2626' }}>{cat.mean_score}</td>
+                              <td style={{ textAlign: 'center', padding: '8px 12px', color: '#16a34a' }}>{cat.pass_rate}%</td>
+                              <td style={{ textAlign: 'center', padding: '8px 12px', color: '#dc2626' }}>{cat.fail_rate}%</td>
+                              <td style={{ textAlign: 'center', padding: '8px 12px', color: 'var(--text-muted)' }}>{cat.avg_latency_ms}ms</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>No category data. Add tags to your test cases to see breakdowns.</p>
+                  )}
+                </div>
+              )}
+
+              {/* Failure Patterns View */}
+              {analyticsView === 'failures' && failurePatterns && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div className="card" style={{ padding: 20 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                      <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0 }}>Failure Pattern Analysis</h4>
+                      <div style={{ fontSize: '0.78rem' }}>
+                        <span style={{ color: '#16a34a', fontWeight: 700 }}>{failurePatterns.pass_rate}% pass rate</span>
+                        <span style={{ color: 'var(--text-muted)', margin: '0 8px' }}>|</span>
+                        <span style={{ color: '#dc2626', fontWeight: 700 }}>{failurePatterns.total_issues} issues</span>
+                      </div>
+                    </div>
+
+                    {Object.entries(failurePatterns.patterns || {}).map(([key, data]) => (
+                      <div key={key} style={{ marginBottom: 16, padding: 16, background: 'var(--bg-secondary)', borderRadius: 10 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                          <div>
+                            <span style={{ fontWeight: 700, fontSize: '0.82rem', textTransform: 'capitalize' }}>{key.replace(/_/g, ' ')}</span>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: 8 }}>{data.description}</span>
+                          </div>
+                          <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#dc2626', background: 'rgba(220,38,38,0.08)', padding: '2px 10px', borderRadius: 99 }}>{data.count}</span>
+                        </div>
+                        {data.questions?.slice(0, 3).map((q, i) => (
+                          <div key={i} style={{ fontSize: '0.75rem', padding: '6px 0', borderTop: '1px solid var(--border-light)', color: 'var(--text-secondary)' }}>
+                            <span style={{ fontWeight: 600 }}>Q:</span> {q.question}
+                            <span style={{ marginLeft: 8, color: '#dc2626', fontWeight: 700 }}>{q.score}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+
+                    {Object.keys(failurePatterns.patterns || {}).length === 0 && (
+                      <div style={{ textAlign: 'center', padding: 20, color: '#16a34a', fontWeight: 600 }}>
+                        All questions passed! No failure patterns detected.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Consistency View */}
+              {analyticsView === 'consistency' && consistency && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div className="card" style={{ padding: 20 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                      <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0 }}>Consistency Analysis</h4>
+                      <div style={{
+                        fontSize: '1.3rem', fontWeight: 800,
+                        color: consistency.consistency_score >= 80 ? '#16a34a' : consistency.consistency_score >= 60 ? '#d97706' : '#dc2626',
+                      }}>
+                        {consistency.consistency_score}/100
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
+                      <div style={{ textAlign: 'center', padding: 12, background: 'rgba(22,163,74,0.06)', borderRadius: 8 }}>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#16a34a' }}>{consistency.summary?.stable || 0}</div>
+                        <div style={{ fontSize: '0.7rem', color: '#16a34a', fontWeight: 600 }}>Stable</div>
+                      </div>
+                      <div style={{ textAlign: 'center', padding: 12, background: 'rgba(217,119,6,0.06)', borderRadius: 8 }}>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#d97706' }}>{consistency.summary?.moderate || 0}</div>
+                        <div style={{ fontSize: '0.7rem', color: '#d97706', fontWeight: 600 }}>Moderate</div>
+                      </div>
+                      <div style={{ textAlign: 'center', padding: 12, background: 'rgba(220,38,38,0.06)', borderRadius: 8 }}>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#dc2626' }}>{consistency.summary?.volatile || 0}</div>
+                        <div style={{ fontSize: '0.7rem', color: '#dc2626', fontWeight: 600 }}>Volatile</div>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 16 }}>
+                      Analyzed {consistency.questions_analyzed} questions across {consistency.runs_analyzed} runs. Average std dev: {consistency.avg_std_dev}
+                    </div>
+                  </div>
+
+                  {consistency.most_inconsistent?.length > 0 && (
+                    <div className="card" style={{ padding: 20 }}>
+                      <h4 style={{ fontSize: '0.85rem', fontWeight: 700, margin: '0 0 12px 0', color: '#dc2626' }}>Most Inconsistent Questions</h4>
+                      {consistency.most_inconsistent.map((q, i) => (
+                        <div key={i} style={{ padding: '10px 0', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                          <div style={{ flex: 1, fontSize: '0.78rem' }}>{q.question}</div>
+                          <div style={{ display: 'flex', gap: 12, alignItems: 'center', whiteSpace: 'nowrap' }}>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{q.min_score}-{q.max_score}</span>
+                            <span style={{
+                              fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+                              background: q.stability === 'volatile' ? 'rgba(220,38,38,0.08)' : 'rgba(217,119,6,0.08)',
+                              color: q.stability === 'volatile' ? '#dc2626' : '#d97706',
+                            }}>
+                              {q.stability} (SD: {q.std_dev})
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Criteria Deep Dive View */}
+              {analyticsView === 'criteria' && criteriaBreakdown && (
+                <div className="card" style={{ padding: 20 }}>
+                  <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: '0 0 16px 0' }}>Criteria Performance Breakdown</h4>
+                  {criteriaBreakdown.criteria?.map(c => (
+                    <div key={c.criteria_key} style={{ marginBottom: 16 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <span style={{ fontSize: '0.82rem', fontWeight: 700, textTransform: 'capitalize' }}>{c.criteria_key.replace(/_/g, ' ')}</span>
+                        <span style={{ fontSize: '0.82rem', fontWeight: 800, color: c.mean >= 80 ? '#16a34a' : c.mean >= 60 ? '#d97706' : '#dc2626' }}>{c.mean}</span>
+                      </div>
+                      <div style={{ height: 8, background: 'var(--bg-secondary)', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{
+                          width: `${c.mean}%`, height: '100%', borderRadius: 4,
+                          background: c.mean >= 80 ? '#16a34a' : c.mean >= 60 ? '#d97706' : '#dc2626',
+                          transition: 'width 0.3s',
+                        }} />
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                        <span>Min: {c.min} | Max: {c.max} | SD: {c.std_dev}</span>
+                        <span>
+                          <span style={{ color: '#dc2626' }}>{c.below_60_pct}% below 60</span>
+                          {' | '}
+                          <span style={{ color: '#16a34a' }}>{c.above_80_pct}% above 80</span>
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </>

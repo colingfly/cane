@@ -122,6 +122,9 @@ from routes.eval_api import router as eval_api_router
 from routes.badges import router as badges_router
 from routes.eval_export import router as eval_export_router
 from finetune_routes import router as finetune_router
+from routes.eval_analytics import router as eval_analytics_router
+from routes.agent_versions import router as agent_versions_router
+from routes.execution_tracing import router as execution_tracing_router
 
 app.include_router(auth_router)
 app.include_router(documents_router)
@@ -152,6 +155,9 @@ app.include_router(eval_api_router)
 app.include_router(badges_router)
 app.include_router(eval_export_router)
 app.include_router(finetune_router)
+app.include_router(eval_analytics_router)
+app.include_router(agent_versions_router)
+app.include_router(execution_tracing_router)
 
 
 # ── Background sync loop for Live Connectors ──

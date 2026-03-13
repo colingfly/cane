@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Upload, Trash2, FileText, Sparkles, Save, ToggleLeft, ToggleRight, MessageSquare, Store, Wrench, Zap, Play, Plus, ChevronDown, ChevronUp, RefreshCw, Link2, Globe, X, BarChart3, Palette, Key, Pencil, Copy, Check, Cloud, FolderOpen, Search, Pause, Unplug, Clock, Brain } from 'lucide-react'
+import { ArrowLeft, Upload, Trash2, FileText, Sparkles, Save, ToggleLeft, ToggleRight, MessageSquare, Store, Wrench, Zap, Play, Plus, ChevronDown, ChevronUp, RefreshCw, Link2, Globe, X, BarChart3, Palette, Key, Pencil, Copy, Check, Cloud, FolderOpen, Search, Pause, Unplug, Clock, Brain, Loader2 } from 'lucide-react'
 import {
   getAgent, updateAgent, generateAgentPrompt, generateReplicaPrompt,
   getDocuments, uploadDocument, deleteDocument, getDocumentStatus,
@@ -15,7 +15,7 @@ import {
   listDriveFolders, listSyncs, createSync, getSync, triggerSync, updateSyncStatus, deleteSync,
   testS3Connection, connectS3, getS3Status, disconnectS3, browseS3,
 } from '../api/client'
-import { getEnvironments, getRuns } from '../api/eval'
+import { getEnvironments, getRuns, createAgentVersion, getAgentVersions, rollbackAgentVersion, getAgentTraces, getTraceAnalytics } from '../api/eval'
 
 const ICON_COLORS = {
   OG: { bg: 'rgba(255,255,255,0.15)' },
@@ -29,6 +29,8 @@ const TABS = [
   { id: 'knowledge', label: 'Knowledge', icon: FileText },
   { id: 'tools', label: 'Tools', icon: Wrench },
   { id: 'behavior', label: 'Behavior', icon: Brain },
+  { id: 'versions', label: 'Versions', icon: Clock },
+  { id: 'traces', label: 'Traces', icon: Zap },
   { id: 'deploy', label: 'Deploy', icon: Globe },
 ]
 
@@ -64,6 +66,17 @@ export default function AgentDetail() {
   const [dirty, setDirty] = useState(false)
   const [dragover, setDragover] = useState(false)
   const fileRef = useRef()
+
+  // Versions
+  const [versions, setVersions] = useState([])
+  const [versionsLoading, setVersionsLoading] = useState(false)
+  const [versionLabel, setVersionLabel] = useState('')
+  const [creatingVersion, setCreatingVersion] = useState(false)
+
+  // Traces
+  const [traces, setTraces] = useState([])
+  const [traceAnalytics, setTraceAnalytics] = useState(null)
+  const [tracesLoading, setTracesLoading] = useState(false)
 
   // Publish flow
   const [showPublish, setShowPublish] = useState(false)
@@ -3437,6 +3450,251 @@ export default function AgentDetail() {
           </div>
         )}
       </div>
+      )}
+
+      {/* ═══ VERSIONS TAB ═══ */}
+      {tab === 'versions' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* Create Version */}
+          <div className="card" style={{ padding: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, marginBottom: 4 }}>Agent Versions</h3>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: 0 }}>Snapshot your agent config. Rollback anytime.</p>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  type="text" value={versionLabel} onChange={e => setVersionLabel(e.target.value)}
+                  placeholder="Version label (optional)"
+                  style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--border-light)', fontSize: '0.78rem', width: 200, background: 'var(--bg-primary)' }}
+                />
+                <button className="btn btn-primary btn-sm" disabled={creatingVersion} onClick={async () => {
+                  setCreatingVersion(true)
+                  try {
+                    await createAgentVersion(agentId, versionLabel)
+                    setVersionLabel('')
+                    const v = await getAgentVersions(agentId)
+                    setVersions(v.versions || [])
+                  } catch (err) { console.error(err) }
+                  finally { setCreatingVersion(false) }
+                }}>
+                  {creatingVersion ? <><Loader2 size={14} className="spin" /> Saving...</> : <><Save size={14} /> Snapshot</>}
+                </button>
+              </div>
+            </div>
+
+            {/* Load versions on first view */}
+            {versions.length === 0 && !versionsLoading && (
+              <div style={{ textAlign: 'center', padding: 20 }}>
+                <button className="btn btn-ghost" onClick={async () => {
+                  setVersionsLoading(true)
+                  try {
+                    const v = await getAgentVersions(agentId)
+                    setVersions(v.versions || [])
+                  } catch (err) { console.error(err) }
+                  finally { setVersionsLoading(false) }
+                }}>
+                  <RefreshCw size={14} /> Load Version History
+                </button>
+              </div>
+            )}
+
+            {versionsLoading && (
+              <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>
+                <Loader2 size={20} className="spin" />
+              </div>
+            )}
+
+            {/* Version List */}
+            {versions.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {versions.map(v => (
+                  <div key={v.id} style={{
+                    padding: '12px 16px', background: 'var(--bg-secondary)', borderRadius: 10,
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  }}>
+                    <div>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 700 }}>
+                        {v.label || `v${v.version_number}`}
+                        <span style={{ marginLeft: 8, fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400 }}>
+                          {v.created_at ? new Date(v.created_at).toLocaleString() : ''}
+                        </span>
+                      </div>
+                      {v.change_count > 0 && (
+                        <div style={{ fontSize: '0.72rem', color: '#d97706', marginTop: 2 }}>
+                          {v.change_count} field{v.change_count !== 1 ? 's' : ''} changed
+                        </div>
+                      )}
+                      {v.changes?.length > 0 && (
+                        <div style={{ marginTop: 4 }}>
+                          {v.changes.slice(0, 3).map((c, i) => (
+                            <div key={i} style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                              <span style={{ fontWeight: 600 }}>{c.field}:</span> changed
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <button className="btn btn-ghost btn-sm" onClick={async () => {
+                      if (!confirm(`Rollback to ${v.label || 'v' + v.version_number}? This will overwrite current config.`)) return
+                      try {
+                        await rollbackAgentVersion(agentId, v.id)
+                        window.location.reload()
+                      } catch (err) { console.error(err); alert(err.message) }
+                    }} style={{ fontSize: '0.72rem' }}>
+                      <RefreshCw size={12} /> Rollback
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ TRACES TAB ═══ */}
+      {tab === 'traces' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div className="card" style={{ padding: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, marginBottom: 4 }}>Execution Traces</h3>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: 0 }}>Agent-to-agent call logs, latency, and error tracking.</p>
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={async () => {
+                setTracesLoading(true)
+                try {
+                  const [t, a] = await Promise.all([
+                    getAgentTraces(agentId),
+                    getTraceAnalytics(agentId),
+                  ])
+                  setTraces(t.traces || [])
+                  setTraceAnalytics(a)
+                } catch (err) { console.error(err) }
+                finally { setTracesLoading(false) }
+              }}>
+                <RefreshCw size={14} /> Refresh
+              </button>
+            </div>
+
+            {tracesLoading ? (
+              <div style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>
+                <Loader2 size={20} className="spin" />
+              </div>
+            ) : traces.length === 0 && !traceAnalytics ? (
+              <div style={{ textAlign: 'center', padding: 30 }}>
+                <Zap size={28} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>No traces yet. Traces appear when this agent calls other agents in a network.</p>
+                <button className="btn btn-primary btn-sm" style={{ marginTop: 8 }} onClick={async () => {
+                  setTracesLoading(true)
+                  try {
+                    const [t, a] = await Promise.all([
+                      getAgentTraces(agentId),
+                      getTraceAnalytics(agentId),
+                    ])
+                    setTraces(t.traces || [])
+                    setTraceAnalytics(a)
+                  } catch (err) { console.error(err) }
+                  finally { setTracesLoading(false) }
+                }}>
+                  Load Traces
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Trace Analytics Summary */}
+                {traceAnalytics?.has_data && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
+                    <div style={{ textAlign: 'center', padding: 12, background: 'rgba(37,99,235,0.06)', borderRadius: 8 }}>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#2563eb' }}>{traceAnalytics.total_calls}</div>
+                      <div style={{ fontSize: '0.68rem', fontWeight: 600, color: '#2563eb' }}>Total Calls</div>
+                    </div>
+                    <div style={{ textAlign: 'center', padding: 12, background: 'rgba(8,145,178,0.06)', borderRadius: 8 }}>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0891b2' }}>{traceAnalytics.avg_latency_ms}ms</div>
+                      <div style={{ fontSize: '0.68rem', fontWeight: 600, color: '#0891b2' }}>Avg Latency</div>
+                    </div>
+                    <div style={{ textAlign: 'center', padding: 12, background: traceAnalytics.error_rate > 5 ? 'rgba(220,38,38,0.06)' : 'rgba(22,163,74,0.06)', borderRadius: 8 }}>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 800, color: traceAnalytics.error_rate > 5 ? '#dc2626' : '#16a34a' }}>{traceAnalytics.error_rate}%</div>
+                      <div style={{ fontSize: '0.68rem', fontWeight: 600, color: traceAnalytics.error_rate > 5 ? '#dc2626' : '#16a34a' }}>Error Rate</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Agent Breakdown */}
+                {traceAnalytics?.agent_breakdown?.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <h4 style={{ fontSize: '0.82rem', fontWeight: 700, marginBottom: 8 }}>Called Agents</h4>
+                    {traceAnalytics.agent_breakdown.map(a => (
+                      <div key={a.agent_id} style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        padding: '8px 0', borderBottom: '1px solid var(--border-light)',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: '0.82rem' }}>{a.icon || '🤖'}</span>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{a.name}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 16, fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                          <span>{a.total_calls} calls</span>
+                          <span>{a.avg_latency_ms}ms avg</span>
+                          <span style={{ color: a.error_rate > 5 ? '#dc2626' : '#16a34a' }}>{a.error_rate}% errors</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Performance Hotspots */}
+                {traceAnalytics?.hotspots?.length > 0 && (
+                  <div style={{ padding: 12, background: 'rgba(220,38,38,0.04)', borderRadius: 8, border: '1px solid rgba(220,38,38,0.15)', marginBottom: 20 }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#dc2626', marginBottom: 4 }}>
+                      Performance Hotspots
+                    </div>
+                    {traceAnalytics.hotspots.map(h => (
+                      <div key={h.agent_id} style={{ fontSize: '0.72rem', color: '#dc2626' }}>
+                        {h.icon} {h.name}: {h.avg_latency_ms}ms avg, {h.error_rate}% error rate
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Recent Traces */}
+                {traces.length > 0 && (
+                  <div>
+                    <h4 style={{ fontSize: '0.82rem', fontWeight: 700, marginBottom: 8 }}>Recent Traces</h4>
+                    {traces.slice(0, 20).map(t => (
+                      <div key={t.id} style={{
+                        padding: '10px 12px', background: 'var(--bg-secondary)', borderRadius: 8,
+                        marginBottom: 6, fontSize: '0.75rem',
+                        borderLeft: `3px solid ${t.status === 'ok' ? '#16a34a' : '#dc2626'}`,
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span>{t.parent_icon || '🤖'} {t.parent_name}</span>
+                            <span style={{ color: 'var(--text-muted)' }}>&#8594;</span>
+                            <span>{t.child_icon || '🤖'} {t.child_name}</span>
+                            {t.depth > 0 && <span style={{ fontSize: '0.65rem', color: '#7c3aed', background: 'rgba(124,58,237,0.08)', padding: '1px 6px', borderRadius: 99 }}>depth {t.depth}</span>}
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <span style={{ color: 'var(--text-muted)' }}>{t.duration_ms}ms</span>
+                            <span style={{
+                              fontSize: '0.65rem', fontWeight: 700, padding: '1px 6px', borderRadius: 99,
+                              background: t.status === 'ok' ? 'rgba(22,163,74,0.08)' : 'rgba(220,38,38,0.08)',
+                              color: t.status === 'ok' ? '#16a34a' : '#dc2626',
+                            }}>{t.status}</span>
+                          </div>
+                        </div>
+                        <div style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {t.query}
+                        </div>
+                        {t.error && <div style={{ color: '#dc2626', marginTop: 2, fontSize: '0.7rem' }}>{t.error}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
       )}
 
       {/* API Keys */}

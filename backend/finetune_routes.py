@@ -19,6 +19,8 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from sqlalchemy.orm import Session
 
+from sqlalchemy import text as sa_text
+
 from database import get_db, SessionLocal
 from auth import get_current_user
 from db_models import User
@@ -310,6 +312,34 @@ def submit_finetune(
     except Exception as e:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Failed to create fine-tune job: {str(e)[:200]}")
 
+    # Track lineage in our DB
+    try:
+        lineage_id = str(uuid.uuid4())
+        db.execute(sa_text("""
+            INSERT INTO finetune_jobs (id, tenant_id, environment_id, openai_job_id,
+                base_model, fine_tuned_model, training_file_id, training_examples,
+                n_epochs, min_score, status, created_by, created_at)
+            VALUES (:id, :tenant_id, :env_id, :job_id, :model, :ft_model,
+                :file_id, :examples, :epochs, :min_score, :status, :user_id, :now)
+        """), {
+            "id": lineage_id,
+            "tenant_id": user.tenant_id,
+            "env_id": env.id,
+            "job_id": ft_result.get("id", ""),
+            "model": model,
+            "ft_model": ft_result.get("fine_tuned_model", ""),
+            "file_id": file_id,
+            "examples": len(examples),
+            "epochs": n_epochs,
+            "min_score": min_score,
+            "status": ft_result.get("status", "pending"),
+            "user_id": user.id,
+            "now": datetime.utcnow(),
+        })
+        db.commit()
+    except Exception as e:
+        print(f"  [Finetune] Lineage tracking failed (non-fatal): {e}")
+
     return {
         "job_id": ft_result.get("id"),
         "status": ft_result.get("status"),
@@ -323,6 +353,57 @@ def submit_finetune(
         "environment_name": env.name,
         "created_at": ft_result.get("created_at"),
     }
+
+
+# ── Fine-tune lineage (local DB tracking) ──
+
+@router.get("/lineage")
+def get_finetune_lineage(
+    environment_id: str = Query(None),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get fine-tune job lineage with environment connections.
+    Shows which eval suites produced which fine-tuned models.
+    """
+    query = """
+        SELECT fj.id, fj.environment_id, fj.openai_job_id, fj.base_model,
+               fj.fine_tuned_model, fj.training_file_id, fj.training_examples,
+               fj.n_epochs, fj.min_score, fj.status, fj.created_at,
+               e.name as env_name
+        FROM finetune_jobs fj
+        LEFT JOIN environments e ON e.id = fj.environment_id
+        WHERE fj.tenant_id = :tenant_id
+    """
+    params = {"tenant_id": user.tenant_id}
+
+    if environment_id:
+        query += " AND fj.environment_id = :env_id"
+        params["env_id"] = environment_id
+
+    query += " ORDER BY fj.created_at DESC LIMIT 50"
+
+    rows = db.execute(sa_text(query), params).fetchall()
+
+    jobs = []
+    for row in rows:
+        jobs.append({
+            "id": row[0],
+            "environment_id": row[1],
+            "openai_job_id": row[2],
+            "base_model": row[3],
+            "fine_tuned_model": row[4] or "",
+            "training_file_id": row[5],
+            "training_examples": row[6],
+            "n_epochs": row[7],
+            "min_score": row[8],
+            "status": row[9],
+            "created_at": row[10].isoformat() if row[10] else None,
+            "environment_name": row[11] or "",
+        })
+
+    return {"jobs": jobs, "total": len(jobs)}
 
 
 # ── Check fine-tune job status ──
