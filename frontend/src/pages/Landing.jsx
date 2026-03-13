@@ -71,9 +71,8 @@ export default function Landing() {
       <section className="lp-hero">
         <div className="lp-hero-grid">
           <div className="lp-hero-left">
-            <div className="lp-eyebrow lp-reveal">AI INFRASTRUCTURE PLATFORM</div>
             <h1 className="lp-reveal">
-              The infrastructure layer<br />for production AI agents.
+              Build for the<br />agentic economy.
             </h1>
             <p className="lp-hero-sub lp-reveal">
               Orchestrate agent networks. Evaluate with LLM judges. Export training data and fine-tune. One platform from prototype to production.
@@ -298,18 +297,15 @@ curl -H "Authorization: Bearer cane_xxx" \\
           {/* Pipeline visualization */}
           <div className="lp-pipeline lp-reveal">
             {[
-              ['Run Evals', 'Score agent responses'],
-              ['Filter by Score', 'Keep 80+ results'],
-              ['Export Dataset', 'SFT, DPO, OpenAI format'],
-              ['Fine-tune', 'Submit to OpenAI API'],
-              ['Re-evaluate', 'Verify improvement'],
-            ].map(([step, desc], i) => (
+              'Run Evals',
+              'Filter by Score',
+              'Export Dataset',
+              'Fine-tune',
+              'Re-evaluate',
+            ].map((step, i) => (
               <div key={i} className="lp-pipeline-step">
                 <div className="lp-pipeline-num">{i + 1}</div>
-                <div className="lp-pipeline-text">
-                  <div className="lp-pipeline-title">{step}</div>
-                  <div className="lp-pipeline-desc">{desc}</div>
-                </div>
+                <div className="lp-pipeline-title">{step}</div>
                 {i < 4 && <div className="lp-pipeline-arrow">&rarr;</div>}
               </div>
             ))}
@@ -439,10 +435,6 @@ result = client.ask("Your question")`}</pre>
 
       {/* Footer */}
       <footer className="lp-footer">
-        <div className="lp-footer-left">
-          <span className="lp-footer-brand">Cane</span>
-          <span className="lp-footer-copy">Built by Colin</span>
-        </div>
         <div className="lp-footer-links">
           <a href="#orchestration">Orchestration</a>
           <a href="#eval">Eval</a>
@@ -853,10 +845,11 @@ const landingStyles = `
 /* Pipeline visualization */
 .lp-pipeline {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: center;
   gap: 0;
   margin-bottom: 56px;
-  padding: 32px;
+  padding: 24px 32px;
   background: rgba(255,255,255,0.02);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 12px;
@@ -866,20 +859,18 @@ const landingStyles = `
 .lp-pipeline-step {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex: 1;
-  min-width: 0;
+  gap: 10px;
 }
 
 .lp-pipeline-num {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: rgba(37,99,235,0.15);
   border: 1px solid rgba(37,99,235,0.3);
   color: #60a5fa;
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -887,30 +878,20 @@ const landingStyles = `
   flex-shrink: 0;
 }
 
-.lp-pipeline-text {
-  min-width: 0;
-}
-
 .lp-pipeline-title {
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 600;
-  color: #fff;
+  color: rgba(255,255,255,0.7);
   letter-spacing: -0.01em;
   white-space: nowrap;
 }
 
-.lp-pipeline-desc {
-  font-size: 0.7rem;
-  color: rgba(255,255,255,0.3);
-  white-space: nowrap;
-}
-
 .lp-pipeline-arrow {
-  color: rgba(255,255,255,0.15);
-  font-size: 1.2rem;
+  color: rgba(255,255,255,0.12);
+  font-size: 0.9rem;
   flex-shrink: 0;
-  margin: 0 8px;
+  margin: 0 12px;
 }
 
 /* SDK grid */
@@ -991,24 +972,10 @@ const landingStyles = `
   padding: 32px 48px;
   border-top: 1px solid rgba(255,255,255,0.06);
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   max-width: 1100px;
   margin: 0 auto;
-}
-
-.lp-footer-left { display: flex; gap: 16px; align-items: baseline; }
-
-.lp-footer-brand {
-  font-family: 'Space Grotesk', sans-serif;
-  font-weight: 700;
-  font-size: 0.92rem;
-  color: rgba(255,255,255,0.7);
-}
-
-.lp-footer-copy {
-  font-size: 0.75rem;
-  color: rgba(255,255,255,0.2);
 }
 
 .lp-footer-links { display: flex; gap: 24px; }
@@ -1054,8 +1021,7 @@ const landingStyles = `
   .lp-pipeline { flex-direction: column; gap: 16px; }
   .lp-pipeline-arrow { transform: rotate(90deg); margin: 0; }
   .lp-stack-item { flex: 1 1 100%; }
-  .lp-footer { flex-direction: column; gap: 20px; text-align: center; }
-  .lp-footer-left { flex-direction: column; gap: 4px; align-items: center; }
+  .lp-footer { padding: 24px; }
   .lp-footer-links { flex-wrap: wrap; justify-content: center; }
   .lp-trust-line { flex-direction: column; gap: 8px; }
   .lp-trust-sep { display: none; }
