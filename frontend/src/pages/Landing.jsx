@@ -43,6 +43,7 @@ export default function Landing() {
             </div></div>
           </div>
           <Link to="/guide">Docs</Link>
+          <Link to="/api-docs">API</Link>
           <Link to="/login" className="lp-nav-cta">Sign in</Link>
         </div>
       </nav>
@@ -52,10 +53,10 @@ export default function Landing() {
         <div className="lp-hero-grid">
           <div className="lp-hero-left">
             <h1 className="lp-reveal">
-              Infrastructure for<br />reliable AI agents.
+              Build, evaluate, and<br />improve AI agents.
             </h1>
             <p className="lp-hero-sub lp-reveal">
-              Orchestrate agent networks. Evaluate with LLM judges. Export training data and fine-tune. One platform from prototype to production.
+              Agent orchestration, LLM-as-judge evaluation, and post-training pipelines in one developer platform.
             </p>
             <div className="lp-hero-actions lp-reveal">
               <Link to="/register" className="lp-btn-fill">Get started free</Link>
@@ -326,75 +327,6 @@ curl -H "Authorization: Bearer cane_xxx" \\
 #   {"role": "assistant", "content": "Our refund policy allows..."}
 # ]}`}</pre>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* SDK / API Credibility */}
-      <section className="lp-section">
-        <div className="lp-contain">
-          <div className="lp-section-head lp-reveal">
-            <h2>Built for developers.</h2>
-            <p>Python SDK, REST API, and embeddable widget. Three ways to integrate.</p>
-          </div>
-          <div className="lp-sdk-grid lp-reveal">
-            <div className="lp-sdk-col">
-              <div className="lp-sdk-label">Python SDK</div>
-              <div className="lp-code-block lp-code-sm">
-                <pre className="lp-code-body">{`pip install cane
-
-from cane import Cane
-client = Cane(api_key="cane_xxx")
-result = client.ask("Your question")`}</pre>
-              </div>
-            </div>
-            <div className="lp-sdk-col">
-              <div className="lp-sdk-label">REST API</div>
-              <div className="lp-code-block lp-code-sm">
-                <pre className="lp-code-body">{`curl -X POST \\
-  https://cane.fyi/v1/ask \\
-  -H "Authorization: Bearer cane_xxx" \\
-  -d '{"query": "Your question"}'`}</pre>
-              </div>
-            </div>
-            <div className="lp-sdk-col">
-              <div className="lp-sdk-label">Embed Widget</div>
-              <div className="lp-code-block lp-code-sm">
-                <pre className="lp-code-body">{`<script
-  src="https://cane.fyi/widget.js"
-  data-api-key="cane_xxx"
-  data-agent-name="Support"
-  data-color="#2563eb">
-</script>`}</pre>
-              </div>
-            </div>
-          </div>
-          <div className="lp-arch-link lp-reveal">
-            <Link to="/guide">Full API and SDK reference &rarr;</Link>
-          </div>
-        </div>
-      </section>
-
-      {/* Architecture */}
-      <section className="lp-section">
-        <div className="lp-contain">
-          <div className="lp-section-head lp-reveal">
-            <h2>Architecture</h2>
-          </div>
-          <div className="lp-stack-row lp-reveal">
-            {[
-              ['Backend', 'Python, FastAPI, Gunicorn, SQLAlchemy'],
-              ['AI / ML', 'Claude API, BGE embeddings, BM25, cross-encoder re-ranking, memory extraction'],
-              ['Storage', 'MySQL, ChromaDB, Google Drive API'],
-              ['Frontend', 'React 18, Vite, Lucide icons, tabbed agent config'],
-              ['Auth', 'JWT, OAuth 2.0, Fernet encryption, scoped API keys'],
-              ['Infra', 'Railway, background workers, scheduled runner, daemon threads'],
-            ].map(([label, val], i) => (
-              <div key={i} className="lp-stack-item">
-                <span className="lp-stack-label">{label}</span>
-                <span className="lp-stack-val">{val}</span>
-              </div>
-            ))}
           </div>
         </div>
       </section>
@@ -907,37 +839,6 @@ const landingStyles = `
 
 .lp-arch-link a:hover { color: #93bbfd; }
 
-/* Stack */
-.lp-stack-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0;
-  border-top: 1px solid rgba(255,255,255,0.06);
-}
-
-.lp-stack-item {
-  flex: 1 1 33%;
-  padding: 20px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  display: flex;
-  gap: 16px;
-  align-items: baseline;
-}
-
-.lp-stack-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: rgba(255,255,255,0.25);
-  min-width: 70px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.lp-stack-val {
-  font-size: 0.82rem;
-  color: rgba(255,255,255,0.45);
-}
-
 /* Demo section */
 .lp-demo-section { border-bottom: none; }
 
@@ -1000,7 +901,6 @@ const landingStyles = `
   .lp-sdk-grid { grid-template-columns: 1fr; }
   .lp-pipeline { flex-direction: column; gap: 16px; }
   .lp-pipeline-arrow { transform: rotate(90deg); margin: 0; }
-  .lp-stack-item { flex: 1 1 100%; }
   .lp-footer { padding: 24px; }
   .lp-footer-links { flex-wrap: wrap; justify-content: center; }
   .lp-trust-line { flex-direction: column; gap: 8px; }

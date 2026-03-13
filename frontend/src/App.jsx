@@ -12,6 +12,7 @@ import Admin from './pages/Admin'
 import AgentBuilder from './pages/AgentBuilder'
 import AgentDetail from './pages/AgentDetail'
 import Guide from './pages/Guide'
+import ApiDocs from './pages/ApiDocs'
 import Demo from './pages/Demo'
 import Marketplace from './pages/Marketplace'
 import MarketplaceDetail from './pages/MarketplaceDetail'
@@ -131,6 +132,23 @@ export default function App() {
               ← Back to home
             </a>
             <Guide />
+          </div>
+        )
+      } />
+
+      <Route path="/api-docs" element={
+        user ? (
+          <Layout><ApiDocs /></Layout>
+        ) : (
+          <div style={{ background: 'var(--bg)', minHeight: '100vh', padding: '28px 36px' }}>
+            <a href="/" style={{
+              color: 'var(--text-muted)', fontSize: '0.8125rem',
+              textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
+              marginBottom: 16,
+            }}>
+              ← Back to home
+            </a>
+            <ApiDocs />
           </div>
         )
       } />
