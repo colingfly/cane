@@ -536,6 +536,108 @@ def api_delete_eval_schedule(
     return {"deleted": True}
 
 
+# ── Push results from cane-eval CLI/integrations ──
+
+@router.post("/results/{environment_id}")
+def push_eval_results(
+    environment_id: str,
+    body: dict,
+    api_key: ApiKey = Depends(get_api_key_auth),
+    db: Session = Depends(get_db),
+):
+    """
+    Accept pre-computed eval results from the cane-eval open-source package.
+
+    This allows users to run evals locally (via cane-eval CLI or integrations)
+    and push results to Cane Cloud for dashboards, trend tracking, and collaboration.
+
+    Body:
+    {
+        "suite_name": "Support Agent",
+        "overall_score": 72.5,
+        "total": 10,
+        "passed": 7,
+        "warned": 1,
+        "failed": 2,
+        "duration_seconds": 12.3,
+        "results": [
+            {
+                "question": "...",
+                "expected_answer": "...",
+                "agent_answer": "...",
+                "overall_score": 85,
+                "status": "pass",
+                "criteria_scores": {"accuracy": 90, "completeness": 80},
+                "judge_reasoning": "...",
+                "response_time_ms": 450,
+                "tags": ["policy"]
+            }
+        ]
+    }
+    """
+    env = db.query(Environment).filter(
+        Environment.id == environment_id,
+        Environment.is_active == True,
+    ).first()
+    if not env:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+
+    if env.tenant_id != api_key.tenant_id and not env.is_public:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+
+    results_data = body.get("results", [])
+    if not results_data:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No results provided")
+
+    # Create an eval run record
+    run = EvalRun(
+        environment_id=env.id,
+        tenant_id=env.tenant_id,
+        status="completed",
+        total_cases=body.get("total", len(results_data)),
+        passed=body.get("passed", 0),
+        warned=body.get("warned", 0),
+        failed=body.get("failed", 0),
+        overall_score=body.get("overall_score", 0),
+        agent_prompt="(cane-eval push)",
+        criteria_snapshot=None,
+        target_snapshot=json.dumps({"source": "cane-eval", "suite_name": body.get("suite_name", "")}),
+        api_key_id=api_key.id,
+        started_at=datetime.utcnow(),
+        completed_at=datetime.utcnow(),
+    )
+    db.add(run)
+    db.flush()
+
+    # Create individual result records
+    for r in results_data:
+        criteria_scores = r.get("criteria_scores", {})
+        eval_result = EvalResult(
+            eval_run_id=run.id,
+            environment_id=env.id,
+            question=r.get("question", ""),
+            expected_answer=r.get("expected_answer", ""),
+            agent_answer=r.get("agent_answer", ""),
+            overall_score=r.get("overall_score", 0),
+            criteria_scores=json.dumps(criteria_scores) if criteria_scores else None,
+            judge_reasoning=r.get("judge_reasoning", ""),
+            status=r.get("status", "fail"),
+            response_time_ms=r.get("response_time_ms", 0),
+        )
+        db.add(eval_result)
+
+    db.commit()
+    db.refresh(run)
+
+    return {
+        "run_id": run.id,
+        "status": "completed",
+        "total_results": len(results_data),
+        "overall_score": run.overall_score,
+        "environment_id": env.id,
+    }
+
+
 # ── Root Cause Analysis (public API) ──
 
 @router.post("/rca/{environment_id}")
