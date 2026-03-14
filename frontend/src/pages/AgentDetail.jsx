@@ -994,6 +994,11 @@ export default function AgentDetail() {
             />
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            {agent.agent_type === 'osint' && (
+              <Link to={`/agents/${agentId}/osint`} className="btn btn-outline" style={{ fontSize: '0.82rem', background: 'rgba(99,102,241,0.1)', borderColor: 'var(--accent)', color: 'var(--accent)' }}>
+                Intel Feed
+              </Link>
+            )}
             <Link to={`/agents/${agentId}/analytics`} className="btn btn-outline" style={{ fontSize: '0.82rem' }}>
               <BarChart3 size={14} /> Analytics
             </Link>

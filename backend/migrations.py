@@ -34,6 +34,7 @@ def run_all():
     _migrate_finetune_jobs_table()
     _migrate_mining_tables()
     _migrate_eval_schedules_table()
+    _migrate_osint_briefings_table()
 
 
 def _migrate_agent_columns():
@@ -942,3 +943,37 @@ def _migrate_eval_schedules_table():
             print(f"  [DB] eval_schedules migration failed: {e}")
     else:
         print("  [DB] eval_schedules table already exists")
+
+
+def _migrate_osint_briefings_table():
+    """Create osint_briefings table for OSINT intelligence briefings."""
+    insp = inspect(engine)
+    if "osint_briefings" not in insp.get_table_names():
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("""
+                    CREATE TABLE osint_briefings (
+                        id VARCHAR(36) PRIMARY KEY,
+                        workspace_id VARCHAR(36) NOT NULL,
+                        tenant_id VARCHAR(36) NOT NULL,
+                        schedule_run_id VARCHAR(36) NULL,
+                        title VARCHAR(500) DEFAULT '',
+                        briefing_type VARCHAR(50) DEFAULT 'combined',
+                        severity VARCHAR(20) DEFAULT 'info',
+                        content TEXT,
+                        sources_json TEXT DEFAULT '[]',
+                        entities_json TEXT DEFAULT '[]',
+                        alert_sent TINYINT(1) DEFAULT 0,
+                        alert_channel VARCHAR(50) NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+                        FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+                        INDEX idx_osint_workspace (workspace_id, created_at),
+                        INDEX idx_osint_severity (workspace_id, severity)
+                    )
+                """))
+            print("  [DB] osint_briefings table created")
+        except Exception as e:
+            print(f"  [DB] osint_briefings migration failed: {e}")
+    else:
+        print("  [DB] osint_briefings table already exists")

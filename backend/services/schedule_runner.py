@@ -196,6 +196,16 @@ def run_schedule(schedule_id: str):
                 except Exception:
                     pass
 
+                # OSINT briefing post-run hook
+                try:
+                    ws = db.query(Workspace).filter(Workspace.id == schedule.workspace_id).first()
+                    if ws and getattr(ws, "agent_type", None) == "osint":
+                        from services.osint_parser import create_briefing_from_run
+                        create_briefing_from_run(run, ws.id, schedule.tenant_id, db)
+                        print(f"  [Scheduler] OSINT briefing created for {schedule_id[:8]}")
+                except Exception as osint_err:
+                    print(f"  [Scheduler] OSINT briefing failed: {osint_err}")
+
             except Exception as e:
                 elapsed_ms = int((time.time() - t0) * 1000)
                 error_msg = str(e)[:500]

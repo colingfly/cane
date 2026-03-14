@@ -636,3 +636,28 @@ export async function browseS3(bucket = '', prefix = '') {
   if (prefix) params.set('prefix', prefix)
   return request(`/connectors/s3/browse?${params.toString()}`)
 }
+
+// ─── OSINT Intelligence ───
+
+export async function getOsintBriefings(agentId, qs = '') {
+  return request(`/osint/${agentId}/briefings${qs ? '?' + qs : ''}`)
+}
+
+export async function getOsintBriefing(agentId, briefingId) {
+  return request(`/osint/${agentId}/briefings/${briefingId}`)
+}
+
+export async function getOsintStats(agentId) {
+  return request(`/osint/${agentId}/stats`)
+}
+
+export async function generateOsintBriefing(agentId) {
+  return request(`/osint/${agentId}/briefings/generate`, { method: 'POST' })
+}
+
+export async function deployOsintAgent(config) {
+  return request('/osint/deploy', {
+    method: 'POST',
+    body: JSON.stringify(config),
+  })
+}

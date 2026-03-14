@@ -22,6 +22,8 @@ import Analytics from './pages/Analytics'
 import Architecture from './pages/Architecture'
 import ConversationHistory from './pages/ConversationHistory'
 import AgentNetwork from './pages/AgentNetwork'
+import OsintDashboard from './pages/OsintDashboard'
+import OsintSetup from './pages/OsintSetup'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -95,6 +97,18 @@ export default function App() {
       <Route path="/agents/:agentId/analytics" element={
         <ProtectedRoute>
           <Layout><Analytics /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/agents/:agentId/osint" element={
+        <ProtectedRoute>
+          <Layout><OsintDashboard /></Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/osint/setup" element={
+        <ProtectedRoute>
+          <Layout><OsintSetup /></Layout>
         </ProtectedRoute>
       } />
 
