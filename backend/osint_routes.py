@@ -25,6 +25,47 @@ from tool_models import AgentTool
 
 router = APIRouter(prefix="/api/osint", tags=["osint"])
 
+_table_checked = False
+
+
+def _ensure_table(db: Session):
+    """Ensure osint_briefings table exists (idempotent)."""
+    global _table_checked
+    if _table_checked:
+        return
+    try:
+        from sqlalchemy import text, inspect as sa_inspect
+        from database import engine
+        insp = sa_inspect(engine)
+        if "osint_briefings" not in insp.get_table_names():
+            with engine.begin() as conn:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS osint_briefings (
+                        id VARCHAR(36) PRIMARY KEY,
+                        workspace_id VARCHAR(36) NOT NULL,
+                        tenant_id VARCHAR(36) NOT NULL,
+                        schedule_run_id VARCHAR(36) NULL,
+                        title VARCHAR(500) DEFAULT '',
+                        briefing_type VARCHAR(50) DEFAULT 'combined',
+                        severity VARCHAR(20) DEFAULT 'info',
+                        content TEXT,
+                        sources_json TEXT,
+                        entities_json TEXT,
+                        alert_sent TINYINT(1) DEFAULT 0,
+                        alert_channel VARCHAR(50) NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                try:
+                    conn.execute(text("CREATE INDEX idx_osint_workspace ON osint_briefings (workspace_id, created_at)"))
+                    conn.execute(text("CREATE INDEX idx_osint_severity ON osint_briefings (workspace_id, severity)"))
+                except Exception:
+                    pass
+            print("[OSINT] Created osint_briefings table on-demand")
+    except Exception as e:
+        print(f"[OSINT] Table check failed: {e}")
+    _table_checked = True
+
 
 def _uuid() -> str:
     return str(uuid.uuid4())
@@ -53,6 +94,7 @@ def list_briefings(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    _ensure_table(db)
     ws = _verify_osint_agent(agent_id, user, db)
     if not ws:
         return JSONResponse({"error": "Agent not found"}, 404)
@@ -98,6 +140,7 @@ def get_briefing(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    _ensure_table(db)
     ws = _verify_osint_agent(agent_id, user, db)
     if not ws:
         return JSONResponse({"error": "Agent not found"}, 404)
@@ -133,6 +176,7 @@ def get_stats(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    _ensure_table(db)
     ws = _verify_osint_agent(agent_id, user, db)
     if not ws:
         return JSONResponse({"error": "Agent not found"}, 404)
