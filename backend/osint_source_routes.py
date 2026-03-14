@@ -148,9 +148,9 @@ def fetch_reddit(
         return PlainTextResponse(cached)
 
     try:
-        url = f"https://www.reddit.com/r/{subreddit}/hot.json?limit={min(limit, 25)}"
+        url = f"https://old.reddit.com/r/{subreddit}/hot.json?limit={min(limit, 25)}&raw_json=1"
         raw = _fetch(url, headers={
-            "User-Agent": "CaneOSINT/1.0 (OSINT monitoring agent)",
+            "User-Agent": "python:CaneOSINT:v1.0 (by /u/cane-osint-bot)",
         })
         data = json.loads(raw)
 
@@ -300,8 +300,10 @@ def fetch_threatfeed(
 def _fetch_abusech() -> str:
     """Fetch recent malware URLs from abuse.ch URLhaus."""
     url = "https://urlhaus-api.abuse.ch/v1/urls/recent/limit/15/"
-    req = urllib.request.Request(url, method="POST", headers={
+    body = b""
+    req = urllib.request.Request(url, data=body, headers={
         "User-Agent": "CaneOSINT/1.0",
+        "Content-Type": "application/x-www-form-urlencoded",
     })
     with urllib.request.urlopen(req, timeout=15) as resp:
         data = json.loads(resp.read().decode("utf-8", errors="replace"))
