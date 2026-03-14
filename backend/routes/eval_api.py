@@ -229,7 +229,7 @@ def get_eval_results(
 @router.get("/export/{run_id}")
 def api_export_run(
     run_id: str,
-    format: str = Query("sft", regex="^(sft|dpo|openai|raw)$"),
+    format: str = Query("sft", pattern="^(sft|dpo|openai|raw)$"),
     min_score: float = Query(0, ge=0, le=100),
     api_key: ApiKey = Depends(get_api_key_auth),
     db: Session = Depends(get_db),
@@ -385,7 +385,7 @@ def api_get_mining_job(
 @router.get("/mine/{job_id}/export")
 def api_export_mining_job(
     job_id: str,
-    format: str = Query("dpo", regex="^(dpo|sft)$"),
+    format: str = Query("dpo", pattern="^(dpo|sft)$"),
     api_key: ApiKey = Depends(get_api_key_auth),
     db: Session = Depends(get_db),
 ):
@@ -645,7 +645,7 @@ def api_batch_rca(
     environment_id: str,
     max_score: float = Query(60, ge=0, le=100),
     max_failures: int = Query(30, ge=1, le=50),
-    api_key=Depends(get_api_key),
+    api_key: ApiKey = Depends(get_api_key_auth),
     db: Session = Depends(get_db),
 ):
     """Run AI-powered root cause analysis on eval failures."""
@@ -671,7 +671,7 @@ def api_batch_rca(
 def api_targeted_rca(
     environment_id: str,
     result_id: str,
-    api_key=Depends(get_api_key),
+    api_key: ApiKey = Depends(get_api_key_auth),
     db: Session = Depends(get_db),
 ):
     """Run deep root cause analysis on a single failing eval result."""
