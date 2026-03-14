@@ -133,7 +133,7 @@ def fetch_news(
 
 
 # ---------------------------------------------------------------------------
-#  REDDIT (public JSON API, no auth needed)
+#  REDDIT (RSS feed -- works from cloud IPs unlike JSON API)
 # ---------------------------------------------------------------------------
 
 @router.get("/reddit")
@@ -141,39 +141,46 @@ def fetch_reddit(
     subreddit: str = Query("cybersecurity", description="Subreddit name"),
     limit: int = Query(10, description="Number of posts"),
 ):
-    """Fetch top recent posts from a subreddit."""
+    """Fetch top recent posts from a subreddit via RSS."""
     cache_key = f"reddit:{subreddit}:{limit}"
     cached = _cached(cache_key)
     if cached:
         return PlainTextResponse(cached)
 
     try:
-        url = f"https://old.reddit.com/r/{subreddit}/hot.json?limit={min(limit, 25)}&raw_json=1"
+        url = f"https://www.reddit.com/r/{subreddit}/hot.rss?limit={min(limit, 25)}"
         raw = _fetch(url, headers={
-            "User-Agent": "python:CaneOSINT:v1.0 (by /u/cane-osint-bot)",
+            "User-Agent": "python:CaneOSINT:v1.0 (OSINT monitoring)",
         })
-        data = json.loads(raw)
 
-        posts = data.get("data", {}).get("children", [])
-        if not posts:
+        root = ET.fromstring(raw)
+        ns = {"atom": "http://www.w3.org/2005/Atom"}
+        entries = root.findall("atom:entry", ns)
+
+        if not entries:
             result = f"No posts found in r/{subreddit}"
             _set_cache(cache_key, result)
             return PlainTextResponse(result)
 
-        lines = [f"REDDIT r/{subreddit} -- top {len(posts)} posts\n"]
-        for i, post in enumerate(posts, 1):
-            d = post.get("data", {})
-            title = d.get("title", "")
-            score = d.get("score", 0)
-            comments = d.get("num_comments", 0)
-            author = d.get("author", "unknown")
-            selftext = _truncate(_strip_html(d.get("selftext", "") or ""), 200)
-            permalink = f"https://reddit.com{d.get('permalink', '')}"
+        lines = [f"REDDIT r/{subreddit} -- top {len(entries[:limit])} posts\n"]
+        for i, entry in enumerate(entries[:limit], 1):
+            title = (entry.findtext("atom:title", "", ns) or "").strip()
+            link_el = entry.find("atom:link", ns)
+            link = link_el.get("href", "") if link_el is not None else ""
+            updated = (entry.findtext("atom:updated", "", ns) or "")[:16].replace("T", " ")
+            content = entry.findtext("atom:content", "", ns) or ""
+            desc = _truncate(_strip_html(content), 200)
+            author = (entry.findtext("atom:author/atom:name", "", ns) or "").strip()
+
             lines.append(f"{i}. {title}")
-            lines.append(f"   Score: {score} | Comments: {comments} | Author: u/{author}")
-            if selftext:
-                lines.append(f"   {selftext}")
-            lines.append(f"   URL: {permalink}")
+            if author:
+                lines.append(f"   Author: {author} | Updated: {updated}")
+            else:
+                lines.append(f"   Updated: {updated}")
+            if desc:
+                lines.append(f"   {desc}")
+            if link:
+                lines.append(f"   URL: {link}")
             lines.append("")
 
         result = "\n".join(lines)
@@ -298,34 +305,42 @@ def fetch_threatfeed(
 
 
 def _fetch_abusech() -> str:
-    """Fetch recent malware URLs from abuse.ch URLhaus."""
-    url = "https://urlhaus-api.abuse.ch/v1/urls/recent/limit/15/"
-    body = b""
-    req = urllib.request.Request(url, data=body, headers={
-        "User-Agent": "CaneOSINT/1.0",
-        "Content-Type": "application/x-www-form-urlencoded",
-    })
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        data = json.loads(resp.read().decode("utf-8", errors="replace"))
+    """Fetch recent malware URLs from abuse.ch URLhaus CSV feed."""
+    # Use the CSV export which doesn't require auth
+    url = "https://urlhaus.abuse.ch/downloads/csv_recent/"
+    raw = _fetch(url, headers={"User-Agent": "CaneOSINT/1.0"}, timeout=20)
 
-    urls = data.get("urls", [])
-    if not urls:
+    lines_out = ["ABUSE.CH URLHAUS -- recent malicious URLs\n"]
+    count = 0
+    for line in raw.split("\n"):
+        if line.startswith("#") or not line.strip():
+            continue
+        parts = line.strip().split('","')
+        if len(parts) < 6:
+            continue
+        # CSV: id, date_added, url, url_status, last_online, threat, tags, ...
+        try:
+            date_added = parts[1].strip('"') if len(parts) > 1 else ""
+            mal_url = parts[2].strip('"') if len(parts) > 2 else ""
+            status = parts[3].strip('"') if len(parts) > 3 else ""
+            threat = parts[5].strip('"') if len(parts) > 5 else ""
+            tags = parts[6].strip('"') if len(parts) > 6 else ""
+        except (IndexError, ValueError):
+            continue
+
+        count += 1
+        lines_out.append(f"{count}. {mal_url}")
+        lines_out.append(f"   Threat: {threat} | Status: {status} | Added: {date_added[:16]}")
+        if tags:
+            lines_out.append(f"   Tags: {tags}")
+        lines_out.append("")
+        if count >= 15:
+            break
+
+    if count == 0:
         return "No recent malware URLs from abuse.ch URLhaus"
 
-    lines = ["ABUSE.CH URLHAUS -- recent malicious URLs\n"]
-    for i, u in enumerate(urls[:15], 1):
-        url_str = u.get("url", "")
-        threat = u.get("threat", "unknown")
-        status = u.get("url_status", "unknown")
-        added = u.get("date_added", "")[:16]
-        tags = ", ".join(u.get("tags", []) or [])
-        lines.append(f"{i}. {url_str}")
-        lines.append(f"   Threat: {threat} | Status: {status} | Added: {added}")
-        if tags:
-            lines.append(f"   Tags: {tags}")
-        lines.append("")
-
-    return "\n".join(lines)
+    return "\n".join(lines_out)
 
 
 def _fetch_otx() -> str:
