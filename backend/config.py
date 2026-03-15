@@ -58,7 +58,9 @@ ALLOWED_ORIGINS = os.getenv("CANE_ALLOWED_ORIGINS", "http://localhost:5173,http:
 IS_PRODUCTION = os.getenv("CANE_ENV", "development").lower() == "production"
 
 # ── Base URL (for resolving relative tool URLs to self) ──
-BASE_URL = os.getenv("CANE_BASE_URL", "http://localhost:8000")
+# Railway sets PORT dynamically; use it so self-referencing tool calls work
+_PORT = os.getenv("PORT", "8000")
+BASE_URL = os.getenv("CANE_BASE_URL", f"http://localhost:{_PORT}")
 
 # ── Google OAuth (app-level credentials for Live Connectors) ──
 GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
