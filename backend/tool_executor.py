@@ -187,13 +187,18 @@ def call_claude_with_tools(
     from services.tools import ToolRef, execute_tool_call
 
     # Add instruction to always provide text answer
-    enhanced_system = system + "\n\nIMPORTANT: You MUST always provide a complete text answer to the user's question. If you also call tools, you must STILL include your full written answer."
+    # Skip if eval context already has its own instructions (detected by "EVAL INSTRUCTIONS")
+    if "EVAL INSTRUCTIONS" in system:
+        enhanced_system = system
+    else:
+        enhanced_system = system + "\n\nIMPORTANT: You MUST always provide a complete text answer to the user's question. If you also call tools, you must STILL include your full written answer."
 
     if max_iterations > 3:
         enhanced_system += "\n\nYou can chain multiple tools together to accomplish complex tasks. After receiving a tool result, you may call another tool if needed before giving your final answer. Think step by step about which tools to use and in what order."
 
     current_messages = list(messages)
     all_text_parts = []  # Collect text across all iterations
+    iteration_texts = {}  # Track which iteration produced which text
 
     for iteration in range(max_iterations):
         try:
@@ -211,10 +216,14 @@ def call_claude_with_tools(
         print(f"  [Tools] Iteration {iteration}: stop_reason={stop_reason}, blocks={len(content)}")
 
         # Collect any text blocks from this response
+        iter_parts = []
         for block in content:
             if block.type == "text" and block.text.strip():
                 all_text_parts.append(block.text)
+                iter_parts.append(block.text)
                 print(f"  [Tools] Got text: {block.text[:80]}...")
+        if iter_parts:
+            iteration_texts[iteration] = iter_parts
 
         # If no tool use, we're done
         if stop_reason != "tool_use":
@@ -391,16 +400,17 @@ def call_claude_with_tools(
         # Add tool results to messages and loop back
         current_messages.append({"role": "user", "content": tool_results})
 
-    # Prefer the last substantial text block (the final answer after tool use)
-    # Earlier blocks are often narration ("I'll fetch...", "Let me check...")
-    if len(all_text_parts) > 1:
-        # Find the last text part that's at least 100 chars (the real answer)
-        for part in reversed(all_text_parts):
-            if len(part.strip()) >= 100:
-                final_text = part.strip()
-                print(f"  [Tools] Using last substantial text block ({len(final_text)} chars) out of {len(all_text_parts)} blocks")
-                return final_text
+    # Prefer text from the LAST iteration only (the final answer after all tools)
+    # Earlier iterations are narration ("I'll fetch...", "Let me check...")
+    if iteration_texts:
+        last_iter = max(iteration_texts.keys())
+        last_parts = iteration_texts[last_iter]
+        final_text = "\n\n".join(last_parts).strip()
+        if final_text and len(final_text) >= 50:
+            print(f"  [Tools] Using text from final iteration {last_iter} ({len(final_text)} chars), discarding {len(all_text_parts) - len(last_parts)} earlier blocks")
+            return final_text
 
-    final_text = " ".join(all_text_parts).strip()
+    # Fallback: join all text if only one iteration produced text
+    final_text = "\n\n".join(all_text_parts).strip()
     print(f"  [Tools] Final text length: {len(final_text)}")
     return final_text
