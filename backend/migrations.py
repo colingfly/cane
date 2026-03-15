@@ -36,6 +36,27 @@ def run_all():
     _migrate_eval_schedules_table()
     _migrate_osint_briefings_table()
     _migrate_osint_tools_fire_and_forget()
+    _migrate_osint_system_prompt_v2()
+
+
+def _migrate_osint_system_prompt_v2():
+    """Update OSINT agent system prompt to demand explicit URLs and citations."""
+    try:
+        with engine.begin() as conn:
+            # Only update if still using old prompt (check for old marker text)
+            result = conn.execute(text(
+                "SELECT id, system_prompt FROM workspaces WHERE agent_type = 'osint'"
+            ))
+            for row in result:
+                prompt = row[1] or ""
+                if "Source URLs" not in prompt and "COPY exact data" not in prompt:
+                    from seeds.seed_osint_agent import SYSTEM_PROMPT
+                    conn.execute(text(
+                        "UPDATE workspaces SET system_prompt = :prompt WHERE id = :wid"
+                    ), {"prompt": SYSTEM_PROMPT, "wid": row[0]})
+                    print(f"  [Migration] Updated OSINT system prompt for workspace {row[0]}")
+    except Exception as e:
+        print(f"  [Migration] OSINT prompt update skipped: {e}")
 
 
 def _migrate_osint_tools_fire_and_forget():

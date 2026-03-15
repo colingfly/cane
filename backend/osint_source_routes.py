@@ -188,7 +188,15 @@ def fetch_reddit(
         return PlainTextResponse(result)
 
     except Exception as e:
-        return PlainTextResponse(f"Reddit error: {str(e)}", status_code=500)
+        # Return 200 with informative message so the agent can still work
+        result = (
+            f"Reddit r/{subreddit} -- temporarily unavailable\n"
+            f"Error: {str(e)}\n"
+            f"Note: Reddit may block requests from cloud IPs. "
+            f"Use other sources (CVE, threat feeds, news) for this briefing cycle."
+        )
+        _set_cache(cache_key, result)
+        return PlainTextResponse(result)
 
 
 # ---------------------------------------------------------------------------
