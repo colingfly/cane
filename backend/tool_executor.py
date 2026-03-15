@@ -391,6 +391,16 @@ def call_claude_with_tools(
         # Add tool results to messages and loop back
         current_messages.append({"role": "user", "content": tool_results})
 
+    # Prefer the last substantial text block (the final answer after tool use)
+    # Earlier blocks are often narration ("I'll fetch...", "Let me check...")
+    if len(all_text_parts) > 1:
+        # Find the last text part that's at least 100 chars (the real answer)
+        for part in reversed(all_text_parts):
+            if len(part.strip()) >= 100:
+                final_text = part.strip()
+                print(f"  [Tools] Using last substantial text block ({len(final_text)} chars) out of {len(all_text_parts)} blocks")
+                return final_text
+
     final_text = " ".join(all_text_parts).strip()
     print(f"  [Tools] Final text length: {len(final_text)}")
     return final_text
