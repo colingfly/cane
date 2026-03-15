@@ -67,6 +67,12 @@ def execute_tool(tool, input_data: dict) -> dict:
     try:
         url = tool.url
 
+        # Resolve relative URLs to local server
+        if url and url.startswith("/"):
+            from config import BASE_URL
+            base = BASE_URL.rstrip("/") if BASE_URL else "http://localhost:8000"
+            url = base + url
+
         # Support URL path templates: replace {{param}} in the URL itself
         # e.g. https://r.jina.ai/{{url}} becomes https://r.jina.ai/https://example.com
         # e.g. https://s.jina.ai/{{query}} becomes https://s.jina.ai/latest%20AI%20news

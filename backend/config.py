@@ -57,6 +57,9 @@ ALLOWED_ORIGINS = os.getenv("CANE_ALLOWED_ORIGINS", "http://localhost:5173,http:
 # ── Environment ──
 IS_PRODUCTION = os.getenv("CANE_ENV", "development").lower() == "production"
 
+# ── Base URL (for resolving relative tool URLs to self) ──
+BASE_URL = os.getenv("CANE_BASE_URL", "http://localhost:8000")
+
 # ── Google OAuth (app-level credentials for Live Connectors) ──
 GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
 GOOGLE_OAUTH_CLIENT_SECRET = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", "")
