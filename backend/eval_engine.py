@@ -111,6 +111,76 @@ def _get_agent_answer(question: str, workspace_id: str, tenant_id: str, system_p
     }
 
 
+# ─── Agent answer WITH tools (webhook/MCP) ───
+
+def _get_agent_answer_with_tools(question: str, workspace_id: str, tenant_id: str, system_prompt: str, db: Session) -> dict:
+    """
+    Query the agent using its configured tools (webhooks, MCP, etc.).
+    Same flow as the /ask endpoint -- Claude can call tools, get results, and reason over them.
+    Returns {answer, sources, response_time_ms}
+    """
+    import time as _time
+    from services.tools import get_all_tools
+    from tool_executor import call_claude_with_tools
+
+    start = _time.time()
+
+    # Load agent tools
+    claude_tools, tool_lookup = get_all_tools(workspace_id, tenant_id, db)
+    if not claude_tools:
+        # Fall back to RAG-only if no tools configured
+        return _get_agent_answer(question, workspace_id, tenant_id, system_prompt)
+
+    print(f"  [Eval] Tool-enabled run: {len(claude_tools)} tools for workspace={workspace_id}")
+
+    # Also include RAG context if available
+    context_block = ""
+    try:
+        from services.search import search_text, build_tenant_where
+        where = build_tenant_where(tenant_id, workspace_id)
+        text_results = search_text(question, 5, where)
+        chunks = text_results.get("results", [])
+        if chunks:
+            context_block = "\n\nRelevant documents:\n" + "\n---\n".join(
+                c.get("text", "")[:500] for c in chunks if c.get("text")
+            )
+    except Exception:
+        pass
+
+    # Build messages
+    user_content = question
+    if context_block:
+        user_content += context_block
+
+    messages = [{"role": "user", "content": user_content}]
+
+    # Check if tool chaining is enabled
+    from db_models import Workspace
+    ws = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    chaining = getattr(ws, "tool_chaining_enabled", False) if ws else False
+    max_iter = 5 if chaining else 3
+
+    try:
+        answer = call_claude_with_tools(
+            messages=messages,
+            system=system_prompt or "You are a helpful assistant.",
+            tools=claude_tools,
+            tool_lookup=tool_lookup,
+            db_session=db,
+            max_iterations=max_iter,
+        )
+    except Exception as e:
+        print(f"  [Eval] Tool execution error: {e}")
+        answer = f"Tool execution error: {str(e)}"
+
+    elapsed = int((_time.time() - start) * 1000)
+    return {
+        "answer": answer,
+        "sources": [],
+        "response_time_ms": elapsed,
+    }
+
+
 # ─── External agent answer (eval-as-a-service) ───
 
 def _extract_by_path(data, path: str):
@@ -323,7 +393,19 @@ def execute_eval_run(run_id: str, db: Session):
         return
 
     workspace_id = env.workspace_id or ""
-    print(f"  [Eval] Starting run {run_id} — env={env_id}, workspace={workspace_id}, tenant={run.tenant_id}")
+    print(f"  [Eval] Starting run {run_id} -- env={env_id}, workspace={workspace_id}, tenant={run.tenant_id}")
+
+    # Check if workspace has tools (enables tool-calling eval mode)
+    use_tools = False
+    if workspace_id:
+        from tool_models import AgentTool
+        tool_count = db.query(AgentTool).filter(
+            AgentTool.workspace_id == workspace_id,
+            AgentTool.is_enabled == True,
+        ).count()
+        use_tools = tool_count > 0
+        if use_tools:
+            print(f"  [Eval] Tool-enabled mode: {tool_count} tools found")
 
     # Load test cases
     test_cases = db.query(TestCase).filter(
@@ -382,6 +464,14 @@ def execute_eval_run(run_id: str, db: Session):
                         target_headers=getattr(env, "target_headers", "{}"),
                         target_payload_template=getattr(env, "target_payload_template", '{"message": "{{question}}"}'),
                         target_response_path=getattr(env, "target_response_path", "response"),
+                    )
+                elif use_tools:
+                    agent_result = _get_agent_answer_with_tools(
+                        question=tc.question,
+                        workspace_id=workspace_id,
+                        tenant_id=run.tenant_id,
+                        system_prompt=run.agent_prompt or "",
+                        db=db,
                     )
                 else:
                     agent_result = _get_agent_answer(
