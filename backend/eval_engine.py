@@ -164,13 +164,20 @@ def _get_agent_answer_with_tools(question: str, workspace_id: str, tenant_id: st
     eval_system = (system_prompt or "You are a helpful assistant.") + (
         "\n\nCRITICAL EVAL INSTRUCTIONS:"
         "\n- This is an automated evaluation. Your response will be scored by a judge."
-        "\n- Do NOT narrate your process (no 'I will fetch...', 'Let me check...')."
-        "\n- After using tools, produce ONLY the final structured deliverable."
-        "\n- You MUST cite specific data from tool results: exact CVE IDs, real URLs, "
-        "actual post titles, real IP addresses, real domain names."
-        "\n- NEVER fabricate or generalize. If a tool returned 'CVE-2025-1234', cite that exact ID."
-        "\n- If a tool returned specific malicious URLs, list them verbatim."
-        "\n- The judge will fail you for vague summaries. Be concrete and specific."
+        "\n- Do NOT narrate your process. No 'I will fetch', 'Let me check', 'I have initiated'."
+        "\n- Do NOT describe what tools you called or what data you are collecting."
+        "\n- ONLY output the final structured deliverable (e.g. the briefing)."
+        "\n- COPY-PASTE specific data from tool results into your answer:"
+        "\n  * Exact CVE IDs from tool output (e.g. CVE-2025-1234)"
+        "\n  * Exact URLs, domain names, IP addresses from tool output"
+        "\n  * Exact post titles and Reddit URLs from tool output"
+        "\n  * Exact malware family names and tags from tool output"
+        "\n- If a tool returned 15 CVEs, pick the 5 most critical and list them BY THEIR EXACT IDs."
+        "\n- If a tool returned Reddit posts, cite the EXACT titles and URLs."
+        "\n- NEVER write generic phrases like 'multiple threats detected' or 'various CVEs found'."
+        "\n- NEVER say 'the data collection is in progress' or 'tools have been executed'."
+        "\n- The judge gives 0 points for vague summaries and fabricated data."
+        "\n- The judge gives high scores for specific, verifiable, real data from tool results."
     )
 
     try:
