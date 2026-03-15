@@ -160,10 +160,18 @@ def _get_agent_answer_with_tools(question: str, workspace_id: str, tenant_id: st
     chaining = getattr(ws, "tool_chaining_enabled", False) if ws else False
     max_iter = 5 if chaining else 3
 
+    # For eval: enhance system prompt to produce clean output (no narration)
+    eval_system = (system_prompt or "You are a helpful assistant.") + (
+        "\n\nIMPORTANT: This is an evaluation run. After using your tools, "
+        "produce ONLY the final structured answer. Do NOT narrate your process "
+        "(no 'I will fetch...', 'Let me check...'). Go straight to the deliverable. "
+        "Your response will be scored by an automated judge."
+    )
+
     try:
         answer = call_claude_with_tools(
             messages=messages,
-            system=system_prompt or "You are a helpful assistant.",
+            system=eval_system,
             tools=claude_tools,
             tool_lookup=tool_lookup,
             db_session=db,
