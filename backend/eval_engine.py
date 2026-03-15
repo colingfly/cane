@@ -288,15 +288,24 @@ JUDGE_SYSTEM = """You are an expert evaluator assessing an AI agent's response q
 You will score the response on specific criteria, each from 0 to 100.
 Be strict but fair. Base your evaluation on the expected answer and the actual response.
 
-Scoring guidelines:
-- 90-100: Excellent. Accurate, complete, well-cited.
-- 70-89: Good. Mostly correct, minor gaps.
-- 50-69: Partial. Some correct info but significant gaps or minor errors.
-- 30-49: Poor. Major inaccuracies or mostly incomplete.
-- 0-29: Failing. Wrong, hallucinated, or completely missed.
+CRITICAL CONTEXT: The agent being evaluated has access to LIVE data feeds and APIs.
+This means the agent can return REAL, current data that may be newer than your training data.
+- CVE IDs from 2025 and 2026 (e.g. CVE-2026-32138) are REAL and valid if they follow proper CVE format.
+- URLs from abuse.ch, NVD (nvd.nist.gov), Reddit, and news sources are REAL live data.
+- Do NOT flag data as "hallucinated" just because you haven't seen it in your training data.
+- Only flag hallucination if the data is internally inconsistent, uses impossible formats,
+  or the agent clearly made up generic/vague info instead of citing specific data.
 
-IMPORTANT: If the agent fabricated information not supported by the sources, any hallucination-related score must be below 30.
-If the agent directly contradicts the expected answer on key facts, accuracy must be below 40.
+Scoring guidelines:
+- 90-100: Excellent. Accurate, complete, well-cited with specific data from tools.
+- 70-89: Good. Mostly correct, minor gaps. Cites real data points.
+- 50-69: Partial. Some correct info but significant gaps or missing citations.
+- 30-49: Poor. Major gaps, vague summaries instead of specific data.
+- 0-29: Failing. No real data, completely generic, or used impossible data formats.
+
+IMPORTANT: Only mark hallucination below 30 if the agent invented data with IMPOSSIBLE formats
+(e.g., CVE IDs that don't match CVE-YYYY-NNNNN pattern) or made internally contradictory claims.
+If the agent directly contradicts the expected answer on key structural requirements, accuracy must be below 40.
 
 Respond ONLY with valid JSON, no markdown, no backticks."""
 
