@@ -35,6 +35,21 @@ def run_all():
     _migrate_mining_tables()
     _migrate_eval_schedules_table()
     _migrate_osint_briefings_table()
+    _migrate_osint_tools_fire_and_forget()
+
+
+def _migrate_osint_tools_fire_and_forget():
+    """Fix OSINT agent tools to NOT be fire-and-forget so Claude sees the response data."""
+    try:
+        with engine.begin() as conn:
+            # Find OSINT workspaces and set their tools to fire_and_forget=0
+            conn.execute(text(
+                "UPDATE agent_tools SET fire_and_forget = 0 "
+                "WHERE workspace_id IN (SELECT id FROM workspaces WHERE agent_type = 'osint') "
+                "AND fire_and_forget = 1"
+            ))
+    except Exception:
+        pass  # Safe to fail silently
 
 
 def _migrate_agent_columns():

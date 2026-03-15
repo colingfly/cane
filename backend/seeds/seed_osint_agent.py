@@ -204,6 +204,7 @@ def seed():
                 auth_value="",
                 parameters="[]",
                 is_enabled=True,
+                fire_and_forget=False,  # MUST be False so Claude sees the response data
             ))
         print(f"[Seed] Created {len(TOOLS)} OSINT tools")
 
