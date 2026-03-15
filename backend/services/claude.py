@@ -70,7 +70,7 @@ def call_with_tools(
     system: str,
     tools: list,
     model: str = None,
-    max_tokens: int = 1024,
+    max_tokens: int = 4096,
     temperature: float = 0.3,
 ) -> anthropic.types.Message:
     """

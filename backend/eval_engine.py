@@ -160,12 +160,17 @@ def _get_agent_answer_with_tools(question: str, workspace_id: str, tenant_id: st
     chaining = getattr(ws, "tool_chaining_enabled", False) if ws else False
     max_iter = 5 if chaining else 3
 
-    # For eval: enhance system prompt to produce clean output (no narration)
+    # For eval: enhance system prompt to produce clean output with real data
     eval_system = (system_prompt or "You are a helpful assistant.") + (
-        "\n\nIMPORTANT: This is an evaluation run. After using your tools, "
-        "produce ONLY the final structured answer. Do NOT narrate your process "
-        "(no 'I will fetch...', 'Let me check...'). Go straight to the deliverable. "
-        "Your response will be scored by an automated judge."
+        "\n\nCRITICAL EVAL INSTRUCTIONS:"
+        "\n- This is an automated evaluation. Your response will be scored by a judge."
+        "\n- Do NOT narrate your process (no 'I will fetch...', 'Let me check...')."
+        "\n- After using tools, produce ONLY the final structured deliverable."
+        "\n- You MUST cite specific data from tool results: exact CVE IDs, real URLs, "
+        "actual post titles, real IP addresses, real domain names."
+        "\n- NEVER fabricate or generalize. If a tool returned 'CVE-2025-1234', cite that exact ID."
+        "\n- If a tool returned specific malicious URLs, list them verbatim."
+        "\n- The judge will fail you for vague summaries. Be concrete and specific."
     )
 
     try:
