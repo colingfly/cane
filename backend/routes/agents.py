@@ -11,21 +11,47 @@ from sqlalchemy import text
 from database import get_db
 from db_models import Tenant, User, Workspace, Document, SearchLog, ApiKey
 from tool_models import AgentLink
-from auth import get_current_user
+from auth import get_current_user, get_optional_user
 from agent_prompts import auto_generate_prompt, generate_replica_prompt
 from security import sanitize_form_field
-from services.limits import check_agent_limit
+from config import GUEST_TENANT_ID
+from services.limits import check_agent_limit, check_guest_agent_limit
 from services.chroma import text_col, image_col
+
+
+def _resolve_guest(request, user, db):
+    """Resolve tenant_id and guest_session_id for anonymous or authenticated users.
+    Returns (tenant_id, guest_session_id) or raises 400 if anonymous with no session."""
+    if user:
+        return user.tenant_id, None
+    guest_session_id = request.headers.get("x-guest-session", "")
+    if not guest_session_id:
+        return None, None
+    return GUEST_TENANT_ID, guest_session_id
+
+
+def _verify_guest_workspace(ws, guest_session_id):
+    """Check that a workspace belongs to the given guest session."""
+    if not ws:
+        return False
+    return ws.tenant_id == GUEST_TENANT_ID and ws.guest_session_id == guest_session_id
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
 
 @router.get("")
-def list_agents(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    agents = db.query(Workspace).filter(
-        Workspace.tenant_id == user.tenant_id,
+def list_agents(request: Request, user: User = Depends(get_optional_user), db: Session = Depends(get_db)):
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if not tenant_id:
+        return {"agents": []}
+
+    q = db.query(Workspace).filter(
+        Workspace.tenant_id == tenant_id,
         Workspace.agent_type.isnot(None),
-    ).order_by(Workspace.created_at.desc()).all()
+    )
+    if guest_session_id:
+        q = q.filter(Workspace.guest_session_id == guest_session_id)
+    agents = q.order_by(Workspace.created_at.desc()).all()
 
     result = []
     for a in agents:
@@ -43,14 +69,22 @@ def list_agents(user: User = Depends(get_current_user), db: Session = Depends(ge
 
 @router.post("")
 def create_agent(
+    request: Request,
     agent_type: str = Form("custom"), name: str = Form(""),
     description: str = Form(""), icon: str = Form(""),
-    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    user: User = Depends(get_optional_user), db: Session = Depends(get_db),
 ):
-    """Create a new agent."""
+    """Create a new agent (works for both authenticated and anonymous users)."""
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if not tenant_id:
+        return JSONResponse({"error": "Guest session required. Include X-Guest-Session header."}, status_code=400)
+
     # Check limit
-    tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
-    limit_err = check_agent_limit(user.tenant_id, tenant.plan if tenant else "free", db)
+    if guest_session_id:
+        limit_err = check_guest_agent_limit(guest_session_id, db)
+    else:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        limit_err = check_agent_limit(tenant_id, tenant.plan if tenant else "free", db)
     if limit_err:
         return JSONResponse({"error": limit_err}, status_code=403)
 
@@ -66,9 +100,10 @@ def create_agent(
         return JSONResponse({"error": "Agent name is required"}, status_code=400)
 
     ws = Workspace(
-        tenant_id=user.tenant_id, name=name, description=description,
+        tenant_id=tenant_id, name=name, description=description,
         agent_type=agent_type, agent_icon=icon, agent_description=description,
         system_prompt=system_prompt, show_on_homepage=False, is_default=False,
+        guest_session_id=guest_session_id,
     )
     db.add(ws)
     db.commit()
@@ -83,11 +118,20 @@ def create_agent(
 
 
 @router.get("/{agent_id}")
-def get_agent(agent_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    ws = db.query(Workspace).filter(
-        Workspace.id == agent_id, Workspace.tenant_id == user.tenant_id,
-        Workspace.agent_type.isnot(None),
-    ).first()
+def get_agent(agent_id: str, request: Request, user: User = Depends(get_optional_user), db: Session = Depends(get_db)):
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+
+    if guest_session_id:
+        ws = db.query(Workspace).filter(
+            Workspace.id == agent_id, Workspace.agent_type.isnot(None),
+        ).first()
+        if not _verify_guest_workspace(ws, guest_session_id):
+            ws = None
+    else:
+        ws = db.query(Workspace).filter(
+            Workspace.id == agent_id, Workspace.tenant_id == tenant_id,
+            Workspace.agent_type.isnot(None),
+        ).first()
     if not ws:
         return JSONResponse({"error": "Agent not found"}, status_code=404)
 
@@ -107,17 +151,26 @@ def get_agent(agent_id: str, user: User = Depends(get_current_user), db: Session
 
 @router.put("/{agent_id}")
 def update_agent(
-    agent_id: str, name: str = Form(None), description: str = Form(None),
+    agent_id: str, request: Request, name: str = Form(None), description: str = Form(None),
     icon: str = Form(None), system_prompt: str = Form(None),
     show_on_homepage: str = Form(None),
     tool_chaining_enabled: str = Form(None),
     orchestrator_mode: str = Form(None),
-    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    user: User = Depends(get_optional_user), db: Session = Depends(get_db),
 ):
-    ws = db.query(Workspace).filter(
-        Workspace.id == agent_id, Workspace.tenant_id == user.tenant_id,
-        Workspace.agent_type.isnot(None),
-    ).first()
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+
+    if guest_session_id:
+        ws = db.query(Workspace).filter(
+            Workspace.id == agent_id, Workspace.agent_type.isnot(None),
+        ).first()
+        if not _verify_guest_workspace(ws, guest_session_id):
+            ws = None
+    else:
+        ws = db.query(Workspace).filter(
+            Workspace.id == agent_id, Workspace.tenant_id == tenant_id,
+            Workspace.agent_type.isnot(None),
+        ).first()
     if not ws:
         return JSONResponse({"error": "Agent not found"}, status_code=404)
 

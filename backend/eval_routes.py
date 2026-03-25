@@ -8,18 +8,41 @@ import json
 import urllib.request
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from database import get_db
-from auth import get_current_user
+from auth import get_current_user, get_optional_user
+from config import GUEST_TENANT_ID
 from db_models import User, Workspace
 from eval_models import (
     Environment, TestCase, JudgeCriteria, JudgeCustomRule, EvalRun, EvalResult,
     EvalSchedule,
 )
+from services.rate_limit import check_guest_eval_rate, record_guest_eval_run
 
 router = APIRouter(prefix="/api/environments", tags=["environments"])
+
+
+def _resolve_guest(request, user, db):
+    """Resolve tenant_id and guest_session_id for anonymous or authenticated users.
+    Returns (tenant_id, guest_session_id) or raises 400 if anonymous with no session."""
+    if user:
+        return user.tenant_id, None
+    guest_session_id = request.headers.get("x-guest-session", "")
+    if not guest_session_id:
+        return None, None
+    return GUEST_TENANT_ID, guest_session_id
+
+
+def _verify_guest_environment(env, guest_session_id, db):
+    """Check that an environment's workspace belongs to the given guest session."""
+    if not env:
+        return False
+    ws = db.query(Workspace).filter(Workspace.id == env.workspace_id).first()
+    if not ws:
+        return False
+    return ws.tenant_id == GUEST_TENANT_ID and ws.guest_session_id == guest_session_id
 
 
 # ─── Default criteria seeded on new environments ───
@@ -69,6 +92,8 @@ def _serialize_env(env: Environment, include_details=False) -> dict:
         "target_payload_template": getattr(env, "target_payload_template", '{"message": "{{question}}"}') or '{"message": "{{question}}"}',
         "target_response_path": getattr(env, "target_response_path", "response") or "response",
         "is_public": bool(getattr(env, "is_public", False)),
+        "judge_provider": getattr(env, "judge_provider", "anthropic") or "anthropic",
+        "judge_model": getattr(env, "judge_model", None),
         "created_at": env.created_at.isoformat() if env.created_at else None,
         "updated_at": env.updated_at.isoformat() if env.updated_at else None,
     }
@@ -140,19 +165,58 @@ def _serialize_run_summary(r: EvalRun) -> dict:
 
 
 # ═══════════════════════════════════════════
+#  JUDGE MODEL PROVIDERS
+# ═══════════════════════════════════════════
+
+@router.get("/judge-models")
+def list_judge_models(
+    request: Request,
+    user: User = Depends(get_optional_user),
+):
+    """List available judge model providers and their default models."""
+    from services.judge_providers import PROVIDERS, DEFAULT_MODELS
+    providers = []
+    for key, cls in PROVIDERS.items():
+        providers.append({
+            "provider": key,
+            "display_name": cls.display_name(),
+            "default_model": DEFAULT_MODELS.get(key, ""),
+            "env_key": cls.env_key(),
+            "requires_base_url": key == "openai-compatible",
+        })
+    return {"providers": providers}
+
+
+# ═══════════════════════════════════════════
 #  ENVIRONMENTS CRUD
 # ═══════════════════════════════════════════
 
 @router.get("")
 def list_environments(
-    user: User = Depends(get_current_user),
+    request: Request,
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """List all environments for the current tenant."""
-    envs = db.query(Environment).filter(
-        Environment.tenant_id == user.tenant_id,
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if not tenant_id:
+        return {"environments": []}
+
+    q = db.query(Environment).filter(
+        Environment.tenant_id == tenant_id,
         Environment.is_active == True,
-    ).order_by(Environment.created_at.desc()).all()
+    )
+
+    if guest_session_id:
+        guest_ws_ids = [
+            w.id for w in db.query(Workspace).filter(
+                Workspace.tenant_id == GUEST_TENANT_ID,
+                Workspace.guest_session_id == guest_session_id,
+            ).all()
+        ]
+        q = q.filter(Environment.workspace_id.in_(guest_ws_ids))
+
+    envs = q.order_by(Environment.created_at.desc()).all()
 
     return {"environments": [_serialize_env(e) for e in envs]}
 
@@ -161,25 +225,39 @@ def list_environments(
 def create_environment(
     name: str,
     workspace_id: str,
+    request: Request,
     description: str = "",
-    user: User = Depends(get_current_user),
+    judge_provider: str = None,
+    judge_model: str = None,
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Create a new environment linked to an agent."""
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if not tenant_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Guest session required. Include X-Guest-Session header.")
+
     # Verify workspace belongs to tenant
-    ws = db.query(Workspace).filter(
-        Workspace.id == workspace_id,
-        Workspace.tenant_id == user.tenant_id,
-    ).first()
+    if guest_session_id:
+        ws = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+        if not ws or ws.tenant_id != GUEST_TENANT_ID or ws.guest_session_id != guest_session_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Agent not found")
+    else:
+        ws = db.query(Workspace).filter(
+            Workspace.id == workspace_id,
+            Workspace.tenant_id == tenant_id,
+        ).first()
     if not ws:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Agent not found")
 
     env = Environment(
-        tenant_id=user.tenant_id,
+        tenant_id=tenant_id,
         workspace_id=workspace_id,
         name=name.strip(),
         description=description.strip(),
-        created_by=user.id,
+        created_by=user.id if user else None,
+        judge_provider=judge_provider or "anthropic",
+        judge_model=judge_model,
     )
     db.add(env)
     db.flush()  # get env.id
@@ -200,17 +278,25 @@ def create_environment(
 @router.get("/{env_id}")
 def get_environment(
     env_id: str,
-    user: User = Depends(get_current_user),
+    request: Request,
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Get environment with all details."""
-    env = _get_env(env_id, user.tenant_id, db)
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    else:
+        env = _get_env(env_id, tenant_id, db)
     return _serialize_env(env, include_details=True)
 
 
 @router.put("/{env_id}")
 def update_environment(
     env_id: str,
+    request: Request,
     name: str = None,
     description: str = None,
     workspace_id: str = None,
@@ -224,11 +310,20 @@ def update_environment(
     target_payload_template: str = None,
     target_response_path: str = None,
     is_public: bool = None,
-    user: User = Depends(get_current_user),
+    judge_provider: str = None,
+    judge_model: str = None,
+    judge_config: str = None,
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Update environment details."""
-    env = _get_env(env_id, user.tenant_id, db)
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    else:
+        env = _get_env(env_id, tenant_id, db)
 
     if name is not None:
         env.name = name.strip()
@@ -255,13 +350,24 @@ def update_environment(
     if is_public is not None:
         env.is_public = is_public
     if workspace_id is not None:
-        ws = db.query(Workspace).filter(
-            Workspace.id == workspace_id,
-            Workspace.tenant_id == user.tenant_id,
-        ).first()
-        if not ws:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Agent not found")
+        if guest_session_id:
+            ws = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+            if not ws or ws.tenant_id != GUEST_TENANT_ID or ws.guest_session_id != guest_session_id:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Agent not found")
+        else:
+            ws = db.query(Workspace).filter(
+                Workspace.id == workspace_id,
+                Workspace.tenant_id == tenant_id,
+            ).first()
+            if not ws:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Agent not found")
         env.workspace_id = workspace_id
+    if judge_provider is not None:
+        env.judge_provider = judge_provider.strip()
+    if judge_model is not None:
+        env.judge_model = judge_model.strip() if judge_model else None
+    if judge_config is not None:
+        env.judge_config = judge_config.strip() if judge_config else None
 
     db.commit()
     db.refresh(env)
@@ -271,11 +377,18 @@ def update_environment(
 @router.delete("/{env_id}")
 def delete_environment(
     env_id: str,
-    user: User = Depends(get_current_user),
+    request: Request,
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Soft-delete an environment."""
-    env = _get_env(env_id, user.tenant_id, db)
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    else:
+        env = _get_env(env_id, tenant_id, db)
     env.is_active = False
     db.commit()
     return {"ok": True}
@@ -289,13 +402,20 @@ def delete_environment(
 def add_test_case(
     env_id: str,
     question: str,
+    request: Request,
     expected_answer: str = "",
     tags: str = "[]",
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Add a test case to an environment."""
-    env = _get_env(env_id, user.tenant_id, db)
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    else:
+        env = _get_env(env_id, tenant_id, db)
 
     # Validate tags JSON
     try:
@@ -325,14 +445,21 @@ def add_test_case(
 def update_test_case(
     env_id: str,
     case_id: str,
+    request: Request,
     question: str = None,
     expected_answer: str = None,
     tags: str = None,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Update a test case."""
-    env = _get_env(env_id, user.tenant_id, db)
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    else:
+        env = _get_env(env_id, tenant_id, db)
     tc = db.query(TestCase).filter(TestCase.id == case_id, TestCase.environment_id == env.id).first()
     if not tc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Test case not found")
@@ -357,11 +484,18 @@ def update_test_case(
 def delete_test_case(
     env_id: str,
     case_id: str,
-    user: User = Depends(get_current_user),
+    request: Request,
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Delete a test case."""
-    env = _get_env(env_id, user.tenant_id, db)
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    else:
+        env = _get_env(env_id, tenant_id, db)
     tc = db.query(TestCase).filter(TestCase.id == case_id, TestCase.environment_id == env.id).first()
     if not tc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Test case not found")
@@ -375,11 +509,18 @@ def delete_test_case(
 def bulk_add_test_cases(
     env_id: str,
     cases: str,  # JSON array of {question, expected_answer, tags}
-    user: User = Depends(get_current_user),
+    request: Request,
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Import multiple test cases at once."""
-    env = _get_env(env_id, user.tenant_id, db)
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    else:
+        env = _get_env(env_id, tenant_id, db)
 
     try:
         case_list = json.loads(cases)
@@ -413,13 +554,20 @@ def bulk_add_test_cases(
 @router.post("/{env_id}/cases/generate", status_code=201)
 def generate_test_cases(
     env_id: str,
+    request: Request,
     count: int = Query(10, ge=3, le=30),
     difficulty: str = Query("mixed"),  # "easy", "mixed", "adversarial"
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Auto-generate test cases from the workspace's documents using an LLM."""
-    env = _get_env(env_id, user.tenant_id, db)
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    else:
+        env = _get_env(env_id, tenant_id, db)
 
     # Get the workspace and its system prompt
     ws = db.query(Workspace).filter(Workspace.id == env.workspace_id).first()
@@ -429,7 +577,7 @@ def generate_test_cases(
     # Fetch document chunks from ChromaDB
     from services.chroma import text_col
     from services.search import build_tenant_where
-    where = build_tenant_where(user.tenant_id, env.workspace_id)
+    where = build_tenant_where(tenant_id, env.workspace_id)
 
     try:
         get_kwargs = {"include": ["documents", "metadatas"]}
@@ -562,11 +710,18 @@ Return ONLY a JSON array with no other text:
 @router.get("/{env_id}/criteria")
 def get_criteria(
     env_id: str,
-    user: User = Depends(get_current_user),
+    request: Request,
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Get all judge criteria for an environment."""
-    env = _get_env(env_id, user.tenant_id, db)
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    else:
+        env = _get_env(env_id, tenant_id, db)
     return {"criteria": [_serialize_criteria(c) for c in sorted(env.criteria, key=lambda x: x.sort_order)]}
 
 
@@ -574,11 +729,18 @@ def get_criteria(
 def update_criteria(
     env_id: str,
     criteria: str,  # JSON array of {id, weight, is_enabled}
-    user: User = Depends(get_current_user),
+    request: Request,
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Bulk update criteria weights and enabled status."""
-    env = _get_env(env_id, user.tenant_id, db)
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    else:
+        env = _get_env(env_id, tenant_id, db)
 
     try:
         updates = json.loads(criteria)
@@ -612,11 +774,18 @@ def update_criteria(
 def add_custom_rule(
     env_id: str,
     rule_text: str,
-    user: User = Depends(get_current_user),
+    request: Request,
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Add a custom judge rule."""
-    env = _get_env(env_id, user.tenant_id, db)
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    else:
+        env = _get_env(env_id, tenant_id, db)
 
     max_order = max([r.sort_order for r in env.custom_rules], default=-1) + 1
 
@@ -636,11 +805,18 @@ def add_custom_rule(
 def delete_custom_rule(
     env_id: str,
     rule_id: str,
-    user: User = Depends(get_current_user),
+    request: Request,
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Delete a custom judge rule."""
-    env = _get_env(env_id, user.tenant_id, db)
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    else:
+        env = _get_env(env_id, tenant_id, db)
     rule = db.query(JudgeCustomRule).filter(
         JudgeCustomRule.id == rule_id,
         JudgeCustomRule.environment_id == env.id,
@@ -660,11 +836,18 @@ def delete_custom_rule(
 @router.get("/{env_id}/runs")
 def list_runs(
     env_id: str,
-    user: User = Depends(get_current_user),
+    request: Request,
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """List all eval runs for an environment."""
-    env = _get_env(env_id, user.tenant_id, db)
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    else:
+        env = _get_env(env_id, tenant_id, db)
     runs = sorted(env.runs, key=lambda r: r.created_at, reverse=True)
     return {"runs": [_serialize_run_summary(r) for r in runs]}
 
@@ -673,11 +856,22 @@ def list_runs(
 def trigger_run(
     env_id: str,
     background_tasks: BackgroundTasks,
-    user: User = Depends(get_current_user),
+    request: Request,
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Trigger a new evaluation run."""
-    env = _get_env(env_id, user.tenant_id, db)
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+        # Rate limit anonymous eval runs
+        rate_err = check_guest_eval_rate(request.client.host)
+        if rate_err:
+            raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, rate_err)
+    else:
+        env = _get_env(env_id, tenant_id, db)
 
     # Validate: need test cases and criteria
     if not env.test_cases:
@@ -721,17 +915,21 @@ def trigger_run(
     # Create run
     run = EvalRun(
         environment_id=env.id,
-        tenant_id=user.tenant_id,
+        tenant_id=tenant_id,
         status="pending",
         total_cases=len(env.test_cases),
         agent_prompt=agent_prompt,
         criteria_snapshot=criteria_snapshot,
         target_snapshot=target_snapshot,
-        triggered_by=user.id,
+        triggered_by=user.id if user else None,
     )
     db.add(run)
     db.commit()
     db.refresh(run)
+
+    # Record anonymous eval run for rate limiting
+    if guest_session_id:
+        record_guest_eval_run(request.client.host)
 
     # Kick off in background
     from eval_engine import execute_eval_run
@@ -754,11 +952,18 @@ def trigger_run(
 def get_run_detail(
     env_id: str,
     run_id: str,
-    user: User = Depends(get_current_user),
+    request: Request,
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Get full run details with all results."""
-    env = _get_env(env_id, user.tenant_id, db)
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    else:
+        env = _get_env(env_id, tenant_id, db)
     run = db.query(EvalRun).filter(
         EvalRun.id == run_id,
         EvalRun.environment_id == env.id,
@@ -796,11 +1001,18 @@ def get_run_detail(
 def delete_run(
     env_id: str,
     run_id: str,
-    user: User = Depends(get_current_user),
+    request: Request,
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Delete an eval run and its results."""
-    env = _get_env(env_id, user.tenant_id, db)
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    else:
+        env = _get_env(env_id, tenant_id, db)
     run = db.query(EvalRun).filter(
         EvalRun.id == run_id,
         EvalRun.environment_id == env.id,
@@ -816,17 +1028,179 @@ def delete_run(
 
 
 # ═══════════════════════════════════════════
+#  PERSONALITY PROFILE
+# ═══════════════════════════════════════════
+
+@router.get("/{env_id}/runs/{run_id}/profile")
+def get_run_profile(
+    env_id: str,
+    run_id: str,
+    request: Request,
+    clusters: int = Query(4, ge=2, le=10),
+    user: User = Depends(get_optional_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Generate personality profile for a completed eval run.
+
+    Embeds all agent responses, projects to 2D, clusters behavioral patterns,
+    computes personality traits, and extracts contrastive steering vectors.
+    """
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    else:
+        env = _get_env(env_id, tenant_id, db)
+    run = db.query(EvalRun).filter(
+        EvalRun.id == run_id,
+        EvalRun.environment_id == env.id,
+    ).first()
+    if not run:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Run not found")
+    if run.status != "completed":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Run must be completed to profile")
+
+    results = db.query(EvalResult).filter(
+        EvalResult.eval_run_id == run.id
+    ).order_by(EvalResult.created_at).all()
+
+    if not results:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No results in this run")
+
+    # Build cane-eval compatible structures
+    try:
+        from cane_eval.profiler import Profiler, _compute_traits, _aggregate_personality, _extract_contrastive_pairs, _compute_steering_vectors, _cluster_kmeans, _project_pca, _label_clusters, _embed_texts, EmbeddedResult
+        import numpy as np
+    except ImportError:
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "cane-eval profiler not available. Install: pip install cane-eval[profile]"
+        )
+
+    # Step 1: Build embedded results with traits
+    embedded_results = []
+    texts = []
+    for i, r in enumerate(results):
+        criteria_scores = json.loads(r.criteria_scores) if r.criteria_scores else {}
+
+        # Compute trait scores from criteria
+        accuracy = float(criteria_scores.get("accuracy", 50))
+        hallucination = float(criteria_scores.get("hallucination", 100))
+        completeness_val = float(criteria_scores.get("completeness", 50))
+
+        agent_answer = r.agent_answer or ""
+        expected_answer = r.expected_answer or ""
+
+        # Hedging detection
+        hedge_markers = [
+            "i think", "i believe", "it seems", "perhaps", "maybe", "possibly",
+            "it's possible", "it might", "could be", "i'm not sure", "approximately",
+            "roughly", "generally", "typically", "often", "usually", "likely",
+            "probably", "it appears", "as far as i know",
+        ]
+        text_lower = agent_answer.lower()
+        hedge_count = sum(1 for m in hedge_markers if m in text_lower)
+        words = max(len(agent_answer.split()), 1)
+        hedging = min(100.0, (hedge_count / words) * 100 * 20)
+
+        # Verbosity
+        expected_words = max(len(expected_answer.split()), 1)
+        verbosity = min(100.0, max(0.0, (len(agent_answer.split()) / expected_words) * 50))
+
+        # Overconfidence
+        overconfidence = max(0.0, (100 - accuracy) * (100 - hallucination) / 100)
+
+        traits = {
+            "overconfidence": round(overconfidence, 1),
+            "calibration": round((accuracy + hallucination) / 2, 1),
+            "verbosity": round(verbosity, 1),
+            "hedging": round(hedging, 1),
+            "groundedness": round((accuracy + hallucination + completeness_val) / 3, 1),
+            "completeness": round(completeness_val, 1),
+        }
+
+        er = EmbeddedResult(
+            index=i,
+            question=r.question or "",
+            agent_answer=agent_answer,
+            expected_answer=expected_answer,
+            score=r.overall_score or 0,
+            status=r.status or "warn",
+            criteria_scores=criteria_scores,
+            traits=traits,
+        )
+        embedded_results.append(er)
+        texts.append(agent_answer if agent_answer else "(empty)")
+
+    # Step 2: Embed
+    try:
+        embeddings = _embed_texts(texts, "all-MiniLM-L6-v2")
+    except ImportError:
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "sentence-transformers not installed. Install: pip install sentence-transformers"
+        )
+
+    for i, er in enumerate(embedded_results):
+        er.embedding = embeddings[i].tolist()
+
+    # Step 3: Project to 2D
+    projection_method = "pca"
+    if len(embeddings) >= 4:
+        proj_2d = _project_pca(embeddings, 2)
+        for i, er in enumerate(embedded_results):
+            er.projection_2d = proj_2d[i].tolist()
+
+    # Step 4: Cluster
+    n_clusters = min(clusters, len(embeddings))
+    if len(embeddings) >= 2:
+        labels = _cluster_kmeans(embeddings, n_clusters)
+        for i, er in enumerate(embedded_results):
+            er.cluster_id = int(labels[i])
+    cluster_labels = _label_clusters(embedded_results, n_clusters)
+
+    # Step 5: Aggregate personality
+    personality = _aggregate_personality(embedded_results)
+
+    # Step 6: Contrastive pairs + steering vectors
+    contrastive_pairs = _extract_contrastive_pairs(embedded_results)
+    steering_vectors = _compute_steering_vectors(embedded_results, contrastive_pairs)
+
+    return {
+        "run_id": run_id,
+        "suite_name": env.name,
+        "total_results": len(embedded_results),
+        "embedding_model": "all-MiniLM-L6-v2",
+        "projection_method": projection_method,
+        "personality": personality.to_dict(),
+        "clusters": {str(k): v for k, v in cluster_labels.items()},
+        "steering_vectors": [sv.to_dict() for sv in steering_vectors],
+        "contrastive_pairs": [cp.to_dict() for cp in contrastive_pairs],
+        "results": [r.to_dict() for r in embedded_results],
+    }
+
+
+# ═══════════════════════════════════════════
 #  WEBHOOK TEST
 # ═══════════════════════════════════════════
 
 @router.post("/{env_id}/webhook/test")
 def test_webhook(
     env_id: str,
-    user: User = Depends(get_current_user),
+    request: Request,
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Send a test payload to the environment's configured webhook URL."""
-    env = _get_env(env_id, user.tenant_id, db)
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    else:
+        env = _get_env(env_id, tenant_id, db)
 
     webhook_url = env.webhook_url or ""
     if not webhook_url:
@@ -882,11 +1256,18 @@ def test_webhook(
 @router.post("/{env_id}/target/test")
 def test_target(
     env_id: str,
-    user: User = Depends(get_current_user),
+    request: Request,
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Send a sample question to the external agent endpoint to verify connectivity."""
-    env = _get_env(env_id, user.tenant_id, db)
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    else:
+        env = _get_env(env_id, tenant_id, db)
 
     target_url = getattr(env, "target_url", "") or ""
     if not target_url:
@@ -953,11 +1334,18 @@ def _serialize_schedule(s: EvalSchedule) -> dict:
 @router.get("/{env_id}/schedule")
 def get_eval_schedule(
     env_id: str,
-    user: User = Depends(get_current_user),
+    request: Request,
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Get the eval schedule for an environment (one schedule per env)."""
-    env = _get_env(env_id, user.tenant_id, db)
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    else:
+        env = _get_env(env_id, tenant_id, db)
     schedule = db.query(EvalSchedule).filter(
         EvalSchedule.environment_id == env.id,
     ).first()
@@ -972,11 +1360,18 @@ def get_eval_schedule(
 def create_or_update_eval_schedule(
     env_id: str,
     body: dict,
-    user: User = Depends(get_current_user),
+    request: Request,
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Create or update the eval schedule for an environment."""
-    env = _get_env(env_id, user.tenant_id, db)
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    else:
+        env = _get_env(env_id, tenant_id, db)
 
     schedule = db.query(EvalSchedule).filter(
         EvalSchedule.environment_id == env.id,
@@ -985,8 +1380,8 @@ def create_or_update_eval_schedule(
     if not schedule:
         schedule = EvalSchedule(
             environment_id=env.id,
-            tenant_id=user.tenant_id,
-            created_by=user.id,
+            tenant_id=tenant_id,
+            created_by=user.id if user else None,
         )
         db.add(schedule)
 
@@ -1022,11 +1417,18 @@ def create_or_update_eval_schedule(
 @router.delete("/{env_id}/schedule")
 def delete_eval_schedule(
     env_id: str,
-    user: User = Depends(get_current_user),
+    request: Request,
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Delete the eval schedule for an environment."""
-    env = _get_env(env_id, user.tenant_id, db)
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    else:
+        env = _get_env(env_id, tenant_id, db)
     schedule = db.query(EvalSchedule).filter(
         EvalSchedule.environment_id == env.id,
     ).first()
@@ -1042,12 +1444,19 @@ def delete_eval_schedule(
 @router.post("/{env_id}/schedule/run-now")
 def trigger_schedule_now(
     env_id: str,
+    request: Request,
     background_tasks: BackgroundTasks = BackgroundTasks(),
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Manually trigger a scheduled eval run immediately."""
-    env = _get_env(env_id, user.tenant_id, db)
+    tenant_id, guest_session_id = _resolve_guest(request, user, db)
+    if guest_session_id:
+        env = _get_env(env_id, GUEST_TENANT_ID, db)
+        if not _verify_guest_environment(env, guest_session_id, db):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
+    else:
+        env = _get_env(env_id, tenant_id, db)
     schedule = db.query(EvalSchedule).filter(
         EvalSchedule.environment_id == env.id,
     ).first()

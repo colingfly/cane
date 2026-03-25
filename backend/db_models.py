@@ -93,6 +93,7 @@ class Workspace(Base):
     show_on_homepage = Column(Boolean, default=False)           # Show in search page workspace dropdown
     tool_chaining_enabled = Column(Boolean, default=False)     # Allow up to 5 tool calls per turn
     orchestrator_mode = Column(Boolean, default=False)         # Auto-discover and route to all tenant agents
+    guest_session_id = Column(String(36), nullable=True, index=True)  # anonymous session tracking
     # widget_config added via migration -- access via raw SQL in analytics_routes
 
     # Relationships

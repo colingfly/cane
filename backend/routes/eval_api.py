@@ -25,6 +25,20 @@ from eval_models import (
 router = APIRouter(prefix="/v1/eval", tags=["eval-api"])
 
 
+def _extract_judge_from_snapshot(target_snapshot: str) -> dict:
+    """Extract judge provider/model from the run's target_snapshot JSON."""
+    if not target_snapshot:
+        return {"provider": "anthropic", "model": None}
+    try:
+        snap = json.loads(target_snapshot)
+        return {
+            "provider": snap.get("judge_provider", "anthropic"),
+            "model": snap.get("judge_model"),
+        }
+    except (json.JSONDecodeError, TypeError):
+        return {"provider": "anthropic", "model": None}
+
+
 # ── List public eval suites ──
 
 @router.get("/suites")
@@ -69,6 +83,8 @@ def submit_eval_run(
     target_headers: str = "{}",
     target_payload_template: str = '{"message": "{{question}}"}',
     target_response_path: str = "response",
+    judge_provider: str = None,
+    judge_model: str = None,
     background_tasks: BackgroundTasks = None,
     api_key: ApiKey = Depends(get_api_key_auth),
     db: Session = Depends(get_db),
@@ -123,18 +139,26 @@ def submit_eval_run(
     env.target_payload_template = target_payload_template
     env.target_response_path = target_response_path.strip()
 
+    # Override judge model for this run if specified
+    if judge_provider:
+        env.judge_provider = judge_provider.strip()
+    if judge_model:
+        env.judge_model = judge_model.strip()
+
     # Snapshot criteria
     criteria_snapshot = json.dumps([
         {"key": c.key, "label": c.label, "weight": c.weight, "is_enabled": True}
         for c in enabled_criteria
     ])
 
-    # Snapshot target config
+    # Snapshot target config (includes judge override)
     target_snapshot = json.dumps({
         "target_type": "external",
         "target_url": target_url.strip(),
         "target_payload_template": target_payload_template,
         "target_response_path": target_response_path.strip(),
+        "judge_provider": getattr(env, "judge_provider", "anthropic"),
+        "judge_model": getattr(env, "judge_model", None),
     })
 
     # Create run
@@ -195,7 +219,7 @@ def get_eval_results(
         EvalResult.eval_run_id == run.id
     ).order_by(EvalResult.created_at).all()
 
-    return {
+    response = {
         "run_id": run.id,
         "environment_id": run.environment_id,
         "status": run.status,
@@ -207,6 +231,24 @@ def get_eval_results(
         "started_at": run.started_at.isoformat() if run.started_at else None,
         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
         "error_message": run.error_message,
+        # Judge model used
+        "judge": _extract_judge_from_snapshot(run.target_snapshot),
+        # Reliability layer
+        "reliability": {
+            "score": run.reliability_score,
+            "grade": run.reliability_grade,
+            "latency": {
+                "p50_ms": run.latency_p50_ms,
+                "p95_ms": run.latency_p95_ms,
+                "p99_ms": run.latency_p99_ms,
+                "max_ms": run.latency_max_ms,
+                "mean_ms": run.latency_mean_ms,
+            } if run.latency_p50_ms is not None else None,
+            "schema": {
+                "pass": run.schema_pass,
+                "fail": run.schema_fail,
+            } if run.schema_pass is not None else None,
+        },
         "results": [
             {
                 "id": r.id,
@@ -218,10 +260,13 @@ def get_eval_results(
                 "judge_reasoning": r.judge_reasoning or "",
                 "status": r.status,
                 "response_time_ms": r.response_time_ms,
+                "schema_valid": r.schema_valid,
+                "schema_errors": json.loads(r.schema_errors) if r.schema_errors else [],
             }
             for r in results
         ],
     }
+    return response
 
 
 # ── Export eval run as training data ──
@@ -560,6 +605,17 @@ def push_eval_results(
         "warned": 1,
         "failed": 2,
         "duration_seconds": 12.3,
+        "latency": {
+            "p50_ms": 320,
+            "p95_ms": 890,
+            "p99_ms": 1200,
+            "max_ms": 1500,
+            "mean_ms": 400
+        },
+        "schema_pass": 8,
+        "schema_fail": 2,
+        "reliability_score": 78.5,
+        "reliability_grade": "B",
         "results": [
             {
                 "question": "...",
@@ -570,6 +626,8 @@ def push_eval_results(
                 "criteria_scores": {"accuracy": 90, "completeness": 80},
                 "judge_reasoning": "...",
                 "response_time_ms": 450,
+                "schema_valid": true,
+                "schema_errors": [],
                 "tags": ["policy"]
             }
         ]
@@ -589,6 +647,9 @@ def push_eval_results(
     if not results_data:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "No results provided")
 
+    # Parse latency stats if present
+    latency = body.get("latency", {})
+
     # Create an eval run record
     run = EvalRun(
         environment_id=env.id,
@@ -605,6 +666,16 @@ def push_eval_results(
         api_key_id=api_key.id,
         started_at=datetime.utcnow(),
         completed_at=datetime.utcnow(),
+        # Reliability layer
+        latency_p50_ms=latency.get("p50_ms"),
+        latency_p95_ms=latency.get("p95_ms"),
+        latency_p99_ms=latency.get("p99_ms"),
+        latency_max_ms=latency.get("max_ms"),
+        latency_mean_ms=latency.get("mean_ms"),
+        schema_pass=body.get("schema_pass"),
+        schema_fail=body.get("schema_fail"),
+        reliability_score=body.get("reliability_score"),
+        reliability_grade=body.get("reliability_grade"),
     )
     db.add(run)
     db.flush()
@@ -612,6 +683,7 @@ def push_eval_results(
     # Create individual result records
     for r in results_data:
         criteria_scores = r.get("criteria_scores", {})
+        schema_errors = r.get("schema_errors", [])
         eval_result = EvalResult(
             eval_run_id=run.id,
             environment_id=env.id,
@@ -623,19 +695,34 @@ def push_eval_results(
             judge_reasoning=r.get("judge_reasoning", ""),
             status=r.get("status", "fail"),
             response_time_ms=r.get("response_time_ms", 0),
+            # Reliability layer
+            schema_valid=r.get("schema_valid"),
+            schema_errors=json.dumps(schema_errors) if schema_errors else None,
         )
         db.add(eval_result)
 
     db.commit()
     db.refresh(run)
 
-    return {
+    response = {
         "run_id": run.id,
         "status": "completed",
         "total_results": len(results_data),
         "overall_score": run.overall_score,
         "environment_id": env.id,
     }
+
+    # Include reliability data in response if present
+    if run.reliability_score is not None:
+        response["reliability_score"] = run.reliability_score
+        response["reliability_grade"] = run.reliability_grade
+    if run.latency_p95_ms is not None:
+        response["latency_p95_ms"] = run.latency_p95_ms
+    if run.schema_pass is not None:
+        response["schema_pass"] = run.schema_pass
+        response["schema_fail"] = run.schema_fail
+
+    return response
 
 
 # ── Root Cause Analysis (public API) ──

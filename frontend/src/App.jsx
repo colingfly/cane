@@ -56,35 +56,51 @@ export default function App() {
         user ? <Navigate to="/" replace /> : <Register />
       } />
 
+      {/* Open routes: accessible to everyone (with Layout) */}
       <Route path="/" element={
-        user ? (
-          <Layout><AgentBuilder /></Layout>
-        ) : (
-          <Landing />
-        )
+        <Layout><AgentBuilder /></Layout>
       } />
 
       <Route path="/search" element={
-        <ProtectedRoute>
-          <Layout><SearchPage /></Layout>
-        </ProtectedRoute>
-      } />
-
-      <Route path="/documents" element={
-        <ProtectedRoute>
-          <Layout><Documents /></Layout>
-        </ProtectedRoute>
+        <Layout><SearchPage /></Layout>
       } />
 
       <Route path="/agents/network" element={
-        <ProtectedRoute>
-          <Layout><AgentNetwork /></Layout>
-        </ProtectedRoute>
+        <Layout><AgentNetwork /></Layout>
       } />
 
       <Route path="/agents/:agentId" element={
+        <Layout><AgentDetail /></Layout>
+      } />
+
+      <Route path="/environments" element={
+        <Layout><Environments /></Layout>
+      } />
+
+      <Route path="/environments/:envId" element={
+        <Layout><EnvironmentDetail /></Layout>
+      } />
+
+      <Route path="/marketplace" element={
+        <Layout><Marketplace /></Layout>
+      } />
+
+      <Route path="/marketplace/:listingId" element={
+        <Layout><MarketplaceDetail /></Layout>
+      } />
+
+      <Route path="/guide" element={
+        <Layout><Guide /></Layout>
+      } />
+
+      <Route path="/api-docs" element={
+        <Layout><ApiDocs /></Layout>
+      } />
+
+      {/* Protected routes: require account */}
+      <Route path="/documents" element={
         <ProtectedRoute>
-          <Layout><AgentDetail /></Layout>
+          <Layout><Documents /></Layout>
         </ProtectedRoute>
       } />
 
@@ -118,89 +134,6 @@ export default function App() {
         </ProtectedRoute>
       } />
 
-      <Route path="/environments" element={
-        <ProtectedRoute>
-          <Layout><Environments /></Layout>
-        </ProtectedRoute>
-      } />
-
-      <Route path="/environments/:envId" element={
-        <ProtectedRoute>
-          <Layout><EnvironmentDetail /></Layout>
-        </ProtectedRoute>
-      } />
-
-      <Route path="/demo" element={<Demo />} />
-      <Route path="/architecture" element={<Architecture />} />
-
-      <Route path="/guide" element={
-        user ? (
-          <Layout><Guide /></Layout>
-        ) : (
-          <div style={{ background: 'var(--bg)', minHeight: '100vh', padding: '28px 36px' }}>
-            <a href="/" style={{
-              color: 'var(--text-muted)', fontSize: '0.8125rem',
-              textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
-              marginBottom: 16,
-            }}>
-              ← Back to home
-            </a>
-            <Guide />
-          </div>
-        )
-      } />
-
-      <Route path="/api-docs" element={
-        user ? (
-          <Layout><ApiDocs /></Layout>
-        ) : (
-          <div style={{ background: 'var(--bg)', minHeight: '100vh', padding: '28px 36px' }}>
-            <a href="/" style={{
-              color: 'var(--text-muted)', fontSize: '0.8125rem',
-              textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
-              marginBottom: 16,
-            }}>
-              ← Back to home
-            </a>
-            <ApiDocs />
-          </div>
-        )
-      } />
-
-      <Route path="/marketplace" element={
-        user ? (
-          <Layout><Marketplace /></Layout>
-        ) : (
-          <div style={{ background: 'var(--bg)', minHeight: '100vh', padding: '28px 36px' }}>
-            <a href="/" style={{
-              color: 'var(--text-muted)', fontSize: '0.8125rem',
-              textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
-              marginBottom: 16,
-            }}>
-              ← Back to home
-            </a>
-            <Marketplace />
-          </div>
-        )
-      } />
-
-      <Route path="/marketplace/:listingId" element={
-        user ? (
-          <Layout><MarketplaceDetail /></Layout>
-        ) : (
-          <div style={{ background: 'var(--bg)', minHeight: '100vh', padding: '28px 36px' }}>
-            <a href="/" style={{
-              color: 'var(--text-muted)', fontSize: '0.8125rem',
-              textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
-              marginBottom: 16,
-            }}>
-              ← Back to home
-            </a>
-            <MarketplaceDetail />
-          </div>
-        )
-      } />
-
       <Route path="/settings" element={
         <ProtectedRoute>
           <Layout><SettingsPage /></Layout>
@@ -212,6 +145,9 @@ export default function App() {
           <Layout><Admin /></Layout>
         </AdminRoute>
       } />
+
+      <Route path="/demo" element={<Demo />} />
+      <Route path="/architecture" element={<Architecture />} />
     </Routes>
   )
 }

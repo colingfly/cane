@@ -14,13 +14,13 @@ import traceback
 from pathlib import Path
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, Query, Request, BackgroundTasks
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from database import get_db
-from auth import get_current_user
-from config import UPLOAD_DIR
+from auth import get_current_user, get_optional_user
+from config import UPLOAD_DIR, GUEST_TENANT_ID
 from db_models import User, Workspace, Document, Tenant
 from eval_models import Environment, TestCase, JudgeCriteria, JudgeCustomRule, EvalRun, EvalResult
 from marketplace_models import MarketplaceListing, MarketplaceClone
@@ -109,23 +109,42 @@ def browse_marketplace(
 
 @router.post("/publish")
 def publish_agent(
+    request: Request,
     workspace_id: str = Query(...),
     environment_id: str = Query(None),
     run_id: str = Query(None),
     category: str = Query("general"),
     tags: str = Query("[]"),
     pack_type: str = Query("byod"),
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Publish an agent to the marketplace."""
 
+    # Resolve tenant
+    if user:
+        tenant_id = user.tenant_id
+        guest_session_id = None
+    else:
+        guest_session_id = request.headers.get("x-guest-session", "")
+        if not guest_session_id:
+            return JSONResponse({"error": "Guest session required. Include X-Guest-Session header."}, status_code=400)
+        tenant_id = GUEST_TENANT_ID
+
     # Load agent
-    ws = db.query(Workspace).filter(
-        Workspace.id == workspace_id,
-        Workspace.tenant_id == user.tenant_id,
-        Workspace.agent_type.isnot(None),
-    ).first()
+    if guest_session_id:
+        ws = db.query(Workspace).filter(
+            Workspace.id == workspace_id,
+            Workspace.agent_type.isnot(None),
+        ).first()
+        if not ws or ws.tenant_id != GUEST_TENANT_ID or ws.guest_session_id != guest_session_id:
+            return JSONResponse({"error": "Agent not found"}, status_code=404)
+    else:
+        ws = db.query(Workspace).filter(
+            Workspace.id == workspace_id,
+            Workspace.tenant_id == tenant_id,
+            Workspace.agent_type.isnot(None),
+        ).first()
 
     if not ws:
         return JSONResponse({"error": "Agent not found"}, status_code=404)
@@ -133,9 +152,15 @@ def publish_agent(
     if not ws.system_prompt:
         return JSONResponse({"error": "Agent must have a system prompt before publishing"}, status_code=400)
 
+    # Anonymous publish requires high score
+    if not user:
+        # Check score from the best eval run
+        if not environment_id:
+            return JSONResponse({"error": "Anonymous publishing requires an evaluation environment"}, status_code=400)
+
     # Publisher info
-    tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
-    publisher_name = user.name or user.email.split("@")[0]
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    publisher_name = (user.name or user.email.split("@")[0]) if user else "Community"
 
     # Snapshot documents metadata
     docs = db.query(Document).filter(
@@ -159,7 +184,7 @@ def publish_agent(
     if environment_id:
         env = db.query(Environment).filter(
             Environment.id == environment_id,
-            Environment.tenant_id == user.tenant_id,
+            Environment.tenant_id == tenant_id,
         ).first()
 
         if env:
@@ -257,7 +282,7 @@ def publish_agent(
     from tool_models import AgentTool
     agent_tools = db.query(AgentTool).filter(
         AgentTool.workspace_id == workspace_id,
-        AgentTool.tenant_id == user.tenant_id,
+        AgentTool.tenant_id == tenant_id,
         AgentTool.is_enabled == True,
     ).all()
     tools_snapshot = json.dumps([
@@ -273,9 +298,14 @@ def publish_agent(
         for t in agent_tools
     ])
 
+    # Anonymous publish requires overall_score >= 90
+    if not user and overall_score is not None and overall_score < 90:
+        return JSONResponse({"error": "Anonymous publishing requires an overall score of 90 or above"}, status_code=400)
+
     listing = MarketplaceListing(
-        publisher_tenant_id=user.tenant_id,
-        publisher_user_id=user.id,
+        publisher_tenant_id=tenant_id,
+        publisher_user_id=user.id if user else None,
+        guest_session_id=guest_session_id if not user else None,
         publisher_name=publisher_name,
         source_workspace_id=workspace_id,
         source_environment_id=source_env_id,
@@ -384,10 +414,20 @@ def _ingest_cloned_doc(doc_id, filepath, tenant_id, workspace_id, tenant_name, w
 def clone_listing(
     listing_id: str,
     background_tasks: BackgroundTasks,
-    user: User = Depends(get_current_user),
+    request: Request,
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Clone a marketplace listing into the user's workspace."""
+    # Resolve tenant
+    if user:
+        tenant_id = user.tenant_id
+        guest_session_id = None
+    else:
+        guest_session_id = request.headers.get("x-guest-session", "")
+        if not guest_session_id:
+            return JSONResponse({"error": "Guest session required. Include X-Guest-Session header."}, status_code=400)
+        tenant_id = GUEST_TENANT_ID
 
     listing = db.query(MarketplaceListing).filter(
         MarketplaceListing.id == listing_id,
@@ -400,7 +440,7 @@ def clone_listing(
     try:
         # ─── Create agent (workspace) ───
         new_ws = Workspace(
-            tenant_id=user.tenant_id,
+            tenant_id=tenant_id,
             name=f"{listing.name}",
             description=listing.description,
             agent_type=listing.agent_type or "custom",
@@ -408,6 +448,7 @@ def clone_listing(
             agent_icon=listing.icon,
             agent_description=listing.description,
             show_on_homepage=False,
+            guest_session_id=guest_session_id if not user else None,
         )
         db.add(new_ws)
         db.flush()  # get the ID
@@ -416,11 +457,11 @@ def clone_listing(
         docs_transferred = 0
         if listing.pack_type in ("open", "licensed"):
             source_dir = UPLOAD_DIR / listing.publisher_tenant_id
-            dest_dir = UPLOAD_DIR / user.tenant_id
+            dest_dir = UPLOAD_DIR / tenant_id
             dest_dir.mkdir(parents=True, exist_ok=True)
 
             # Get tenant/workspace names for ingestion metadata
-            cloner_tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+            cloner_tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
             cloner_tenant_name = cloner_tenant.name if cloner_tenant else ""
 
             doc_meta = json.loads(listing.included_documents or "[]")
@@ -440,9 +481,9 @@ def clone_listing(
 
                 # Create document record
                 new_doc = Document(
-                    tenant_id=user.tenant_id,
+                    tenant_id=tenant_id,
                     workspace_id=new_ws.id,
-                    uploaded_by=user.id,
+                    uploaded_by=user.id if user else None,
                     filename=filename,
                     file_type=dm.get("file_type", ""),
                     file_size_bytes=source_file.stat().st_size,
@@ -456,7 +497,7 @@ def clone_listing(
                     _ingest_cloned_doc,
                     doc_id=new_doc.id,
                     filepath=str(dest_file),
-                    tenant_id=user.tenant_id,
+                    tenant_id=tenant_id,
                     workspace_id=new_ws.id,
                     tenant_name=cloner_tenant_name,
                     workspace_name=new_ws.name,
@@ -472,11 +513,11 @@ def clone_listing(
 
         if test_cases:
             new_env = Environment(
-                tenant_id=user.tenant_id,
+                tenant_id=tenant_id,
                 workspace_id=new_ws.id,
                 name=f"{listing.name} — Eval",
                 description=f"Cloned from marketplace: {listing.name}",
-                created_by=user.id,
+                created_by=user.id if user else None,
             )
             db.add(new_env)
             db.flush()
@@ -523,7 +564,7 @@ def clone_listing(
                 is_platform = tool_url.startswith("https://cane.fyi/api/")
                 new_tool = AgentTool(
                     workspace_id=new_ws.id,
-                    tenant_id=user.tenant_id,
+                    tenant_id=tenant_id,
                     name=t.get("name", ""),
                     description=t.get("description", ""),
                     tool_type=t.get("tool_type", "webhook"),
@@ -543,10 +584,11 @@ def clone_listing(
         # ─── Record the clone ───
         clone = MarketplaceClone(
             listing_id=listing_id,
-            cloned_by_tenant_id=user.tenant_id,
-            cloned_by_user_id=user.id,
+            cloned_by_tenant_id=tenant_id,
+            cloned_by_user_id=user.id if user else None,
             cloned_workspace_id=new_ws.id,
             cloned_environment_id=new_env_id,
+            guest_session_id=guest_session_id if not user else None,
         )
         db.add(clone)
 
@@ -555,7 +597,7 @@ def clone_listing(
 
         db.commit()
 
-        print(f"  [Marketplace] Cloned: {listing.name} → tenant={user.tenant_id}, agent={new_ws.id}, env={new_env_id}, docs={docs_transferred}, tools={tools_cloned}")
+        print(f"  [Marketplace] Cloned: {listing.name} → tenant={tenant_id}, agent={new_ws.id}, env={new_env_id}, docs={docs_transferred}, tools={tools_cloned}")
 
         return {
             "status": "cloned",
@@ -581,15 +623,33 @@ def clone_listing(
 @router.delete("/{listing_id}")
 def delist_agent(
     listing_id: str,
-    user: User = Depends(get_current_user),
+    request: Request,
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
     """Delist an agent from marketplace (publisher only)."""
 
-    listing = db.query(MarketplaceListing).filter(
-        MarketplaceListing.id == listing_id,
-        MarketplaceListing.publisher_tenant_id == user.tenant_id,
-    ).first()
+    # Resolve tenant
+    if user:
+        tenant_id = user.tenant_id
+        guest_session_id = None
+    else:
+        guest_session_id = request.headers.get("x-guest-session", "")
+        if not guest_session_id:
+            return JSONResponse({"error": "Guest session required. Include X-Guest-Session header."}, status_code=400)
+        tenant_id = GUEST_TENANT_ID
+
+    if guest_session_id:
+        listing = db.query(MarketplaceListing).filter(
+            MarketplaceListing.id == listing_id,
+            MarketplaceListing.publisher_tenant_id == GUEST_TENANT_ID,
+            MarketplaceListing.guest_session_id == guest_session_id,
+        ).first()
+    else:
+        listing = db.query(MarketplaceListing).filter(
+            MarketplaceListing.id == listing_id,
+            MarketplaceListing.publisher_tenant_id == tenant_id,
+        ).first()
 
     if not listing:
         return JSONResponse({"error": "Listing not found or not yours"}, status_code=404)

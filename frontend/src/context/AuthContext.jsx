@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react'
-import { getMe, setToken } from '../api/client'
+import { getMe, setToken, getGuestSession, clearGuestSession, getGuestAgentId } from '../api/client'
 
 const AuthContext = createContext(null)
 
@@ -50,6 +50,9 @@ export function AuthProvider({ children }) {
       handleLogin, handleLogout, updateWorkspaces,
       isAdmin: user?.role === 'admin',
       isOwner: user?.role === 'owner' || user?.role === 'admin',
+      isGuest: !user,
+      guestSessionId: !user ? getGuestSession() : null,
+      guestAgentId: !user ? getGuestAgentId() : null,
     }}>
       {children}
     </AuthContext.Provider>

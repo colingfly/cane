@@ -22,6 +22,7 @@ import {
   runBatchRCA, runTargetedRCA,
 } from '../api/eval'
 import { getAgents } from '../api/client'
+import PersonalityProfile from '../components/PersonalityProfile'
 
 const TABS = [
   { id: 'setup', label: 'Setup', icon: Settings },
@@ -29,6 +30,7 @@ const TABS = [
   { id: 'criteria', label: 'Judge Criteria', icon: SlidersHorizontal },
   { id: 'results', label: 'Results', icon: BarChart3 },
   { id: 'analytics', label: 'Analytics', icon: Activity },
+  { id: 'personality', label: 'Personality', icon: Sparkles },
   { id: 'schedule', label: 'Schedule', icon: Clock },
   { id: 'training', label: 'Training Data', icon: Brain },
 ]
@@ -1925,6 +1927,11 @@ export default function EnvironmentDetail() {
             </>
           )}
         </div>
+      )}
+
+      {/* ═══ PERSONALITY TAB ═══ */}
+      {tab === 'personality' && (
+        <PersonalityProfile envId={envId} runs={env?.runs} />
       )}
 
       {/* ═══ SCHEDULE TAB ═══ */}

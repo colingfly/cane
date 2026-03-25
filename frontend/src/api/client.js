@@ -16,12 +16,38 @@ export function setToken(token) {
   }
 }
 
+// Guest session management
+export function getGuestSession() {
+  let session = localStorage.getItem('cane_guest_session')
+  if (!session) {
+    session = crypto.randomUUID()
+    localStorage.setItem('cane_guest_session', session)
+  }
+  return session
+}
+
+export function clearGuestSession() {
+  localStorage.removeItem('cane_guest_session')
+  localStorage.removeItem('cane_guest_agent_id')
+}
+
+export function getGuestAgentId() {
+  return localStorage.getItem('cane_guest_agent_id')
+}
+
+export function setGuestAgentId(id) {
+  localStorage.setItem('cane_guest_agent_id', id)
+}
+
 async function request(path, options = {}) {
   const token = getToken()
   const headers = { ...options.headers }
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
+  } else {
+    // Anonymous: include guest session header
+    headers['X-Guest-Session'] = getGuestSession()
   }
 
   if (!(options.body instanceof FormData) && !headers['Content-Type']) {
@@ -30,7 +56,9 @@ async function request(path, options = {}) {
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers })
 
-  if (res.status === 401) {
+  if (res.status === 401 && token) {
+    // Only redirect to login if they had a token (expired session)
+    // Anonymous users should NOT be redirected
     setToken(null)
     window.location.href = '/login'
     throw new Error('Session expired')
@@ -58,7 +86,13 @@ export async function register(email, password, name = '', companyName = '') {
   form.append('password', password)
   form.append('name', name)
   form.append('company_name', companyName)
-  return request('/auth/register', { method: 'POST', body: form })
+  // Include guest session for migration
+  const guestSession = localStorage.getItem('cane_guest_session')
+  if (guestSession) form.append('guest_session_id', guestSession)
+  const result = await request('/auth/register', { method: 'POST', body: form })
+  // Clear guest data after successful registration
+  clearGuestSession()
+  return result
 }
 
 export async function getMe() {
@@ -139,11 +173,18 @@ export async function askStream(query, n = 5, workspaceId = '', onText, onMeta, 
   const params = new URLSearchParams({ q: query, n, workspace_id: workspaceId, session_id: sessionId })
 
   try {
+    const streamHeaders = {}
+    if (token) {
+      streamHeaders['Authorization'] = `Bearer ${token}`
+    } else {
+      streamHeaders['X-Guest-Session'] = getGuestSession()
+    }
+
     const res = await fetch(`${API_BASE}/ask/stream?${params}`, {
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers: streamHeaders,
     })
 
-    if (res.status === 401) {
+    if (res.status === 401 && token) {
       setToken(null)
       window.location.href = '/login'
       return

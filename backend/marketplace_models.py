@@ -30,8 +30,9 @@ class MarketplaceListing(Base):
 
     # Publisher
     publisher_tenant_id = Column(String(36), ForeignKey("tenants.id"), nullable=False)
-    publisher_user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    publisher_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     publisher_name = Column(String(255), default="")        # display name
+    guest_session_id = Column(String(36), nullable=True)    # for anonymous "Community" listings
 
     # Source (reference only — listing is a fork/snapshot)
     source_workspace_id = Column(String(36), nullable=False)
@@ -114,7 +115,8 @@ class MarketplaceClone(Base):
 
     # Who cloned
     cloned_by_tenant_id = Column(String(36), ForeignKey("tenants.id"), nullable=False)
-    cloned_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    cloned_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    guest_session_id = Column(String(36), nullable=True)
 
     # What was created
     cloned_workspace_id = Column(String(36), nullable=True)      # the new agent

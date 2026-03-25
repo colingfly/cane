@@ -6,15 +6,16 @@ Integrates agent memory: loads memories before calls, extracts after.
 """
 import json
 
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Query, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from config import ANTHROPIC_API_KEY, CLAUDE_MODEL
 from database import get_db
 from db_models import Tenant, User, Workspace, SearchLog
-from auth import get_current_user
+from auth import get_current_user, get_optional_user
 from security import sanitize_query
+from config import GUEST_TENANT_ID
 from services.limits import check_search_limit
 from services.rag import build_context, build_system_prompt, call_claude
 from streaming import stream_claude, get_conversation_history, save_conversation_turn, persist_conversation_turn, _sse
@@ -27,19 +28,29 @@ router = APIRouter(prefix="/api", tags=["ask"])
 
 @router.get("/ask")
 def ask(
+    request: Request,
     q: str = Query(...),
     n: int = Query(5, ge=1, le=20),
     workspace_id: str = Query(""),
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
-    """RAG: search + summarize with Claude."""
+    """RAG: search + summarize with Claude (works for anonymous users)."""
     q = sanitize_query(q)
     if not q:
         return {"status": "error", "error": "Query is required"}
 
-    tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
-    limit_err = check_search_limit(user.tenant_id, tenant.plan if tenant else "free", db)
+    guest_session_id = request.headers.get("x-guest-session", "")
+    if user:
+        tenant_id = user.tenant_id
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        limit_err = check_search_limit(tenant_id, tenant.plan if tenant else "free", db)
+    else:
+        if not guest_session_id:
+            return JSONResponse({"error": "Authentication required"}, status_code=401)
+        tenant_id = GUEST_TENANT_ID
+        limit_err = check_search_limit(tenant_id, "guest", db)
+
     if limit_err:
         return JSONResponse({"error": limit_err}, status_code=403)
 
@@ -51,7 +62,7 @@ def ask(
     ws = None
     if workspace_id:
         ws = db.query(Workspace).filter(
-            Workspace.id == workspace_id, Workspace.tenant_id == user.tenant_id,
+            Workspace.id == workspace_id, Workspace.tenant_id == tenant_id,
         ).first()
         if ws and ws.system_prompt:
             agent_prompt = ws.system_prompt
@@ -59,7 +70,7 @@ def ask(
     is_agent = bool(ws and (ws.system_prompt or ws.agent_type))
 
     # Build context using shared service
-    ctx = build_context(q, user.tenant_id, workspace_id, n)
+    ctx = build_context(q, tenant_id, workspace_id, n)
 
     if not ctx.has_content and not is_agent:
         return {"status": "no_results", "error": "No text content to summarize."}
@@ -67,7 +78,7 @@ def ask(
     # Load memories and inject into system prompt
     memory_context = ""
     if workspace_id:
-        memories = get_memories(workspace_id, user.id, db)
+        memories = get_memories(workspace_id, user.id if user else None, db)
         memory_context = format_memories_for_prompt(memories)
 
     system_prompt = build_system_prompt(agent_prompt, memory_context)
@@ -82,7 +93,7 @@ def ask(
         from tool_executor import call_claude_with_tools
 
         t0 = time.time()
-        claude_tools, tool_lookup = get_all_tools(workspace_id, user.tenant_id, db) if workspace_id else ([], {})
+        claude_tools, tool_lookup = get_all_tools(workspace_id, tenant_id, db) if workspace_id else ([], {})
 
         if claude_tools:
             chaining = getattr(ws, "tool_chaining_enabled", False) if workspace_id and ws else False
@@ -98,11 +109,11 @@ def ask(
 
         # Extract memories in background
         if workspace_id and summary:
-            extract_memories_background(q, summary, workspace_id, user.tenant_id, user.id)
+            extract_memories_background(q, summary, workspace_id, tenant_id, user.id if user else None)
 
         # Log
         log = SearchLog(
-            tenant_id=user.tenant_id, user_id=user.id, query=q, mode="ask",
+            tenant_id=tenant_id, user_id=user.id if user else None, query=q, mode="ask",
             workspace_id=workspace_id or None, result_count=ctx.chunks_used,
         )
         db.add(log)
@@ -111,14 +122,14 @@ def ask(
         # Analytics
         if workspace_id:
             log_conversation(
-                db, tenant_id=user.tenant_id, workspace_id=workspace_id,
-                query=q, answer=summary, channel="internal", user_id=user.id,
+                db, tenant_id=tenant_id, workspace_id=workspace_id,
+                query=q, answer=summary, channel="internal", user_id=user.id if user else None,
                 chunks_used=ctx.chunks_used, sources=ctx.sources, response_time_ms=elapsed_ms,
             )
             # Persist to conversation history
             persist_conversation_turn(
                 session_id="", workspace_id=workspace_id,
-                tenant_id=user.tenant_id, user_id=user.id,
+                tenant_id=tenant_id, user_id=user.id if user else None,
                 query=q, answer=summary, sources=ctx.sources,
                 chunks_used=ctx.chunks_used, response_time_ms=elapsed_ms,
                 channel="internal",
@@ -134,20 +145,30 @@ def ask(
 
 @router.get("/ask/stream")
 def ask_stream(
+    request: Request,
     q: str = Query(...),
     n: int = Query(5, ge=1, le=20),
     workspace_id: str = Query(""),
     session_id: str = Query(""),
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
-    """RAG: search + stream answer via SSE."""
+    """RAG: search + stream answer via SSE (works for anonymous users)."""
     q = sanitize_query(q)
     if not q:
         return JSONResponse({"status": "error", "error": "Query is required"})
 
-    tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
-    limit_err = check_search_limit(user.tenant_id, tenant.plan if tenant else "free", db)
+    guest_session_id = request.headers.get("x-guest-session", "")
+    if user:
+        tenant_id = user.tenant_id
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        limit_err = check_search_limit(tenant_id, tenant.plan if tenant else "free", db)
+    else:
+        if not guest_session_id:
+            return JSONResponse({"error": "Authentication required"}, status_code=401)
+        tenant_id = GUEST_TENANT_ID
+        limit_err = check_search_limit(tenant_id, "guest", db)
+
     if limit_err:
         return JSONResponse({"error": limit_err}, status_code=403)
 
@@ -159,7 +180,7 @@ def ask_stream(
     ws = None
     if workspace_id:
         ws = db.query(Workspace).filter(
-            Workspace.id == workspace_id, Workspace.tenant_id == user.tenant_id,
+            Workspace.id == workspace_id, Workspace.tenant_id == tenant_id,
         ).first()
         if ws and ws.system_prompt:
             agent_prompt = ws.system_prompt
@@ -168,7 +189,7 @@ def ask_stream(
     is_agent = bool(ws and (ws.system_prompt or ws.agent_type))
 
     # Build context using shared service
-    ctx = build_context(q, user.tenant_id, workspace_id, n)
+    ctx = build_context(q, tenant_id, workspace_id, n)
 
     if not ctx.has_content and not is_agent:
         return JSONResponse({"status": "no_results", "error": "No text content to summarize."})
@@ -176,7 +197,7 @@ def ask_stream(
     # Load memories and inject into system prompt
     memory_context = ""
     if workspace_id:
-        memories = get_memories(workspace_id, user.id, db)
+        memories = get_memories(workspace_id, user.id if user else None, db)
         memory_context = format_memories_for_prompt(memories)
 
     system_prompt = build_system_prompt(agent_prompt, memory_context)
@@ -203,13 +224,13 @@ def ask_stream(
     from services.tools import get_all_tools
     from tool_executor import call_claude_with_tools
 
-    claude_tools, tool_lookup = get_all_tools(workspace_id, user.tenant_id, db) if workspace_id else ([], {})
+    claude_tools, tool_lookup = get_all_tools(workspace_id, tenant_id, db) if workspace_id else ([], {})
     has_tools = len(claude_tools) > 0
     chaining = getattr(ws, "tool_chaining_enabled", False) if workspace_id and ws else False
 
     # Capture user context for memory extraction
-    _user_id = user.id
-    _tenant_id = user.tenant_id
+    _user_id = user.id if user else None
+    _tenant_id = tenant_id
     _workspace_id = workspace_id
 
     def generate():
@@ -303,7 +324,7 @@ def ask_stream(
 
     # Log
     log = SearchLog(
-        tenant_id=user.tenant_id, user_id=user.id, query=q, mode="ask_stream",
+        tenant_id=tenant_id, user_id=user.id if user else None, query=q, mode="ask_stream",
         workspace_id=workspace_id or None, result_count=ctx.chunks_used,
     )
     db.add(log)

@@ -3,15 +3,16 @@ routes/search.py — Search endpoint, image serving, and dashboard stats.
 """
 from pathlib import Path
 
-from fastapi import APIRouter, Query, HTTPException, Depends
+from fastapi import APIRouter, Query, HTTPException, Depends, Request
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from config import EXTRACTED_DIR
 from database import get_db
 from db_models import Tenant, User, Workspace, Document, SearchLog
-from auth import get_current_user
+from auth import get_current_user, get_optional_user
 from security import sanitize_query
+from config import GUEST_TENANT_ID
 from services.limits import check_search_limit
 from services.search import search_text, search_visual, search_fusion, build_tenant_where
 
@@ -20,27 +21,37 @@ router = APIRouter(prefix="/api", tags=["search"])
 
 @router.get("/search")
 def search(
+    request: Request,
     q: str = Query(...),
     mode: str = Query("text"),
     n: int = Query(10, ge=1, le=50),
     workspace_id: str = Query(""),
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
-    """Search documents scoped to the authenticated user's tenant."""
+    """Search documents (works for anonymous users with guest session)."""
     q = sanitize_query(q)
     if not q:
         return {"results": [], "mode": mode, "query": ""}
 
-    tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
-    limit_err = check_search_limit(user.tenant_id, tenant.plan if tenant else "free", db)
+    guest_session_id = request.headers.get("x-guest-session", "")
+    if user:
+        tenant_id = user.tenant_id
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        limit_err = check_search_limit(tenant_id, tenant.plan if tenant else "free", db)
+    else:
+        if not guest_session_id:
+            return JSONResponse({"error": "Authentication required"}, status_code=401)
+        tenant_id = GUEST_TENANT_ID
+        limit_err = check_search_limit(tenant_id, "guest", db)
+
     if limit_err:
         return JSONResponse({"error": limit_err}, status_code=403)
 
     if mode not in ("text", "visual", "fusion"):
         mode = "text"
 
-    where = build_tenant_where(user.tenant_id, workspace_id)
+    where = build_tenant_where(tenant_id, workspace_id)
 
     if mode == "text":
         result = search_text(q, n, where)
@@ -52,7 +63,7 @@ def search(
         result = {"results": [], "mode": mode}
 
     log = SearchLog(
-        tenant_id=user.tenant_id, user_id=user.id, query=q, mode=mode,
+        tenant_id=tenant_id, user_id=user.id if user else None, query=q, mode=mode,
         workspace_id=workspace_id or None,
         result_count=len(result.get("results", [])),
         top_score=str(result["results"][0]["score"]) if result.get("results") else "",

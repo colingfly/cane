@@ -18,6 +18,19 @@ if _root not in sys.path:
 from database import init_db, SessionLocal
 from db_models import User, Tenant, Workspace
 from auth import hash_password
+from config import GUEST_TENANT_ID
+
+
+def ensure_guest_tenant(db):
+    """Create the guest tenant for anonymous access if it doesn't exist."""
+    existing = db.query(Tenant).filter(Tenant.id == GUEST_TENANT_ID).first()
+    if existing:
+        print(f"[AutoSeed] Guest tenant already exists: {existing.name}")
+        return
+    guest = Tenant(id=GUEST_TENANT_ID, name="Community", slug="guest", plan="guest")
+    db.add(guest)
+    db.commit()
+    print("[AutoSeed] Guest tenant created")
 
 
 def auto_seed():
@@ -25,6 +38,16 @@ def auto_seed():
     print("[AutoSeed] Initializing database...")
     init_db()
     print("[AutoSeed] Tables ready")
+
+    # Ensure guest tenant exists
+    db = SessionLocal()
+    try:
+        ensure_guest_tenant(db)
+    except Exception as e:
+        db.rollback()
+        print(f"[AutoSeed] Guest tenant error: {e}")
+    finally:
+        db.close()
 
     # Check if admin exists
     db = SessionLocal()

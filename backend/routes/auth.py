@@ -8,10 +8,11 @@ from fastapi import APIRouter, Form, HTTPException, Depends, Request
 from sqlalchemy.orm import Session
 
 from database import get_db
-from db_models import Tenant, User, Workspace
+from db_models import Tenant, User, Workspace, Document
 from auth import (
     get_current_user, hash_password, verify_password, create_token,
 )
+from config import GUEST_TENANT_ID, UPLOAD_DIR
 from security import (
     login_limiter, validate_password, sanitize_form_field, validate_email,
 )
@@ -78,6 +79,7 @@ def register(
     password: str = Form(...),
     name: str = Form(""),
     company_name: str = Form(""),
+    guest_session_id: str = Form(""),
     db: Session = Depends(get_db),
 ):
     """Self-service signup: creates tenant + owner + default workspace + returns JWT."""
@@ -132,6 +134,10 @@ def register(
 
     login_limiter.record_success(client_ip)
 
+    # Migrate guest data if a guest session was active
+    if guest_session_id:
+        _migrate_guest_data(db, guest_session_id, tenant.id, user.id)
+
     return {
         "token": create_token(user.id, user.tenant_id, user.role),
         "user": {"id": user.id, "email": user.email, "name": user.name, "role": user.role},
@@ -155,3 +161,95 @@ def change_password(
     user.password_hash = hash_password(new_password)
     db.commit()
     return {"status": "ok", "message": "Password updated"}
+
+
+def _migrate_guest_data(db: Session, guest_session_id: str, new_tenant_id: str, new_user_id: str):
+    """Migrate guest workspaces, documents, and eval data to a new account."""
+    import shutil
+    from pathlib import Path
+
+    guest_workspaces = db.query(Workspace).filter(
+        Workspace.tenant_id == GUEST_TENANT_ID,
+        Workspace.guest_session_id == guest_session_id,
+    ).all()
+
+    if not guest_workspaces:
+        return
+
+    for ws in guest_workspaces:
+        ws.tenant_id = new_tenant_id
+        ws.guest_session_id = None
+
+        # Migrate documents
+        docs = db.query(Document).filter(Document.workspace_id == ws.id).all()
+        for doc in docs:
+            doc.tenant_id = new_tenant_id
+            doc.uploaded_by = new_user_id
+
+        # Migrate eval data
+        try:
+            from eval_models import Environment, EvalRun, EvalResult, TestCase, JudgeCriteria, JudgeCustomRule
+            envs = db.query(Environment).filter(
+                Environment.workspace_id == ws.id, Environment.tenant_id == GUEST_TENANT_ID,
+            ).all()
+            for env in envs:
+                env.tenant_id = new_tenant_id
+                env.created_by = new_user_id
+                for run in db.query(EvalRun).filter(EvalRun.environment_id == env.id).all():
+                    run.tenant_id = new_tenant_id
+                    run.triggered_by = new_user_id
+        except Exception:
+            pass
+
+        # Migrate ChromaDB chunks
+        try:
+            from services.chroma import text_col, image_col
+            for col in [text_col, image_col]:
+                if not col:
+                    continue
+                results = col.get(
+                    where={"$and": [{"tenant_id": GUEST_TENANT_ID}, {"workspace_id": ws.id}]},
+                    include=["metadatas"],
+                )
+                if results["ids"]:
+                    new_metas = [{**m, "tenant_id": new_tenant_id} for m in results["metadatas"]]
+                    col.update(ids=results["ids"], metadatas=new_metas)
+        except Exception:
+            pass
+
+        # Move uploaded files
+        try:
+            guest_dir = UPLOAD_DIR / GUEST_TENANT_ID
+            new_dir = UPLOAD_DIR / new_tenant_id
+            new_dir.mkdir(parents=True, exist_ok=True)
+            if guest_dir.exists():
+                for f in guest_dir.iterdir():
+                    if f.is_file():
+                        dest = new_dir / f.name
+                        if not dest.exists():
+                            shutil.move(str(f), str(dest))
+        except Exception:
+            pass
+
+    # Migrate marketplace listings/clones
+    try:
+        from marketplace_models import MarketplaceListing, MarketplaceClone
+        db.query(MarketplaceListing).filter(
+            MarketplaceListing.guest_session_id == guest_session_id,
+        ).update({
+            MarketplaceListing.publisher_tenant_id: new_tenant_id,
+            MarketplaceListing.publisher_user_id: new_user_id,
+            MarketplaceListing.guest_session_id: None,
+        })
+        db.query(MarketplaceClone).filter(
+            MarketplaceClone.guest_session_id == guest_session_id,
+        ).update({
+            MarketplaceClone.cloned_by_tenant_id: new_tenant_id,
+            MarketplaceClone.cloned_by_user_id: new_user_id,
+            MarketplaceClone.guest_session_id: None,
+        })
+    except Exception:
+        pass
+
+    db.commit()
+    print(f"[Auth] Migrated {len(guest_workspaces)} guest workspace(s) to tenant {new_tenant_id}")

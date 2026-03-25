@@ -192,6 +192,14 @@ async def start_eval_schedule_runner():
     asyncio.create_task(start_eval_schedule_loop())
 
 
+# ── Background cleanup for abandoned guest data ──
+@app.on_event("startup")
+async def start_guest_cleanup():
+    import asyncio
+    from services.guest_cleanup import start_guest_cleanup_loop
+    asyncio.create_task(start_guest_cleanup_loop())
+
+
 # ── Health check ──
 @app.get("/api/health")
 def health_check():

@@ -37,6 +37,51 @@ def run_all():
     _migrate_osint_briefings_table()
     _migrate_osint_tools_fire_and_forget()
     _migrate_osint_system_prompt_v2()
+    _migrate_eval_reliability_columns()
+    _migrate_judge_model_columns()
+    _migrate_guest_access_columns()
+
+
+def _migrate_guest_access_columns():
+    """Add guest_session_id columns and make marketplace FKs nullable for anonymous access."""
+    insp = inspect(engine)
+
+    # Workspaces: add guest_session_id
+    ws_cols = {c["name"] for c in insp.get_columns("workspaces")}
+    if "guest_session_id" not in ws_cols:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE workspaces ADD COLUMN guest_session_id VARCHAR(36) NULL"))
+                conn.execute(text("CREATE INDEX idx_ws_guest_session ON workspaces(guest_session_id)"))
+            print("  [DB] Added guest_session_id to workspaces")
+        except Exception as e:
+            print(f"  [DB] workspaces guest_session_id failed: {e}")
+
+    # Marketplace listings: add guest_session_id, make publisher_user_id nullable
+    if "marketplace_listings" in insp.get_table_names():
+        ml_cols = {c["name"] for c in insp.get_columns("marketplace_listings")}
+        if "guest_session_id" not in ml_cols:
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE marketplace_listings ADD COLUMN guest_session_id VARCHAR(36) NULL"))
+                    conn.execute(text("ALTER TABLE marketplace_listings MODIFY COLUMN publisher_user_id VARCHAR(36) NULL"))
+                print("  [DB] Added guest columns to marketplace_listings")
+            except Exception as e:
+                print(f"  [DB] marketplace_listings guest migration failed: {e}")
+
+    # Marketplace clones: add guest_session_id, make cloned_by_user_id nullable
+    if "marketplace_clones" in insp.get_table_names():
+        mc_cols = {c["name"] for c in insp.get_columns("marketplace_clones")}
+        if "guest_session_id" not in mc_cols:
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE marketplace_clones ADD COLUMN guest_session_id VARCHAR(36) NULL"))
+                    conn.execute(text("ALTER TABLE marketplace_clones MODIFY COLUMN cloned_by_user_id VARCHAR(36) NULL"))
+                print("  [DB] Added guest columns to marketplace_clones")
+            except Exception as e:
+                print(f"  [DB] marketplace_clones guest migration failed: {e}")
+
+    print("  [DB] Guest access migration complete")
 
 
 def _migrate_osint_system_prompt_v2():
@@ -1013,3 +1058,95 @@ def _migrate_osint_briefings_table():
             print(f"  [DB] osint_briefings migration failed: {e}")
     else:
         print("  [DB] osint_briefings table already exists")
+
+
+def _migrate_eval_reliability_columns():
+    """Add reliability layer columns to eval tables (v0.4.0).
+
+    EvalRun: latency stats, schema stats, reliability score/grade
+    EvalResult: per-result schema validation
+    Environment: response schema + latency target config
+    """
+    insp = inspect(engine)
+    try:
+        # -- EvalRun reliability columns --
+        run_cols = {c["name"] for c in insp.get_columns("eval_runs")}
+        run_new = {
+            "latency_p50_ms": "ALTER TABLE eval_runs ADD COLUMN latency_p50_ms INT NULL",
+            "latency_p95_ms": "ALTER TABLE eval_runs ADD COLUMN latency_p95_ms INT NULL",
+            "latency_p99_ms": "ALTER TABLE eval_runs ADD COLUMN latency_p99_ms INT NULL",
+            "latency_max_ms": "ALTER TABLE eval_runs ADD COLUMN latency_max_ms INT NULL",
+            "latency_mean_ms": "ALTER TABLE eval_runs ADD COLUMN latency_mean_ms INT NULL",
+            "schema_pass": "ALTER TABLE eval_runs ADD COLUMN schema_pass INT NULL",
+            "schema_fail": "ALTER TABLE eval_runs ADD COLUMN schema_fail INT NULL",
+            "reliability_score": "ALTER TABLE eval_runs ADD COLUMN reliability_score FLOAT NULL",
+            "reliability_grade": "ALTER TABLE eval_runs ADD COLUMN reliability_grade VARCHAR(2) NULL",
+        }
+        added = []
+        for col_name, sql in run_new.items():
+            if col_name not in run_cols:
+                with engine.begin() as conn:
+                    conn.execute(text(sql))
+                added.append(col_name)
+        if added:
+            print(f"  [DB] EvalRun reliability columns added: {', '.join(added)}")
+
+        # -- EvalResult schema columns --
+        result_cols = {c["name"] for c in insp.get_columns("eval_results")}
+        result_new = {
+            "schema_valid": "ALTER TABLE eval_results ADD COLUMN schema_valid TINYINT(1) NULL",
+            "schema_errors": "ALTER TABLE eval_results ADD COLUMN schema_errors TEXT NULL",
+        }
+        added2 = []
+        for col_name, sql in result_new.items():
+            if col_name not in result_cols:
+                with engine.begin() as conn:
+                    conn.execute(text(sql))
+                added2.append(col_name)
+        if added2:
+            print(f"  [DB] EvalResult reliability columns added: {', '.join(added2)}")
+
+        # -- Environment reliability config --
+        env_cols = {c["name"] for c in insp.get_columns("environments")}
+        env_new = {
+            "response_schema": "ALTER TABLE environments ADD COLUMN response_schema TEXT NULL",
+            "latency_target_ms": "ALTER TABLE environments ADD COLUMN latency_target_ms INT NULL",
+        }
+        added3 = []
+        for col_name, sql in env_new.items():
+            if col_name not in env_cols:
+                with engine.begin() as conn:
+                    conn.execute(text(sql))
+                added3.append(col_name)
+        if added3:
+            print(f"  [DB] Environment reliability config added: {', '.join(added3)}")
+
+        if not added and not added2 and not added3:
+            print("  [DB] Eval reliability columns already present")
+
+    except Exception as e:
+        print(f"  [DB] Eval reliability migration skipped: {e}")
+
+
+def _migrate_judge_model_columns():
+    """Add multi-model judge config columns to environments table."""
+    insp = inspect(engine)
+    try:
+        env_cols = {c["name"] for c in insp.get_columns("environments")}
+        new_cols = {
+            "judge_provider": "ALTER TABLE environments ADD COLUMN judge_provider VARCHAR(30) DEFAULT 'anthropic'",
+            "judge_model": "ALTER TABLE environments ADD COLUMN judge_model VARCHAR(100) NULL",
+            "judge_config": "ALTER TABLE environments ADD COLUMN judge_config TEXT NULL",
+        }
+        added = []
+        for col_name, sql in new_cols.items():
+            if col_name not in env_cols:
+                with engine.begin() as conn:
+                    conn.execute(text(sql))
+                added.append(col_name)
+        if added:
+            print(f"  [DB] Environment judge model columns added: {', '.join(added)}")
+        else:
+            print("  [DB] Judge model columns already present")
+    except Exception as e:
+        print(f"  [DB] Judge model migration skipped: {e}")

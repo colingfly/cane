@@ -5,15 +5,16 @@ import traceback
 from pathlib import Path
 from datetime import datetime
 
-from fastapi import APIRouter, Query, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, Query, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 
 from config import UPLOAD_DIR, EXT_MAP
 from database import get_db
 from db_models import Tenant, User, Workspace, Document
-from auth import get_current_user, require_owner
+from auth import get_current_user, get_optional_user, require_owner
 from security import validate_file_content, MAX_FILE_SIZE
-from services.limits import check_document_limit
+from config import GUEST_TENANT_ID
+from services.limits import check_document_limit, check_guest_document_limit
 from services.chroma import text_col, image_col
 
 router = APIRouter(prefix="/api", tags=["documents"])
@@ -114,21 +115,34 @@ def list_documents(
 
 @router.post("/documents/upload", status_code=202)
 async def upload_and_ingest(
+    request: Request,
     file: UploadFile = File(...),
     workspace_id: str = Form(...),
     background_tasks: BackgroundTasks = None,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
-    """Upload a file and start async ingestion."""
-    ws = db.query(Workspace).filter(
-        Workspace.id == workspace_id, Workspace.tenant_id == user.tenant_id,
-    ).first()
-    if not ws:
-        raise HTTPException(400, "Invalid workspace")
+    """Upload a file and start async ingestion (works for anonymous users)."""
+    guest_session_id = request.headers.get("x-guest-session", "")
 
-    tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
-    limit_err = check_document_limit(user.tenant_id, tenant.plan if tenant else "free", db)
+    if user:
+        tenant_id = user.tenant_id
+        ws = db.query(Workspace).filter(
+            Workspace.id == workspace_id, Workspace.tenant_id == tenant_id,
+        ).first()
+        if not ws:
+            raise HTTPException(400, "Invalid workspace")
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        limit_err = check_document_limit(tenant_id, tenant.plan if tenant else "free", db)
+    else:
+        if not guest_session_id:
+            raise HTTPException(400, "Guest session required")
+        tenant_id = GUEST_TENANT_ID
+        ws = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+        if not ws or ws.tenant_id != GUEST_TENANT_ID or ws.guest_session_id != guest_session_id:
+            raise HTTPException(400, "Invalid workspace")
+        limit_err = check_guest_document_limit(guest_session_id, db)
+
     if limit_err:
         raise HTTPException(403, limit_err)
 
@@ -147,14 +161,15 @@ async def upload_and_ingest(
         raise HTTPException(400, content_err)
 
     safe_filename = Path(file.filename).name[:200]
-    tenant_dir = UPLOAD_DIR / user.tenant_id
+    tenant_dir = UPLOAD_DIR / tenant_id
     tenant_dir.mkdir(parents=True, exist_ok=True)
     dest = tenant_dir / safe_filename
     with open(dest, "wb") as f:
         f.write(content)
 
     doc = Document(
-        tenant_id=user.tenant_id, workspace_id=workspace_id, uploaded_by=user.id,
+        tenant_id=tenant_id, workspace_id=workspace_id,
+        uploaded_by=user.id if user else None,
         filename=safe_filename, file_type=file_type, file_size_bytes=len(content), status="processing",
     )
     db.add(doc)
@@ -162,8 +177,10 @@ async def upload_and_ingest(
     db.refresh(doc)
 
     doc_id = doc.id
-    tenant_id = user.tenant_id
-    tenant_name = tenant.name if tenant else ""
+    tenant_name = ""
+    if user:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        tenant_name = tenant.name if tenant else ""
 
     background_tasks.add_task(
         _run_ingestion_background,

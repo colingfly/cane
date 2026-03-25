@@ -50,6 +50,15 @@ class Environment(Base):
     target_response_path = Column(String(255), nullable=True, default="response")
     is_public = Column(Boolean, default=False)                 # public eval suite for API access
 
+    # Reliability config
+    response_schema = Column(Text, nullable=True)              # JSON Schema for agent response validation
+    latency_target_ms = Column(Integer, nullable=True)         # target p95 latency threshold
+
+    # Judge model config (multi-model support)
+    judge_provider = Column(String(30), default="anthropic")   # anthropic | openai | gemini | openai-compatible
+    judge_model = Column(String(100), nullable=True)           # None = platform default (claude-sonnet-4-5)
+    judge_config = Column(Text, nullable=True)                 # JSON: {"api_key": "...", "base_url": "..."}
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -154,6 +163,18 @@ class EvalRun(Base):
     api_key_id = Column(String(36), nullable=True)   # if triggered via public API
     triggered_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     error_message = Column(Text, nullable=True)
+
+    # Reliability layer (v0.4.0)
+    latency_p50_ms = Column(Integer, nullable=True)
+    latency_p95_ms = Column(Integer, nullable=True)
+    latency_p99_ms = Column(Integer, nullable=True)
+    latency_max_ms = Column(Integer, nullable=True)
+    latency_mean_ms = Column(Integer, nullable=True)
+    schema_pass = Column(Integer, nullable=True)
+    schema_fail = Column(Integer, nullable=True)
+    reliability_score = Column(Float, nullable=True)
+    reliability_grade = Column(String(2), nullable=True)   # A, B, C, D, F
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     environment = relationship("Environment", back_populates="runs")
@@ -184,6 +205,11 @@ class EvalResult(Base):
     judge_reasoning = Column(Text, nullable=True)
     status = Column(String(20), default="pending")    # pending | pass | warn | fail
     response_time_ms = Column(Integer, nullable=True)
+
+    # Reliability layer (v0.4.0)
+    schema_valid = Column(Boolean, nullable=True)
+    schema_errors = Column(Text, nullable=True)        # JSON array of validation errors
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     eval_run = relationship("EvalRun", back_populates="results")

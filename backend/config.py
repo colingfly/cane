@@ -33,6 +33,9 @@ else:
     if DATABASE_URL.startswith("mysql://"):
         DATABASE_URL = DATABASE_URL.replace("mysql://", "mysql+pymysql://", 1)
 
+# ── Guest Access ──
+GUEST_TENANT_ID = "00000000-0000-0000-0000-000000000000"
+
 # ── Auth ──
 def _get_secret_key():
     key = os.getenv("CANE_SECRET_KEY", "")

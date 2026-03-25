@@ -99,6 +99,9 @@ export const getRunDetail = (envId, runId) => request(`/environments/${envId}/ru
 
 export const deleteRun = (envId, runId) => request(`/environments/${envId}/runs/${runId}`, { method: 'DELETE' })
 
+// -- Personality Profile --
+export const getRunProfile = (envId, runId, clusters = 4) => request(`/environments/${envId}/runs/${runId}/profile?clusters=${clusters}`)
+
 // -- Webhook --
 export const testWebhook = (envId) => request(`/environments/${envId}/webhook/test`, { method: 'POST' })
 

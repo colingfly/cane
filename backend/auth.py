@@ -24,6 +24,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # -- Bearer token scheme --
 bearer_scheme = HTTPBearer()
+_optional_bearer = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
@@ -88,6 +89,27 @@ def get_current_user(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found or inactive")
 
     return user
+
+
+def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_optional_bearer),
+    db: Session = Depends(get_db),
+) -> Optional[User]:
+    """
+    Extract the authenticated user if a valid token is present.
+    Returns None for anonymous requests instead of raising 401.
+    """
+    if not credentials:
+        return None
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        user_id = payload.get("sub")
+        if not user_id:
+            return None
+        user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
+        return user
+    except JWTError:
+        return None
 
 
 def require_owner(user: User = Depends(get_current_user)) -> User:

@@ -57,11 +57,25 @@ export default function Layout({ children }) {
         <div className="sidebar-spacer" />
 
         <div className="sidebar-footer">
-          <div className="user-name">{user?.name || user?.email}</div>
-          <div className="user-email">{user?.email}</div>
-          <button className="sidebar-logout" onClick={handleLogout}>
-            Sign out
-          </button>
+          {user ? (
+            <>
+              <div className="user-name">{user.name || user.email}</div>
+              <div className="user-email">{user.email}</div>
+              <button className="sidebar-logout" onClick={handleLogout}>
+                Sign out
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="user-name" style={{ color: 'rgba(255,255,255,0.5)' }}>Guest session</div>
+              <NavLink to="/register" style={{ fontSize: '0.75rem', color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>
+                Sign up to save your work
+              </NavLink>
+              <NavLink to="/login" className="sidebar-logout" style={{ textAlign: 'center', display: 'block', marginTop: 4 }}>
+                Sign in
+              </NavLink>
+            </>
+          )}
         </div>
       </aside>
 

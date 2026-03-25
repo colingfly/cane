@@ -1,13 +1,15 @@
 """
-eval_engine.py — LLM-as-a-Judge evaluation pipeline.
+eval_engine.py -- LLM-as-a-Judge evaluation pipeline.
 
 Executes an eval run:
 1. For each test case, query the agent (reuses the existing search + Claude pipeline)
 2. Send (question, expected_answer, agent_answer) to a judge model
 3. Score per criteria, aggregate, classify pass/warn/fail
-4. Finalize the run with summary stats
+4. Compute latency stats, schema validation, and reliability score
+5. Finalize the run with summary stats
 """
 import json
+import statistics
 import time
 import urllib.request
 from datetime import datetime
@@ -17,8 +19,134 @@ from sqlalchemy.orm import Session
 from config import ANTHROPIC_API_KEY, CLAUDE_MODEL
 from eval_models import Environment, EvalRun, EvalResult, TestCase, JudgeCriteria, JudgeCustomRule
 
-# Judge uses a stronger model than the agent
+# Judge uses a stronger model than the agent (default when no per-env config)
 JUDGE_MODEL = "claude-sonnet-4-5-20250929"
+
+
+def _get_judge_provider(env: Environment, provider_override: str = None, model_override: str = None):
+    """
+    Build a judge provider from the environment's config.
+    Falls back to Anthropic + JUDGE_MODEL if nothing is configured.
+    """
+    from services.judge_providers import get_provider
+
+    provider_name = provider_override or getattr(env, "judge_provider", None) or "anthropic"
+    model_name = model_override or getattr(env, "judge_model", None) or JUDGE_MODEL
+
+    # Parse optional config (api_key, base_url)
+    extra = {}
+    raw_config = getattr(env, "judge_config", None)
+    if raw_config:
+        try:
+            parsed = json.loads(raw_config)
+            if parsed.get("api_key"):
+                extra["api_key"] = parsed["api_key"]
+            if parsed.get("base_url"):
+                extra["base_url"] = parsed["base_url"]
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    return get_provider(provider=provider_name, model=model_name, **extra)
+
+
+# ─── Reliability helpers ───
+
+def _compute_latency_stats(results: list) -> dict:
+    """Compute p50/p95/p99/max/mean latency from a list of EvalResult objects."""
+    times = [r.response_time_ms for r in results if r.response_time_ms and r.response_time_ms > 0]
+    if not times:
+        return {}
+    times_sorted = sorted(times)
+    n = len(times_sorted)
+    return {
+        "p50_ms": int(times_sorted[int(n * 0.5)]) if n else 0,
+        "p95_ms": int(times_sorted[min(int(n * 0.95), n - 1)]) if n else 0,
+        "p99_ms": int(times_sorted[min(int(n * 0.99), n - 1)]) if n else 0,
+        "max_ms": int(times_sorted[-1]) if n else 0,
+        "mean_ms": int(statistics.mean(times)) if n else 0,
+    }
+
+
+def _validate_schema(answer: str, schema: dict) -> tuple:
+    """Validate an agent answer against a JSON schema. Returns (valid, errors)."""
+    try:
+        import jsonschema
+    except ImportError:
+        return (None, [])
+
+    try:
+        data = json.loads(answer)
+    except (json.JSONDecodeError, TypeError):
+        return (False, ["Response is not valid JSON"])
+
+    try:
+        jsonschema.validate(data, schema)
+        return (True, [])
+    except jsonschema.ValidationError as e:
+        return (False, [e.message])
+    except jsonschema.SchemaError as e:
+        return (None, [f"Invalid schema: {e.message}"])
+
+
+def _compute_reliability(results: list, latency_stats: dict, accuracy_score: float,
+                         schema_pass: int, schema_fail: int,
+                         latency_target_ms: int = None) -> tuple:
+    """
+    Compute composite reliability score across three pillars:
+    - Correctness (LLM judge accuracy score)
+    - Structural (JSON schema pass rate)
+    - Performance (latency vs target)
+
+    Returns (score, grade).
+    """
+    has_schema = (schema_pass + schema_fail) > 0
+    has_latency = latency_target_ms is not None and latency_stats.get("p95_ms")
+
+    # Correctness pillar (always available)
+    correctness = accuracy_score
+
+    # Structural pillar
+    structural = 0.0
+    if has_schema:
+        total = schema_pass + schema_fail
+        structural = (schema_pass / total * 100) if total > 0 else 0
+
+    # Performance pillar
+    performance = 0.0
+    if has_latency:
+        p95 = latency_stats["p95_ms"]
+        if p95 <= latency_target_ms:
+            performance = 100.0
+        elif p95 <= latency_target_ms * 2:
+            performance = max(0, 100 - ((p95 - latency_target_ms) / latency_target_ms * 100))
+        else:
+            performance = 0.0
+
+    # Weight selection based on what data is available
+    if has_schema and has_latency:
+        score = correctness * 0.50 + structural * 0.25 + performance * 0.25
+    elif has_schema:
+        score = correctness * 0.60 + structural * 0.40
+    elif has_latency:
+        score = correctness * 0.70 + performance * 0.30
+    else:
+        score = correctness
+
+    score = round(score, 1)
+
+    # Grade
+    if score >= 90:
+        grade = "A"
+    elif score >= 75:
+        grade = "B"
+    elif score >= 60:
+        grade = "C"
+    elif score >= 40:
+        grade = "D"
+    else:
+        grade = "F"
+
+    return (score, grade)
 
 
 # ─── Claude API call ───
@@ -349,11 +477,14 @@ Return this exact JSON structure:
 }}"""
 
 
-def _judge_response(question, expected_answer, agent_answer, criteria, custom_rules) -> dict:
+def _judge_response(question, expected_answer, agent_answer, criteria, custom_rules, provider=None) -> dict:
     """Call the judge model to score one agent response."""
     prompt = _build_judge_prompt(question, expected_answer, agent_answer, criteria, custom_rules)
 
-    raw = _call_claude(prompt, system=JUDGE_SYSTEM, model=JUDGE_MODEL, max_tokens=1024)
+    if provider:
+        raw = provider.call(prompt=prompt, system=JUDGE_SYSTEM, max_tokens=1024, temperature=0.2)
+    else:
+        raw = _call_claude(prompt, system=JUDGE_SYSTEM, model=JUDGE_MODEL, max_tokens=1024)
 
     # Parse JSON — strip any markdown fences
     cleaned = raw.strip()
@@ -472,6 +603,15 @@ def execute_eval_run(run_id: str, db: Session):
     else:
         print(f"  [Eval] Target: internal agent (workspace={workspace_id})")
 
+    # Build judge provider (multi-model support)
+    try:
+        judge_provider = _get_judge_provider(env)
+        judge_label = f"{getattr(env, 'judge_provider', 'anthropic') or 'anthropic'}/{judge_provider.model}"
+        print(f"  [Eval] Judge: {judge_label}")
+    except Exception as e:
+        print(f"  [Eval] Judge provider init failed ({e}), falling back to default")
+        judge_provider = None
+
     # Mark running
     run.status = "running"
     run.started_at = datetime.utcnow()
@@ -525,6 +665,7 @@ def execute_eval_run(run_id: str, db: Session):
                     agent_answer=agent_result["answer"],
                     criteria=criteria,
                     custom_rules=custom_rules,
+                    provider=judge_provider,
                 )
             except Exception as e:
                 print(f"  [Eval] Judge error: {e}")
@@ -543,6 +684,17 @@ def execute_eval_run(run_id: str, db: Session):
             for key, val in criteria_scores.items():
                 flat_scores[key] = val.get("score", 50) if isinstance(val, dict) else val
 
+            # Schema validation (if environment has a response_schema)
+            schema_valid = None
+            schema_errors = []
+            response_schema_raw = getattr(env, "response_schema", None)
+            if response_schema_raw:
+                try:
+                    response_schema = json.loads(response_schema_raw) if isinstance(response_schema_raw, str) else response_schema_raw
+                    schema_valid, schema_errors = _validate_schema(agent_result["answer"], response_schema)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
             # Create result
             result = EvalResult(
                 eval_run_id=run.id,
@@ -556,6 +708,8 @@ def execute_eval_run(run_id: str, db: Session):
                 judge_reasoning=judge_result.get("overall_reasoning", ""),
                 status=status,
                 response_time_ms=agent_result.get("response_time_ms", 0),
+                schema_valid=schema_valid,
+                schema_errors=json.dumps(schema_errors) if schema_errors else None,
             )
             db.add(result)
             results.append(result)
@@ -575,11 +729,40 @@ def execute_eval_run(run_id: str, db: Session):
         run.overall_score = round(
             sum(r.overall_score for r in results) / len(results), 1
         ) if results else 0
+
+        # Step 5: Compute reliability layer
+        latency_stats = _compute_latency_stats(results)
+        if latency_stats:
+            run.latency_p50_ms = latency_stats.get("p50_ms")
+            run.latency_p95_ms = latency_stats.get("p95_ms")
+            run.latency_p99_ms = latency_stats.get("p99_ms")
+            run.latency_max_ms = latency_stats.get("max_ms")
+            run.latency_mean_ms = latency_stats.get("mean_ms")
+
+        s_pass = sum(1 for r in results if r.schema_valid is True)
+        s_fail = sum(1 for r in results if r.schema_valid is False)
+        if s_pass + s_fail > 0:
+            run.schema_pass = s_pass
+            run.schema_fail = s_fail
+
+        latency_target = getattr(env, "latency_target_ms", None)
+        reliability_score, reliability_grade = _compute_reliability(
+            results=results,
+            latency_stats=latency_stats,
+            accuracy_score=run.overall_score or 0,
+            schema_pass=s_pass,
+            schema_fail=s_fail,
+            latency_target_ms=latency_target,
+        )
+        run.reliability_score = reliability_score
+        run.reliability_grade = reliability_grade
+
         run.status = "completed"
         run.completed_at = datetime.utcnow()
         db.commit()
 
-        print(f"  [Eval] Run complete: {run.overall_score} ({run.passed}P/{run.warned}W/{run.failed}F)")
+        grade_str = f" | Reliability: {reliability_score} ({reliability_grade})" if reliability_score else ""
+        print(f"  [Eval] Run complete: {run.overall_score} ({run.passed}P/{run.warned}W/{run.failed}F){grade_str}")
 
         # Fire webhook if configured and there are failures
         _fire_webhook(run, env, results)
@@ -629,7 +812,7 @@ def _fire_webhook(run: EvalRun, env: Environment, results: list):
                     "reasoning": r.judge_reasoning or "",
                 })
 
-        payload = json.dumps({
+        webhook_data = {
             "event": "eval_run_completed",
             "environment_id": env.id,
             "environment_name": env.name,
@@ -642,7 +825,19 @@ def _fire_webhook(run: EvalRun, env: Environment, results: list):
             "failed": run.failed,
             "failed_checks": failed_checks,
             "timestamp": datetime.utcnow().isoformat(),
-        }).encode()
+        }
+
+        # Include reliability data if available
+        if run.reliability_score is not None:
+            webhook_data["reliability_score"] = run.reliability_score
+            webhook_data["reliability_grade"] = run.reliability_grade
+        if run.latency_p95_ms is not None:
+            webhook_data["latency_p95_ms"] = run.latency_p95_ms
+        if run.schema_pass is not None:
+            webhook_data["schema_pass"] = run.schema_pass
+            webhook_data["schema_fail"] = run.schema_fail
+
+        payload = json.dumps(webhook_data).encode()
 
         req = urllib.request.Request(
             webhook_url, data=payload,
