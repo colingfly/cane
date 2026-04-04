@@ -1,0 +1,618 @@
+"""
+connector_sync.py — Sync engine for Live Connectors.
+
+Handles initial sync (download all files from a folder), incremental sync
+(detect changes via Google Drive Changes API), and the background polling loop.
+
+Reuses the existing Ingestor pipeline — no new extraction code needed.
+"""
+import traceback
+import threading
+import asyncio
+from pathlib import Path
+from datetime import datetime
+
+from cane.core.config import CONNECTOR_SYNC_DIR
+from cane.core.database import SessionLocal
+from cane.core.models import Document
+from cane.integrations.connector_models import ConnectorCredential, ConnectorSync, ConnectorFile
+from services import gdrive
+from services import s3 as s3_service
+
+
+# Simple lock to prevent concurrent syncs of the same sync_id
+_sync_locks: dict[str, threading.Lock] = {}
+
+
+def _get_lock(sync_id: str) -> threading.Lock:
+    if sync_id not in _sync_locks:
+        _sync_locks[sync_id] = threading.Lock()
+    return _sync_locks[sync_id]
+
+
+def run_sync(sync_id: str):
+    """
+    Run a sync — initial or incremental depending on whether we have a change token.
+    Called from background tasks or the polling loop.
+    """
+    lock = _get_lock(sync_id)
+    if not lock.acquire(blocking=False):
+        print(f"  [Sync] {sync_id[:8]} already running, skipping")
+        return
+
+    try:
+        db = SessionLocal()
+        try:
+            sync = db.query(ConnectorSync).filter(ConnectorSync.id == sync_id).first()
+            if not sync:
+                print(f"  [Sync] Sync {sync_id[:8]} not found")
+                return
+
+            cred = db.query(ConnectorCredential).filter(
+                ConnectorCredential.id == sync.credential_id
+            ).first()
+            if not cred or not cred.is_active:
+                sync.last_sync_status = "error"
+                sync.last_sync_message = "Credential not found or inactive"
+                db.commit()
+                return
+
+            sync.last_sync_status = "running"
+            db.commit()
+
+            if sync.provider == "s3":
+                if sync.last_sync_at:
+                    _run_incremental_sync_s3(sync, cred, db)
+                else:
+                    _run_initial_sync_s3(sync, cred, db)
+            else:
+                if sync.last_change_token:
+                    _run_incremental_sync(sync, cred, db)
+                else:
+                    _run_initial_sync(sync, cred, db)
+
+        except Exception as e:
+            traceback.print_exc()
+            try:
+                sync = db.query(ConnectorSync).filter(ConnectorSync.id == sync_id).first()
+                if sync:
+                    sync.last_sync_status = "error"
+                    sync.last_sync_message = str(e)[:500]
+                    sync.last_sync_at = datetime.utcnow()
+                    db.commit()
+            except Exception:
+                pass
+        finally:
+            db.close()
+    finally:
+        lock.release()
+
+
+def _run_initial_sync(sync: ConnectorSync, cred: ConnectorCredential, db):
+    """Download all files from the folder and ingest them."""
+    print(f"  [Sync] Initial sync for folder '{sync.remote_folder_name}'")
+
+    # List all files in the folder
+    files = gdrive.list_folder_contents(cred, sync.remote_folder_id)
+    db.commit()  # persist token refresh
+
+    synced_count = 0
+    errors = []
+
+    for file_meta in files:
+        try:
+            _download_and_ingest_file(sync, cred, file_meta, db)
+            synced_count += 1
+        except Exception as e:
+            traceback.print_exc()
+            errors.append(f"{file_meta.get('name', '?')}: {str(e)[:100]}")
+
+    # Get the initial change token for future incremental syncs
+    try:
+        page_token = gdrive.get_start_page_token(cred)
+        sync.last_change_token = page_token
+        db.commit()
+    except Exception as e:
+        print(f"  [Sync] Warning: couldn't get change token: {e}")
+
+    # Update sync status
+    sync.last_sync_at = datetime.utcnow()
+    sync.files_synced = synced_count
+    if errors:
+        sync.last_sync_status = "error" if synced_count == 0 else "success"
+        sync.last_sync_message = f"Synced {synced_count}/{len(files)} files. Errors: {'; '.join(errors[:3])}"
+    else:
+        sync.last_sync_status = "success"
+        sync.last_sync_message = f"Synced {synced_count} files"
+    db.commit()
+
+    print(f"  [Sync] Initial sync complete: {synced_count}/{len(files)} files")
+
+
+def _run_incremental_sync(sync: ConnectorSync, cred: ConnectorCredential, db):
+    """Use Changes API to detect and process file changes."""
+    print(f"  [Sync] Incremental sync for folder '{sync.remote_folder_name}'")
+
+    changes, new_token = gdrive.get_changes(cred, sync.last_change_token, sync.remote_folder_id)
+    db.commit()  # persist token refresh
+
+    added = 0
+    updated = 0
+    removed = 0
+    errors = []
+
+    for change in changes:
+        file_id = change["file_id"]
+        try:
+            if change["removed"]:
+                # File was deleted or trashed
+                _remove_synced_file(sync, file_id, db)
+                removed += 1
+            else:
+                # Check if we already have this file
+                existing = db.query(ConnectorFile).filter(
+                    ConnectorFile.sync_id == sync.id,
+                    ConnectorFile.remote_file_id == file_id,
+                    ConnectorFile.status != "deleted",
+                ).first()
+
+                mime = change["mime_type"]
+                ext = gdrive.get_file_extension(mime)
+                if not ext:
+                    continue  # unsupported file type
+
+                if existing:
+                    # File was modified — re-download and re-ingest
+                    _remove_synced_file(sync, file_id, db)
+                    file_meta = {
+                        "id": file_id,
+                        "name": change["name"],
+                        "mimeType": mime,
+                        "modifiedTime": change["modified_time"],
+                        "size": str(change["size"]),
+                    }
+                    _download_and_ingest_file(sync, cred, file_meta, db)
+                    updated += 1
+                else:
+                    # New file
+                    file_meta = {
+                        "id": file_id,
+                        "name": change["name"],
+                        "mimeType": mime,
+                        "modifiedTime": change["modified_time"],
+                        "size": str(change["size"]),
+                    }
+                    _download_and_ingest_file(sync, cred, file_meta, db)
+                    added += 1
+        except Exception as e:
+            traceback.print_exc()
+            errors.append(f"{change.get('name', file_id[:8])}: {str(e)[:100]}")
+
+    # Update change token and status
+    sync.last_change_token = new_token
+    sync.last_sync_at = datetime.utcnow()
+
+    # Recount files
+    file_count = db.query(ConnectorFile).filter(
+        ConnectorFile.sync_id == sync.id,
+        ConnectorFile.status == "ready",
+    ).count()
+    sync.files_synced = file_count
+
+    parts = []
+    if added:
+        parts.append(f"{added} added")
+    if updated:
+        parts.append(f"{updated} updated")
+    if removed:
+        parts.append(f"{removed} removed")
+    if not parts:
+        parts.append("No changes")
+    if errors:
+        parts.append(f"{len(errors)} errors")
+
+    sync.last_sync_status = "error" if errors and not (added or updated or removed) else "success"
+    sync.last_sync_message = ", ".join(parts)
+    db.commit()
+
+    print(f"  [Sync] Incremental sync complete: {', '.join(parts)}")
+
+
+def _prepare_connector_file(
+    sync: ConnectorSync,
+    file_id: str,
+    name: str,
+    mime: str,
+    modified_str: str,
+    size: int,
+    ext: str,
+    db,
+) -> tuple:
+    """
+    Create the ConnectorFile record and determine local path.
+    Returns (cf, dest_path) tuple.
+    """
+    base_name = Path(name).stem
+    local_name = f"{base_name}{ext}"
+
+    # Create sync-specific download directory
+    sync_dir = CONNECTOR_SYNC_DIR / sync.tenant_id / sync.id
+    sync_dir.mkdir(parents=True, exist_ok=True)
+    dest_path = sync_dir / local_name
+
+    # Handle name collisions
+    counter = 1
+    while dest_path.exists():
+        dest_path = sync_dir / f"{base_name}_{counter}{ext}"
+        counter += 1
+
+    cf = ConnectorFile(
+        sync_id=sync.id,
+        tenant_id=sync.tenant_id,
+        remote_file_id=file_id,
+        remote_name=name,
+        remote_mime_type=mime,
+        remote_size_bytes=size,
+        local_path=str(dest_path),
+        status="downloading",
+    )
+    if modified_str:
+        try:
+            cf.remote_modified_at = datetime.fromisoformat(modified_str.replace("Z", "+00:00"))
+        except Exception:
+            pass
+    db.add(cf)
+    db.commit()
+    db.refresh(cf)
+
+    return cf, dest_path
+
+
+def _ingest_downloaded_file(sync: ConnectorSync, cf: ConnectorFile, dest_path: Path, ext: str, name: str, db):
+    """
+    Run a downloaded file through the ingestor pipeline.
+    Shared between Google Drive and S3 sync paths.
+    """
+    cf.status = "ingesting"
+    db.commit()
+
+    from cane.core.config import EXT_MAP
+    file_type = EXT_MAP.get(ext, "")
+    file_size = dest_path.stat().st_size if dest_path.exists() else cf.remote_size_bytes
+
+    doc = Document(
+        tenant_id=sync.tenant_id,
+        workspace_id=sync.workspace_id,
+        uploaded_by=None,
+        filename=dest_path.name,
+        file_type=file_type,
+        file_size_bytes=file_size,
+        status="processing",
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
+    cf.document_id = doc.id
+    db.commit()
+
+    from cane.core.models import Workspace, Tenant
+    ws = db.query(Workspace).filter(Workspace.id == sync.workspace_id).first()
+    ws_name = ws.name if ws else ""
+    tenant = db.query(Tenant).filter(Tenant.id == sync.tenant_id).first()
+    tenant_name = tenant.name if tenant else ""
+
+    from cane.rag.ingestor import Ingestor
+    ing = Ingestor()
+    result = ing.ingest(
+        filepath=str(dest_path),
+        tenant_id=sync.tenant_id,
+        workspace_id=sync.workspace_id,
+        document_id=doc.id,
+        company_name=tenant_name,
+        workspace_name=ws_name,
+        force=True,
+    )
+
+    if result.ok:
+        doc.status = "ready"
+        doc.chunk_count = len(result.chunks)
+        doc.image_count = len(result.images)
+        doc.processed_at = datetime.utcnow()
+        cf.status = "ready"
+        try:
+            from cane.rag.hybrid_search import invalidate_index
+            invalidate_index(sync.tenant_id, sync.workspace_id)
+        except Exception:
+            pass
+    else:
+        doc.status = "error"
+        doc.error_message = result.error
+        cf.status = "error"
+        cf.error_message = result.error or "Ingestion failed"
+
+    db.commit()
+    print(f"  [Sync] Ingested '{name}' - {doc.chunk_count} chunks, {doc.image_count} images")
+
+
+def _download_and_ingest_file(
+    sync: ConnectorSync,
+    cred: ConnectorCredential,
+    file_meta: dict,
+    db,
+):
+    """Download one file from Drive and run it through the ingestor."""
+    file_id = file_meta["id"]
+    name = file_meta.get("name", "unknown")
+    mime = file_meta.get("mimeType", "")
+    modified_str = file_meta.get("modifiedTime", "")
+    size = int(file_meta.get("size", 0) or 0)
+
+    ext = gdrive.get_file_extension(mime)
+    if not ext:
+        raise ValueError(f"Unsupported MIME type: {mime}")
+
+    cf, dest_path = _prepare_connector_file(
+        sync, file_id, name, mime, modified_str, size, ext, db,
+    )
+
+    try:
+        # Download from Google Drive
+        gdrive.download_file(cred, file_id, mime, str(dest_path))
+        db.commit()  # persist token refresh
+
+        _ingest_downloaded_file(sync, cf, dest_path, ext, name, db)
+
+    except Exception as e:
+        cf.status = "error"
+        cf.error_message = str(e)[:500]
+        db.commit()
+        raise
+
+
+def _download_and_ingest_s3_file(
+    sync: ConnectorSync,
+    cred: ConnectorCredential,
+    file_meta: dict,
+    bucket: str,
+    db,
+):
+    """Download one file from S3 and run it through the ingestor."""
+    key = file_meta["key"]
+    name = file_meta.get("name", key.rsplit("/", 1)[-1])
+    mime = file_meta.get("mimeType", "")
+    modified_str = file_meta.get("modifiedTime", "")
+    size = int(file_meta.get("size", 0) or 0)
+
+    ext = s3_service.get_file_extension(key)
+    if not ext:
+        raise ValueError(f"Unsupported file type: {key}")
+
+    cf, dest_path = _prepare_connector_file(
+        sync, key, name, mime, modified_str, size, ext, db,
+    )
+
+    try:
+        # Download from S3
+        s3_service.download_object(cred, bucket, key, str(dest_path))
+
+        _ingest_downloaded_file(sync, cf, dest_path, ext, name, db)
+
+    except Exception as e:
+        cf.status = "error"
+        cf.error_message = str(e)[:500]
+        db.commit()
+        raise
+
+
+def _remove_synced_file(sync: ConnectorSync, remote_file_id: str, db):
+    """Remove a previously synced file — delete chunks, Document, and ConnectorFile."""
+    from cane.rag.chroma import text_col, image_col
+
+    cf = db.query(ConnectorFile).filter(
+        ConnectorFile.sync_id == sync.id,
+        ConnectorFile.remote_file_id == remote_file_id,
+        ConnectorFile.status != "deleted",
+    ).first()
+
+    if not cf:
+        return
+
+    # Delete ChromaDB chunks
+    if cf.document_id:
+        try:
+            text_col.delete(where={"document_id": cf.document_id})
+        except Exception:
+            pass
+        if image_col:
+            try:
+                image_col.delete(where={"document_id": cf.document_id})
+            except Exception:
+                pass
+        # Delete Document record
+        doc = db.query(Document).filter(Document.id == cf.document_id).first()
+        if doc:
+            db.delete(doc)
+
+    # Delete local file
+    if cf.local_path:
+        local = Path(cf.local_path)
+        if local.exists():
+            local.unlink()
+
+    # Mark as deleted (or fully delete)
+    db.delete(cf)
+    db.commit()
+
+    try:
+        from cane.rag.hybrid_search import invalidate_index
+        invalidate_index(sync.tenant_id, sync.workspace_id)
+    except Exception:
+        pass
+
+
+# ══════════════════════════════════════════
+#  S3 Sync Functions
+# ══════════════════════════════════════════
+
+def _run_initial_sync_s3(sync: ConnectorSync, cred: ConnectorCredential, db):
+    """Download all supported files from the S3 bucket/prefix and ingest them."""
+    bucket, prefix = s3_service.parse_bucket_prefix(sync.remote_folder_id)
+    print(f"  [Sync] S3 initial sync for '{bucket}/{prefix}'")
+
+    files = s3_service.list_objects(cred, bucket, prefix)
+    synced_count = 0
+    errors = []
+
+    for file_meta in files:
+        try:
+            _download_and_ingest_s3_file(sync, cred, file_meta, bucket, db)
+            synced_count += 1
+        except Exception as e:
+            traceback.print_exc()
+            errors.append(f"{file_meta.get('name', '?')}: {str(e)[:100]}")
+
+    sync.last_sync_at = datetime.utcnow()
+    sync.files_synced = synced_count
+    if errors:
+        sync.last_sync_status = "error" if synced_count == 0 else "success"
+        sync.last_sync_message = f"Synced {synced_count}/{len(files)} files. Errors: {'; '.join(errors[:3])}"
+    else:
+        sync.last_sync_status = "success"
+        sync.last_sync_message = f"Synced {synced_count} files"
+    db.commit()
+
+    print(f"  [Sync] S3 initial sync complete: {synced_count}/{len(files)} files")
+
+
+def _run_incremental_sync_s3(sync: ConnectorSync, cred: ConnectorCredential, db):
+    """Compare S3 objects against stored files and process changes."""
+    bucket, prefix = s3_service.parse_bucket_prefix(sync.remote_folder_id)
+    print(f"  [Sync] S3 incremental sync for '{bucket}/{prefix}'")
+
+    # Get current state from S3
+    current_objects = s3_service.list_objects(cred, bucket, prefix)
+    current_keys = {obj["key"]: obj for obj in current_objects}
+
+    # Get stored state from DB
+    existing_files = db.query(ConnectorFile).filter(
+        ConnectorFile.sync_id == sync.id,
+        ConnectorFile.status != "deleted",
+    ).all()
+    existing_keys = {cf.remote_file_id: cf for cf in existing_files}
+
+    added = 0
+    updated = 0
+    removed = 0
+    errors = []
+
+    # Find new and modified files
+    for key, obj in current_keys.items():
+        try:
+            if key not in existing_keys:
+                # New file
+                _download_and_ingest_s3_file(sync, cred, obj, bucket, db)
+                added += 1
+            else:
+                # Check if modified (compare LastModified)
+                cf = existing_keys[key]
+                if cf.remote_modified_at and obj.get("modifiedTime"):
+                    try:
+                        remote_modified = datetime.fromisoformat(
+                            obj["modifiedTime"].replace("Z", "+00:00")
+                        )
+                        # Compare as naive UTC (strip timezone info for comparison)
+                        remote_naive = remote_modified.replace(tzinfo=None)
+                        if remote_naive > cf.remote_modified_at:
+                            # File was modified - remove old, re-ingest
+                            _remove_synced_file(sync, key, db)
+                            _download_and_ingest_s3_file(sync, cred, obj, bucket, db)
+                            updated += 1
+                    except Exception:
+                        pass  # Skip comparison on parse errors
+        except Exception as e:
+            traceback.print_exc()
+            errors.append(f"{obj.get('name', key[:20])}: {str(e)[:100]}")
+
+    # Find deleted files (in DB but not in S3)
+    for key in existing_keys:
+        if key not in current_keys:
+            try:
+                _remove_synced_file(sync, key, db)
+                removed += 1
+            except Exception as e:
+                errors.append(f"Remove {key[:20]}: {str(e)[:100]}")
+
+    # Update sync status
+    sync.last_sync_at = datetime.utcnow()
+
+    file_count = db.query(ConnectorFile).filter(
+        ConnectorFile.sync_id == sync.id,
+        ConnectorFile.status == "ready",
+    ).count()
+    sync.files_synced = file_count
+
+    parts = []
+    if added:
+        parts.append(f"{added} added")
+    if updated:
+        parts.append(f"{updated} updated")
+    if removed:
+        parts.append(f"{removed} removed")
+    if not parts:
+        parts.append("No changes")
+    if errors:
+        parts.append(f"{len(errors)} errors")
+
+    sync.last_sync_status = "error" if errors and not (added or updated or removed) else "success"
+    sync.last_sync_message = ", ".join(parts)
+    db.commit()
+
+    print(f"  [Sync] S3 incremental sync complete: {', '.join(parts)}")
+
+
+# ══════════════════════════════════════════
+#  Background Polling Loop
+# ══════════════════════════════════════════
+
+async def start_sync_loop():
+    """
+    Background loop that checks for active syncs needing refresh.
+    Runs every 5 minutes. Called from app.py on startup.
+    """
+    print("  [Sync] Background sync loop started")
+    while True:
+        await asyncio.sleep(300)  # 5 minutes
+        try:
+            _check_and_run_syncs()
+        except Exception as e:
+            print(f"  [Sync] Loop error: {e}")
+
+
+def _check_and_run_syncs():
+    """Check all active syncs and run any that are due."""
+    db = SessionLocal()
+    try:
+        syncs = db.query(ConnectorSync).filter(
+            ConnectorSync.status == "active",
+            ConnectorSync.last_sync_status != "running",
+        ).all()
+
+        now = datetime.utcnow()
+        for sync in syncs:
+            if sync.last_sync_at:
+                from datetime import timedelta
+                next_sync = sync.last_sync_at + timedelta(minutes=sync.sync_interval_minutes)
+                if now < next_sync:
+                    continue
+
+            sync_id = sync.id
+            db.expunge(sync)
+            # Run in a thread to avoid blocking the async loop
+            thread = threading.Thread(target=run_sync, args=(sync_id,), daemon=True)
+            thread.start()
+
+    except Exception as e:
+        print(f"  [Sync] Check error: {e}")
+    finally:
+        db.close()

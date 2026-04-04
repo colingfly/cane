@@ -213,4 +213,4 @@ Vite proxies `/api` to the backend at `:8000`.
 
 ## License
 
-Proprietary. All rights reserved.
+Apache 2.0. See [LICENSE](LICENSE).

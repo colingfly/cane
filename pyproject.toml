@@ -1,0 +1,68 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cane-ai"
+version = "0.1.0"
+description = "Open-source agentic infrastructure. Build, eval, fine-tune, and deploy AI agents."
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.10"
+authors = [
+    { name = "Colin Gibbons-Fly", email = "colingfly@gmail.com" },
+]
+keywords = ["ai", "agents", "rag", "eval", "llm", "mcp", "fine-tuning"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "fastapi>=0.100.0",
+    "uvicorn>=0.20.0",
+    "sqlalchemy>=2.0.0",
+    "pymysql>=1.1.0",
+    "chromadb>=0.4.0",
+    "anthropic>=0.30.0",
+    "openai>=1.0.0",
+    "pyjwt>=2.8.0",
+    "bcrypt>=4.0.0",
+    "python-multipart>=0.0.6",
+    "sentence-transformers>=2.2.0",
+]
+
+[project.optional-dependencies]
+all = [
+    "cane-ai[google,audio]",
+]
+google = [
+    "google-auth>=2.0.0",
+    "google-api-python-client>=2.0.0",
+]
+audio = [
+    "faster-whisper>=0.9.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.1.0",
+]
+
+[project.urls]
+Homepage = "https://cane.fyi"
+Documentation = "https://docs.cane.fyi"
+Repository = "https://github.com/colingfly/cane"
+Issues = "https://github.com/colingfly/cane/issues"
+
+[project.scripts]
+cane = "cane.cli.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["cane"]
