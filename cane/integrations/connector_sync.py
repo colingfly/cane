@@ -16,8 +16,8 @@ from cane.core.config import CONNECTOR_SYNC_DIR
 from cane.core.database import SessionLocal
 from cane.core.models import Document
 from cane.integrations.connector_models import ConnectorCredential, ConnectorSync, ConnectorFile
-from services import gdrive
-from services import s3 as s3_service
+from cane.integrations import gdrive
+from cane.integrations import s3 as s3_service
 
 
 # Simple lock to prevent concurrent syncs of the same sync_id

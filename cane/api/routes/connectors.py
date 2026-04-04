@@ -21,8 +21,8 @@ from cane.core.models import User, Workspace, Document
 from cane.integrations.connector_models import ConnectorCredential, ConnectorSync, ConnectorFile
 from cane.auth.jwt import get_current_user
 from cane.core.crypto import encrypt, decrypt
-from services import gdrive
-from services import s3 as s3_service
+from cane.integrations import gdrive
+from cane.integrations import s3 as s3_service
 
 router = APIRouter(prefix="/api/connectors", tags=["connectors"])
 

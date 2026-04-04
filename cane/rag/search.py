@@ -179,7 +179,7 @@ def search_text(q: str, n: int, where: dict) -> dict:
 def search_visual(q: str, n: int, where: dict) -> dict:
     from cane.rag.chroma import image_col as _img_col, chroma_client
     from cane.core.config import IMAGE_COLLECTION
-    import services.chroma as _chroma_mod
+    import cane.rag.chroma as _chroma_mod
 
     img_col = _img_col
     if img_col is None:
