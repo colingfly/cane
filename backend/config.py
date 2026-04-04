@@ -72,6 +72,7 @@ GOOGLE_OAUTH_CLIENT_SECRET = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", "")
 # ── LLM (Claude API) ──
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL = os.getenv("CANE_CLAUDE_MODEL", "claude-haiku-4-5-20251001")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
 # ── Embedding Model ──
 # BGE-large is 3x better retrieval than BGE-base, still runs locally

@@ -42,6 +42,7 @@ def run_all():
     _migrate_guest_access_columns()
     _migrate_workspace_model_config()
     _migrate_finetune_auto_deploy()
+    _migrate_marketplace_personality()
 
 
 def _migrate_guest_access_columns():
@@ -871,7 +872,7 @@ def _migrate_agent_versions_table():
                         version_number INT NOT NULL,
                         label VARCHAR(255) DEFAULT '',
                         config_snapshot TEXT NOT NULL,
-                        changes TEXT DEFAULT '[]',
+                        changes TEXT NULL,
                         created_by VARCHAR(36) NULL,
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -1200,3 +1201,30 @@ def _migrate_finetune_auto_deploy():
             print("  [DB] Finetune auto_deploy columns already present")
     except Exception as e:
         print(f"  [DB] Finetune auto_deploy migration skipped: {e}")
+
+
+def _migrate_marketplace_personality():
+    """Add personality eval columns to marketplace_listings."""
+    try:
+        insp = inspect(engine)
+        if "marketplace_listings" not in insp.get_table_names():
+            return
+        cols = {c["name"] for c in insp.get_columns("marketplace_listings")}
+        new_cols = {
+            "personality_composite": "ALTER TABLE marketplace_listings ADD COLUMN personality_composite FLOAT NULL",
+            "personality_grade": "ALTER TABLE marketplace_listings ADD COLUMN personality_grade VARCHAR(2) NULL",
+            "personality_scores": "ALTER TABLE marketplace_listings ADD COLUMN personality_scores TEXT NULL",
+            "model_used": "ALTER TABLE marketplace_listings ADD COLUMN model_used VARCHAR(100) DEFAULT ''",
+        }
+        added = []
+        for col_name, sql in new_cols.items():
+            if col_name not in cols:
+                with engine.begin() as conn:
+                    conn.execute(text(sql))
+                added.append(col_name)
+        if added:
+            print(f"  [DB] Marketplace personality columns added: {', '.join(added)}")
+        else:
+            print("  [DB] Marketplace personality columns already present")
+    except Exception as e:
+        print(f"  [DB] Marketplace personality migration skipped: {e}")

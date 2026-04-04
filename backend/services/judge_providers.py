@@ -187,6 +187,7 @@ PROVIDER_ALIASES = {
     "claude": "anthropic",
     "gpt": "openai",
     "google": "gemini",
+    "openrouter": "openai-compatible",
     "ollama": "openai-compatible",
     "mistral": "openai-compatible",
     "vllm": "openai-compatible",
@@ -195,6 +196,9 @@ PROVIDER_ALIASES = {
     "groq": "openai-compatible",
     "deepseek": "openai-compatible",
     "fireworks": "openai-compatible",
+    "trinity": "openai-compatible",
+    "qwen": "openai-compatible",
+    "arcee": "openai-compatible",
 }
 
 DEFAULT_MODELS = {
@@ -224,19 +228,29 @@ def get_provider(
     kwargs = {"model": model}
     if api_key:
         kwargs["api_key"] = api_key
-    if base_url and resolved == "openai-compatible":
-        kwargs["base_url"] = base_url
+
+    # Auto-configure OpenRouter when detected
+    if resolved == "openai-compatible":
+        if base_url:
+            kwargs["base_url"] = base_url
+        elif provider.lower() == "openrouter":
+            kwargs["base_url"] = "https://openrouter.ai/api/v1"
+            if not api_key:
+                kwargs["api_key"] = os.environ.get("OPENROUTER_API_KEY", "none")
 
     return cls(**kwargs)
 
 
 def detect_provider_from_model(model: str) -> str:
-    """Auto-detect provider from model name prefix."""
+    """Auto-detect provider from model name prefix or path."""
     model_lower = model.lower()
     if model_lower.startswith("claude"):
         return "anthropic"
-    if model_lower.startswith(("gpt-", "o1-", "o3-")):
+    if model_lower.startswith(("gpt-", "o1-", "o3-", "ft:")):
         return "openai"
     if model_lower.startswith("gemini"):
         return "gemini"
+    # OpenRouter-style model IDs use org/model format
+    if "/" in model_lower:
+        return "openrouter"
     return "anthropic"

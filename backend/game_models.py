@@ -139,6 +139,68 @@ class GameThreadSummary(Base):
     created_at = Column(DateTime, default=func.now())
 
 
+class PersonalityLeaderboard(Base):
+    """Personality eval scores and leaderboard rankings for agents."""
+    __tablename__ = 'personality_leaderboard'
+
+    id = Column(String(36), primary_key=True, default=_game_id)
+    workspace_id = Column(String(36), ForeignKey('workspaces.id', ondelete='CASCADE'), unique=True, nullable=False)
+    tenant_id = Column(String(36), ForeignKey('tenants.id'), nullable=False)
+    agent_name = Column(String(200), default='')
+    model_used = Column(String(100), default='')
+
+    # Dimension scores (0-100)
+    consistency = Column(Float, nullable=True)
+    theory_of_mind = Column(Float, nullable=True)
+    emotional_range = Column(Float, nullable=True)
+    social_awareness = Column(Float, nullable=True)
+    authenticity = Column(Float, nullable=True)
+    memory_coherence = Column(Float, nullable=True)
+    resilience = Column(Float, nullable=True)
+    growth = Column(Float, nullable=True)
+
+    composite_score = Column(Float, nullable=True)
+    grade = Column(String(2), nullable=True)
+
+    # History
+    total_evals = Column(Integer, default=0)
+    days_alive = Column(Integer, default=0)
+    last_eval_at = Column(DateTime, nullable=True)
+    last_eval_suite = Column(String(100), nullable=True)
+    eval_history = Column(JSON, default=[])  # list of past eval snapshots
+
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class PersonalityEvalRun(Base):
+    """Individual personality eval run result."""
+    __tablename__ = 'personality_eval_runs'
+
+    id = Column(String(36), primary_key=True, default=_game_id)
+    workspace_id = Column(String(36), ForeignKey('workspaces.id', ondelete='CASCADE'), nullable=False)
+    tenant_id = Column(String(36), ForeignKey('tenants.id'), nullable=False)
+
+    suite = Column(String(100), nullable=False)
+    model_used = Column(String(100), default='')
+    judge_model = Column(String(100), default='')
+
+    # Dimension scores
+    dimension_scores = Column(JSON, default={})
+    composite_score = Column(Float, nullable=True)
+    grade = Column(String(2), nullable=True)
+
+    # Details
+    scenario_results = Column(JSON, default=[])  # per-scenario breakdown
+    highlights = Column(JSON, default=[])         # notable moments
+
+    status = Column(String(20), default='pending')  # pending, running, completed, failed
+    error_message = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=func.now())
+    completed_at = Column(DateTime, nullable=True)
+
+
 class GameEvent(Base):
     """Town-wide events (fights, arrests, gold strikes, etc.)."""
     __tablename__ = 'game_events'

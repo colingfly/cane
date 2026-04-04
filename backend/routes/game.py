@@ -647,3 +647,309 @@ def trigger_end_of_day(
         "agents_failed": len([r for r in results if "error" in r]),
         "results": results,
     }
+
+
+# ─── Personality Eval (The Hospital) ───
+
+class PersonalityEvalRequest(BaseModel):
+    suite: str = "basic_personality"
+    model_override: Optional[str] = None
+    judge_model: Optional[str] = None
+
+
+class CustomScenarioRequest(BaseModel):
+    prompt: str
+    dimensions: List[str] = ["consistency", "authenticity"]
+    setup_context: Optional[str] = None
+
+
+@router.post("/eval/personality/{workspace_id}")
+def run_personality_eval(
+    workspace_id: str,
+    body: PersonalityEvalRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Run a personality eval suite against an agent (the Hospital exam)."""
+    from services.personality_eval import run_personality_eval as _run, TEST_SUITES
+
+    if body.suite not in TEST_SUITES:
+        raise HTTPException(400, f"Unknown suite. Available: {list(TEST_SUITES.keys())}")
+
+    result = _run(
+        workspace_id=workspace_id,
+        tenant_id=user.tenant_id,
+        suite_name=body.suite,
+        db=db,
+        model_override=body.model_override,
+        judge_model=body.judge_model,
+    )
+
+    if "error" in result:
+        raise HTTPException(400, result["error"])
+
+    return result
+
+
+@router.post("/eval/personality/{workspace_id}/custom")
+def run_custom_personality_scenario(
+    workspace_id: str,
+    body: CustomScenarioRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Run a single custom personality scenario."""
+    from services.personality_eval import run_personality_eval as _run, TEST_SUITES
+
+    # Build a temporary suite with the custom scenario
+    custom_suite = {
+        "name": "Custom Scenario",
+        "description": "User-defined personality test",
+        "scenarios": [{
+            "name": "custom",
+            "prompt": body.prompt,
+            "setup_context": body.setup_context,
+            "dimensions": body.dimensions,
+        }],
+    }
+
+    # Temporarily inject
+    TEST_SUITES["_custom_temp"] = custom_suite
+    try:
+        result = _run(
+            workspace_id=workspace_id,
+            tenant_id=user.tenant_id,
+            suite_name="_custom_temp",
+            db=db,
+        )
+    finally:
+        TEST_SUITES.pop("_custom_temp", None)
+
+    if "error" in result:
+        raise HTTPException(400, result["error"])
+
+    return result
+
+
+@router.get("/eval/personality/{workspace_id}/profile")
+def get_personality_profile(
+    workspace_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get an agent's full personality profile and eval history."""
+    from services.personality_eval import get_agent_profile
+    return get_agent_profile(workspace_id, db)
+
+
+@router.get("/eval/personality/{workspace_id}/runs")
+def get_personality_runs(
+    workspace_id: str,
+    limit: int = Query(20, ge=1, le=100),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get detailed eval run history for an agent."""
+    from game_models import PersonalityEvalRun
+
+    runs = db.query(PersonalityEvalRun).filter(
+        PersonalityEvalRun.workspace_id == workspace_id,
+        PersonalityEvalRun.tenant_id == user.tenant_id,
+    ).order_by(PersonalityEvalRun.created_at.desc()).limit(limit).all()
+
+    return [{
+        "id": r.id,
+        "suite": r.suite,
+        "model_used": r.model_used,
+        "judge_model": r.judge_model,
+        "composite_score": r.composite_score,
+        "grade": r.grade,
+        "dimension_scores": r.dimension_scores,
+        "scenario_results": r.scenario_results,
+        "highlights": r.highlights,
+        "status": r.status,
+        "created_at": r.created_at.isoformat() if r.created_at else None,
+    } for r in runs]
+
+
+@router.get("/eval/personality/leaderboard")
+def personality_leaderboard(
+    sort_by: str = Query("composite_score"),
+    model: str = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    user: Optional[User] = Depends(get_optional_user),
+    db: Session = Depends(get_db),
+):
+    """Get the personality leaderboard."""
+    from services.personality_eval import get_leaderboard, DIMENSIONS
+
+    valid_sorts = list(DIMENSIONS.keys()) + ["composite_score"]
+    if sort_by not in valid_sorts:
+        raise HTTPException(400, f"sort_by must be one of: {valid_sorts}")
+
+    return {
+        "leaderboard": get_leaderboard(db, sort_by=sort_by, model_filter=model, limit=limit),
+        "dimensions": {k: v["description"] for k, v in DIMENSIONS.items()},
+    }
+
+
+@router.get("/eval/personality/compare")
+def compare_agents(
+    agents: str = Query(..., description="Comma-separated workspace IDs"),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Side-by-side personality comparison of multiple agents."""
+    from services.personality_eval import get_agent_profile
+
+    agent_ids = [a.strip() for a in agents.split(",") if a.strip()]
+    if len(agent_ids) < 2:
+        raise HTTPException(400, "Need at least 2 agent IDs to compare")
+    if len(agent_ids) > 6:
+        raise HTTPException(400, "Max 6 agents per comparison")
+
+    profiles = []
+    for aid in agent_ids:
+        profile = get_agent_profile(aid, db)
+        profiles.append(profile)
+
+    return {"agents": profiles, "count": len(profiles)}
+
+
+@router.get("/eval/personality/suites")
+def list_personality_suites(
+    user: Optional[User] = Depends(get_optional_user),
+):
+    """List available personality eval suites."""
+    from services.personality_eval import TEST_SUITES
+
+    return {
+        "suites": [
+            {
+                "key": k,
+                "name": v["name"],
+                "description": v["description"],
+                "scenario_count": len(v["scenarios"]),
+            }
+            for k, v in TEST_SUITES.items()
+        ],
+    }
+
+
+@router.get("/models")
+def list_available_models(
+    user: Optional[User] = Depends(get_optional_user),
+):
+    """List all available models and task routing."""
+    from services.model_router import router as model_router
+
+    return {
+        "models": model_router.list_models(),
+        "task_routing": model_router.list_tasks(),
+    }
+
+
+# ─── Agent Package Export (for Marketplace) ───
+
+@router.get("/agents/{workspace_id}/export")
+def export_agent_package(
+    workspace_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Export a complete agent package for the marketplace.
+    Includes config, personality, game state, memory cloud, and model preferences.
+    """
+    ws = db.query(Workspace).filter(
+        Workspace.id == workspace_id,
+        Workspace.tenant_id == user.tenant_id,
+    ).first()
+    if not ws:
+        raise HTTPException(404, "Workspace not found")
+
+    # Game state
+    game_state = db.query(AgentGameState).filter(
+        AgentGameState.workspace_id == workspace_id,
+    ).first()
+
+    # Personality scores
+    from game_models import PersonalityLeaderboard
+    personality = db.query(PersonalityLeaderboard).filter(
+        PersonalityLeaderboard.workspace_id == workspace_id,
+    ).first()
+
+    # Topic cloud
+    cloud_row = db.query(AgentTopicCloud).filter(
+        AgentTopicCloud.workspace_id == workspace_id,
+    ).first()
+
+    # Tools (schema only, no auth)
+    from tool_models import AgentTool
+    tools = db.query(AgentTool).filter(
+        AgentTool.workspace_id == workspace_id,
+        AgentTool.is_enabled == True,
+    ).all()
+
+    import json
+    tool_schemas = []
+    for t in tools:
+        tool_schemas.append({
+            "name": t.name,
+            "description": t.description,
+            "url": t.url,
+            "method": t.method,
+            "parameters": json.loads(t.parameters or "[]"),
+            "fire_and_forget": getattr(t, "fire_and_forget", False),
+        })
+
+    package = {
+        "format_version": "1.0",
+        "exported_at": datetime.utcnow().isoformat(),
+
+        # Identity
+        "name": ws.name,
+        "description": ws.description or "",
+        "agent_type": ws.agent_type or "custom",
+        "icon": ws.agent_icon or "",
+
+        # Configuration
+        "system_prompt": ws.system_prompt or "",
+
+        # Model preferences
+        "preferred_model": ws.inference_model or "trinity-large-thinking",
+        "inference_provider": ws.inference_provider or "",
+
+        # Game state (if exists)
+        "game_config": {
+            "game_role": game_state.game_role if game_state else "citizen",
+            "accent_color": game_state.accent_color if game_state else "#E8A87C",
+            "skin_tone": game_state.skin_tone if game_state else 1,
+        } if game_state else None,
+
+        # Personality scores (if evaluated)
+        "personality": {
+            "composite_score": personality.composite_score,
+            "grade": personality.grade,
+            "dimensions": {
+                "consistency": personality.consistency,
+                "theory_of_mind": personality.theory_of_mind,
+                "emotional_range": personality.emotional_range,
+                "social_awareness": personality.social_awareness,
+                "authenticity": personality.authenticity,
+                "memory_coherence": personality.memory_coherence,
+                "resilience": personality.resilience,
+                "growth": personality.growth,
+            },
+            "total_evals": personality.total_evals,
+            "model_used": personality.model_used,
+        } if personality and personality.composite_score else None,
+
+        # Memory cloud snapshot
+        "topic_cloud": cloud_row.cloud_data if cloud_row else None,
+
+        # Tools (schema only)
+        "tools": tool_schemas,
+    }
+
+    return package
