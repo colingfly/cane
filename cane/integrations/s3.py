@@ -10,8 +10,14 @@ import json
 import mimetypes
 from pathlib import Path
 
-import boto3
-from botocore.exceptions import ClientError, EndpointConnectionError, NoCredentialsError
+try:
+    import boto3
+    from botocore.exceptions import ClientError, EndpointConnectionError, NoCredentialsError
+except ImportError:
+    boto3 = None
+    ClientError = Exception
+    EndpointConnectionError = Exception
+    NoCredentialsError = Exception
 
 from cane.core.config import EXT_MAP
 from cane.core.crypto import encrypt, decrypt
