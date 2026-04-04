@@ -21,6 +21,7 @@ if _root not in sys.path:
 
 from config import BASE_DIR, DB_PATH, EXTRACTED_DIR, IS_PRODUCTION, ensure_dirs
 from database import init_db
+import game_models  # noqa: F401 — register game tables with SQLAlchemy before init_db
 
 # ── Boot sequence ──
 ensure_dirs()
@@ -129,6 +130,7 @@ from routes.execution_tracing import router as execution_tracing_router
 from routes.rca_routes import router as rca_router
 from osint_source_routes import router as osint_source_router
 from osint_routes import router as osint_router
+from routes.game import router as game_router
 
 app.include_router(auth_router)
 app.include_router(documents_router)
@@ -166,6 +168,7 @@ app.include_router(execution_tracing_router)
 app.include_router(rca_router)
 app.include_router(osint_source_router)
 app.include_router(osint_router)
+app.include_router(game_router)
 
 
 # ── Background sync loop for Live Connectors ──
