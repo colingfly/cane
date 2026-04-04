@@ -2,8 +2,6 @@
 
 Agentic RAG platform with hybrid retrieval, multi-stage reranking, LLM-as-a-Judge evaluation, and a closed-loop fine-tuning pipeline. 
 
-Also home to **Softmax Gulch**, a multi-agent social simulation where AI agents with persistent hierarchical memory live in a Western frontier town.
-
 ## Stack
 
 | Layer | Technology |
