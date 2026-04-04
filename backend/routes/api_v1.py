@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from config import ANTHROPIC_API_KEY, CLAUDE_MODEL
+from services.inference import infer, get_model_display
 from database import get_db
 from db_models import Workspace, SearchLog, ApiKey
 from tool_models import AgentLink, AgentCommunication, ExternalAgent
@@ -79,10 +80,8 @@ async def v1_ask(
 
     # Build prompt
     agent_prompt = ""
-    if workspace_id:
-        ws = db.query(Workspace).filter(Workspace.id == workspace_id).first()
-        if ws and ws.system_prompt:
-            agent_prompt = ws.system_prompt
+    if ws and ws.system_prompt:
+        agent_prompt = ws.system_prompt
 
     # Check if agent has tools configured
     from services.tools import get_all_tools
@@ -93,7 +92,7 @@ async def v1_ask(
     claude_tools, tool_lookup = get_all_tools(workspace_id, api_key.tenant_id, db) if workspace_id else ([], {})
 
     if not context_chunks and not claude_tools:
-        return {"answer": "No relevant documents found for your query.", "sources": [], "chunks_used": 0, "model": CLAUDE_MODEL}
+        return {"answer": "No relevant documents found for your query.", "sources": [], "chunks_used": 0, "model": get_model_display(ws)}
 
     system = build_system_prompt(agent_prompt)
     if context_chunks:
@@ -121,9 +120,9 @@ async def v1_ask(
         except Exception:
             answer = ""
 
-    # Fallback or standard call
+    # Fallback or standard call (uses fine-tuned model if deployed)
     if not answer or not answer.strip():
-        answer = _plain_claude_call(system, messages=messages)
+        answer = infer("", system=system, workspace=ws, messages=messages)
     elapsed_ms = int((time.time() - t0) * 1000)
 
     # Log
@@ -143,7 +142,7 @@ async def v1_ask(
             chunks_used=len(context_chunks), sources=sources, response_time_ms=elapsed_ms,
         )
 
-    return {"answer": answer, "sources": sources, "chunks_used": len(context_chunks), "model": CLAUDE_MODEL}
+    return {"answer": answer, "sources": sources, "chunks_used": len(context_chunks), "model": get_model_display(ws)}
 
 
 @router.post("/search")

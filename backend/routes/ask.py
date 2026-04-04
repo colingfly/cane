@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from config import ANTHROPIC_API_KEY, CLAUDE_MODEL
+from services.inference import get_model_display
 from database import get_db
 from db_models import Tenant, User, Workspace, SearchLog
 from auth import get_current_user, get_optional_user
@@ -18,7 +19,8 @@ from security import sanitize_query
 from config import GUEST_TENANT_ID
 from services.limits import check_search_limit
 from services.rag import build_context, build_system_prompt, call_claude
-from streaming import stream_claude, get_conversation_history, save_conversation_turn, persist_conversation_turn, _sse
+from streaming import get_conversation_history, save_conversation_turn, persist_conversation_turn, _sse
+from services.inference import infer_stream
 from services.analytics import log_conversation
 from services.memory import get_memories, format_memories_for_prompt, extract_memories_background
 import time
@@ -104,7 +106,7 @@ def ask(
                 max_iterations=5 if chaining else 3,
             )
         else:
-            summary = call_claude(user_prompt, system=system_prompt)
+            summary = call_claude(user_prompt, system=system_prompt, workspace=ws)
         elapsed_ms = int((time.time() - t0) * 1000)
 
         # Extract memories in background
@@ -136,7 +138,7 @@ def ask(
             )
 
         return {
-            "status": "ok", "summary": summary, "model": CLAUDE_MODEL,
+            "status": "ok", "summary": summary, "model": get_model_display(ws),
             "sources": ctx.sources, "chunks_used": ctx.chunks_used, "images": ctx.images,
         }
     except Exception as e:
@@ -295,7 +297,7 @@ def ask_stream(
             yield _sse({"type": "meta", "sources": ctx.sources, "images": ctx.images,
                          "chunks_used": ctx.chunks_used})
             full_text = []
-            for chunk in stream_claude("", system=system_prompt, messages=messages):
+            for chunk in infer_stream("", system=system_prompt, messages=messages, workspace=ws):
                 yield chunk
                 if chunk.startswith("data: "):
                     try:

@@ -40,6 +40,8 @@ def run_all():
     _migrate_eval_reliability_columns()
     _migrate_judge_model_columns()
     _migrate_guest_access_columns()
+    _migrate_workspace_model_config()
+    _migrate_finetune_auto_deploy()
 
 
 def _migrate_guest_access_columns():
@@ -1150,3 +1152,51 @@ def _migrate_judge_model_columns():
             print("  [DB] Judge model columns already present")
     except Exception as e:
         print(f"  [DB] Judge model migration skipped: {e}")
+
+
+def _migrate_workspace_model_config():
+    """Add per-workspace model override columns for fine-tuned model deployment."""
+    try:
+        insp = inspect(engine)
+        ws_cols = {c["name"] for c in insp.get_columns("workspaces")}
+        new_cols = {
+            "inference_provider": "ALTER TABLE workspaces ADD COLUMN inference_provider VARCHAR(30) NULL",
+            "inference_model": "ALTER TABLE workspaces ADD COLUMN inference_model VARCHAR(255) NULL",
+            "inference_config": "ALTER TABLE workspaces ADD COLUMN inference_config TEXT NULL",
+        }
+        added = []
+        for col_name, sql in new_cols.items():
+            if col_name not in ws_cols:
+                with engine.begin() as conn:
+                    conn.execute(text(sql))
+                added.append(col_name)
+        if added:
+            print(f"  [DB] Workspace model config columns added: {', '.join(added)}")
+        else:
+            print("  [DB] Workspace model config columns already present")
+    except Exception as e:
+        print(f"  [DB] Workspace model config migration skipped: {e}")
+
+
+def _migrate_finetune_auto_deploy():
+    """Add auto_deploy and workspace_id columns to finetune_jobs."""
+    try:
+        insp = inspect(engine)
+        ft_cols = {c["name"] for c in insp.get_columns("finetune_jobs")}
+        new_cols = {
+            "auto_deploy": "ALTER TABLE finetune_jobs ADD COLUMN auto_deploy BOOLEAN DEFAULT FALSE",
+            "workspace_id": "ALTER TABLE finetune_jobs ADD COLUMN workspace_id VARCHAR(36) NULL",
+            "mined_examples_count": "ALTER TABLE finetune_jobs ADD COLUMN mined_examples_count INT DEFAULT 0",
+        }
+        added = []
+        for col_name, sql in new_cols.items():
+            if col_name not in ft_cols:
+                with engine.begin() as conn:
+                    conn.execute(text(sql))
+                added.append(col_name)
+        if added:
+            print(f"  [DB] Finetune jobs columns added: {', '.join(added)}")
+        else:
+            print("  [DB] Finetune auto_deploy columns already present")
+    except Exception as e:
+        print(f"  [DB] Finetune auto_deploy migration skipped: {e}")

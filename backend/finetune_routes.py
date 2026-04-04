@@ -23,8 +23,8 @@ from sqlalchemy import text as sa_text
 
 from database import get_db, SessionLocal
 from auth import get_current_user
-from db_models import User
-from eval_models import Environment, EvalRun, EvalResult
+from db_models import User, Workspace
+from eval_models import Environment, EvalRun, EvalResult, MiningJob, MinedExample
 
 router = APIRouter(prefix="/api/finetune", tags=["finetune"])
 
@@ -102,13 +102,22 @@ def generate_dataset(
     environment_id: str,
     format: str = Query("openai", regex="^(sft|openai)$"),
     min_score: float = Query(80, ge=0, le=100),
+    include_mined: bool = Query(True),
     max_results: int = Query(500, ge=10, le=5000),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    Generate a fine-tuning dataset from eval results.
-    Pulls high-scoring responses across all completed runs.
+    Generate a fine-tuning dataset from eval results + mined corrections.
+
+    Two data sources, merged and deduplicated:
+    1. High-scoring eval results (agent got it right, reinforce that behavior)
+    2. Mined corrections from failure mining (agent got it wrong, LLM rewrote
+       the answer -- this is the highest-value training signal)
+
+    The mined corrections teach the model to handle its hardest failure modes.
+    Combined with the high-scoring examples, this produces a balanced dataset
+    that reinforces strengths and patches weaknesses.
     """
     env = db.query(Environment).filter(
         Environment.id == environment_id,
@@ -127,59 +136,116 @@ def generate_dataset(
     if not runs:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "No completed eval runs found")
 
-    # Get high-scoring results across all runs
+    # Get system prompt from the latest run
+    latest_run = max(runs, key=lambda r: r.created_at)
+    system_prompt = latest_run.agent_prompt or "You are a helpful assistant."
+
+    # ── Source 1: High-scoring eval results ──
     results = db.query(EvalResult).filter(
         EvalResult.eval_run_id.in_([r.id for r in runs]),
         EvalResult.overall_score >= min_score,
     ).order_by(EvalResult.overall_score.desc()).limit(max_results).all()
 
-    if not results:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST,
-                            f"No results found with score >= {min_score}. Lower the threshold or run more evals.")
-
     # Deduplicate by question (keep highest scoring)
     seen_questions = {}
-    deduped = []
+    examples = []
+    eval_count = 0
+
     for r in results:
         q = r.question.strip()
-        if q not in seen_questions or r.overall_score > seen_questions[q]:
-            seen_questions[q] = r.overall_score
-            deduped.append(r)
-
-    # Get system prompt from the latest run
-    latest_run = max(runs, key=lambda r: r.created_at)
-    system_prompt = latest_run.agent_prompt or "You are a helpful assistant."
-
-    # Build dataset
-    if format == "openai":
-        examples = []
-        for r in deduped:
+        if q in seen_questions:
+            continue
+        seen_questions[q] = r.overall_score
+        eval_count += 1
+        if format == "openai":
             examples.append({
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": r.question},
                     {"role": "assistant", "content": r.agent_answer or ""},
-                ]
+                ],
+                "_source": "eval_pass",
             })
-    else:
-        examples = []
-        for r in deduped:
+        else:
             examples.append({
                 "prompt": r.question,
                 "completion": r.agent_answer or "",
+                "_source": "eval_pass",
             })
 
-    dataset_content = "\n".join(json.dumps(ex) for ex in examples)
+    # ── Source 2: Mined corrections (the good stuff) ──
+    mined_count = 0
+    if include_mined:
+        mining_jobs = db.query(MiningJob).filter(
+            MiningJob.environment_id == env.id,
+            MiningJob.status == "completed",
+        ).all()
+
+        if mining_jobs:
+            mined_examples = db.query(MinedExample).filter(
+                MinedExample.mining_job_id.in_([j.id for j in mining_jobs]),
+                MinedExample.improved_answer.isnot(None),
+                MinedExample.improved_answer != "",
+            ).all()
+
+            for ex in mined_examples:
+                q = (ex.prompt or "").strip()
+                if not q or not ex.improved_answer:
+                    continue
+                # Mined corrections override eval results for the same question
+                # because they represent a better answer for a known failure
+                if q in seen_questions:
+                    examples = [e for e in examples if _get_question(e, format) != q]
+                seen_questions[q] = 100.0
+                mined_count += 1
+                if format == "openai":
+                    examples.append({
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": q},
+                            {"role": "assistant", "content": ex.improved_answer},
+                        ],
+                        "_source": "mined_correction",
+                    })
+                else:
+                    examples.append({
+                        "prompt": q,
+                        "completion": ex.improved_answer,
+                        "_source": "mined_correction",
+                    })
+
+    if not examples:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"No training data found. Need eval results with score >= {min_score} or mined corrections.",
+        )
+
+    # Strip internal metadata for export, keep for preview
+    preview = examples[:5]
+    export_examples = [{k: v for k, v in ex.items() if k != "_source"} for ex in examples]
+    dataset_content = "\n".join(json.dumps(ex) for ex in export_examples)
 
     return {
-        "dataset_preview": examples[:3],
+        "dataset_preview": preview,
         "total_examples": len(examples),
+        "from_eval_passes": eval_count,
+        "from_mined_corrections": mined_count,
         "min_score_used": min_score,
         "source_runs": len(runs),
         "format": format,
         "system_prompt_preview": system_prompt[:200],
         "dataset_jsonl": dataset_content,
     }
+
+
+def _get_question(example: dict, format: str) -> str:
+    """Extract question text from a training example."""
+    if format == "openai":
+        msgs = example.get("messages", [])
+        for m in msgs:
+            if m.get("role") == "user":
+                return m.get("content", "").strip()
+    return example.get("prompt", "").strip()
 
 
 # ── Submit fine-tune job to OpenAI ──
@@ -189,20 +255,23 @@ def submit_finetune(
     environment_id: str,
     model: str = Query("gpt-4o-mini-2024-07-18"),
     min_score: float = Query(80, ge=0, le=100),
+    include_mined: bool = Query(True),
     n_epochs: int = Query(3, ge=1, le=10),
     suffix: str = Query(""),
+    auto_deploy: bool = Query(False),
     background_tasks: BackgroundTasks = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    Submit a fine-tuning job to OpenAI using high-scoring eval results.
+    Submit a fine-tuning job to OpenAI using eval results + mined corrections.
 
     Flow:
-    1. Generate training JSONL from eval results
+    1. Generate training JSONL (high-scoring evals + mined failure corrections)
     2. Upload file to OpenAI
     3. Create fine-tuning job
-    4. Return job details for tracking
+    4. Track lineage
+    5. Optionally auto-deploy when complete
     """
     env = db.query(Environment).filter(
         Environment.id == environment_id,
@@ -212,7 +281,7 @@ def submit_finetune(
     if not env:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Environment not found")
 
-    # Generate training data
+    # Generate training data using the unified dataset builder
     runs = db.query(EvalRun).filter(
         EvalRun.environment_id == env.id,
         EvalRun.status == "completed",
@@ -221,38 +290,64 @@ def submit_finetune(
     if not runs:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "No completed eval runs")
 
+    latest_run = max(runs, key=lambda r: r.created_at)
+    system_prompt = latest_run.agent_prompt or "You are a helpful assistant."
+
+    # ── Build unified dataset: eval passes + mined corrections ──
+    seen = {}
+    examples = []
+
+    # Source 1: High-scoring eval results
     results = db.query(EvalResult).filter(
         EvalResult.eval_run_id.in_([r.id for r in runs]),
         EvalResult.overall_score >= min_score,
     ).order_by(EvalResult.overall_score.desc()).all()
 
-    if len(results) < 10:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST,
-                            f"Need at least 10 high-scoring examples (found {len(results)} with score >= {min_score}). "
-                            "Run more evals or lower the score threshold.")
-
-    # Deduplicate
-    seen = {}
-    deduped = []
     for r in results:
         q = r.question.strip()
         if q not in seen:
             seen[q] = True
-            deduped.append(r)
+            examples.append({
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": r.question},
+                    {"role": "assistant", "content": r.agent_answer or ""},
+                ]
+            })
 
-    latest_run = max(runs, key=lambda r: r.created_at)
-    system_prompt = latest_run.agent_prompt or "You are a helpful assistant."
+    # Source 2: Mined corrections (override eval results for same question)
+    mined_count = 0
+    if include_mined:
+        mining_jobs = db.query(MiningJob).filter(
+            MiningJob.environment_id == env.id,
+            MiningJob.status == "completed",
+        ).all()
+        if mining_jobs:
+            mined_examples = db.query(MinedExample).filter(
+                MinedExample.mining_job_id.in_([j.id for j in mining_jobs]),
+                MinedExample.improved_answer.isnot(None),
+                MinedExample.improved_answer != "",
+            ).all()
+            for ex in mined_examples:
+                q = (ex.prompt or "").strip()
+                if not q or not ex.improved_answer:
+                    continue
+                if q in seen:
+                    examples = [e for e in examples if e["messages"][1]["content"].strip() != q]
+                seen[q] = True
+                mined_count += 1
+                examples.append({
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": q},
+                        {"role": "assistant", "content": ex.improved_answer},
+                    ]
+                })
 
-    # Build JSONL
-    examples = []
-    for r in deduped:
-        examples.append({
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": r.question},
-                {"role": "assistant", "content": r.agent_answer or ""},
-            ]
-        })
+    if len(examples) < 10:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            f"Need at least 10 training examples (found {len(examples)}). "
+                            "Run more evals, mine failures, or lower the score threshold.")
 
     jsonl_content = "\n".join(json.dumps(ex) for ex in examples)
 
@@ -318,9 +413,11 @@ def submit_finetune(
         db.execute(sa_text("""
             INSERT INTO finetune_jobs (id, tenant_id, environment_id, openai_job_id,
                 base_model, fine_tuned_model, training_file_id, training_examples,
-                n_epochs, min_score, status, created_by, created_at)
+                n_epochs, min_score, status, created_by, created_at,
+                auto_deploy, workspace_id, mined_examples_count)
             VALUES (:id, :tenant_id, :env_id, :job_id, :model, :ft_model,
-                :file_id, :examples, :epochs, :min_score, :status, :user_id, :now)
+                :file_id, :examples, :epochs, :min_score, :status, :user_id, :now,
+                :auto_deploy, :workspace_id, :mined_count)
         """), {
             "id": lineage_id,
             "tenant_id": user.tenant_id,
@@ -335,6 +432,9 @@ def submit_finetune(
             "status": ft_result.get("status", "pending"),
             "user_id": user.id,
             "now": datetime.utcnow(),
+            "auto_deploy": auto_deploy,
+            "workspace_id": env.workspace_id,
+            "mined_count": mined_count,
         })
         db.commit()
     except Exception as e:
@@ -347,10 +447,13 @@ def submit_finetune(
         "fine_tuned_model": ft_result.get("fine_tuned_model"),
         "training_file": file_id,
         "training_examples": len(examples),
+        "from_mined_corrections": mined_count,
         "n_epochs": n_epochs,
         "min_score_used": min_score,
+        "auto_deploy": auto_deploy,
         "environment_id": env.id,
         "environment_name": env.name,
+        "workspace_id": env.workspace_id,
         "created_at": ft_result.get("created_at"),
     }
 
@@ -550,4 +653,285 @@ def compare_models(
             "answer": ft_result["answer"],
             "response_time_ms": ft_result["response_time_ms"],
         },
+    }
+
+
+# ── Deploy fine-tuned model to a workspace ──
+
+@router.post("/deploy")
+def deploy_model(
+    workspace_id: str,
+    model: str = Query(..., description="Fine-tuned model ID (e.g. ft:gpt-4o-mini:cane:abc123)"),
+    provider: str = Query("openai", description="Model provider (openai, anthropic, openai-compatible)"),
+    api_key: str = Query(None, description="Provider API key (uses env var if not set)"),
+    base_url: str = Query(None, description="Custom base URL for openai-compatible providers"),
+    trigger_eval: bool = Query(False, description="Run eval after deploy to measure improvement"),
+    background_tasks: BackgroundTasks = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Deploy a fine-tuned model to a workspace/agent.
+
+    After deployment, the agent uses the fine-tuned model for inference
+    instead of the global Claude model. This closes the loop:
+    eval -> mine failures -> fine-tune -> deploy -> re-eval.
+    """
+    ws = db.query(Workspace).filter(
+        Workspace.id == workspace_id,
+        Workspace.tenant_id == user.tenant_id,
+    ).first()
+    if not ws:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Workspace not found")
+
+    # Validate provider
+    from services.judge_providers import PROVIDERS, PROVIDER_ALIASES
+    resolved = PROVIDER_ALIASES.get(provider.lower(), provider.lower())
+    if resolved not in PROVIDERS:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unknown provider: {provider}")
+
+    # Build config JSON
+    config = {}
+    if api_key:
+        config["api_key"] = api_key
+    if base_url:
+        config["base_url"] = base_url
+
+    # Save the previous model for rollback info
+    previous = {
+        "provider": ws.inference_provider,
+        "model": ws.inference_model,
+    }
+
+    ws.inference_provider = resolved
+    ws.inference_model = model
+    ws.inference_config = json.dumps(config) if config else None
+    db.commit()
+
+    result = {
+        "workspace_id": ws.id,
+        "workspace_name": ws.name,
+        "deployed_model": model,
+        "provider": resolved,
+        "previous_model": previous,
+        "eval_triggered": False,
+    }
+
+    # Optionally trigger eval to measure improvement
+    if trigger_eval and background_tasks:
+        env = db.query(Environment).filter(
+            Environment.workspace_id == workspace_id,
+            Environment.tenant_id == user.tenant_id,
+            Environment.is_active == True,
+        ).first()
+        if env:
+            from eval_engine import execute_eval_run
+            run = EvalRun(
+                environment_id=env.id,
+                tenant_id=user.tenant_id,
+                total_cases=db.query(EvalResult).filter(False).count(),  # placeholder
+                agent_prompt=ws.system_prompt or "",
+                triggered_by=user.id,
+            )
+            # Count test cases properly
+            from eval_models import TestCase
+            run.total_cases = db.query(TestCase).filter(
+                TestCase.environment_id == env.id
+            ).count()
+            db.add(run)
+            db.commit()
+            background_tasks.add_task(execute_eval_run, run.id, SessionLocal())
+            result["eval_triggered"] = True
+            result["eval_run_id"] = run.id
+
+    print(f"  [Finetune] Deployed {model} ({resolved}) to workspace {ws.name}")
+    return result
+
+
+@router.post("/undeploy")
+def undeploy_model(
+    workspace_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Remove a deployed fine-tuned model from a workspace.
+    The agent reverts to the global Claude model.
+    """
+    ws = db.query(Workspace).filter(
+        Workspace.id == workspace_id,
+        Workspace.tenant_id == user.tenant_id,
+    ).first()
+    if not ws:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Workspace not found")
+
+    previous = {
+        "provider": ws.inference_provider,
+        "model": ws.inference_model,
+    }
+
+    ws.inference_provider = None
+    ws.inference_model = None
+    ws.inference_config = None
+    db.commit()
+
+    print(f"  [Finetune] Undeployed model from workspace {ws.name}")
+    return {
+        "workspace_id": ws.id,
+        "workspace_name": ws.name,
+        "previous_model": previous,
+        "status": "reverted to default model",
+    }
+
+
+@router.get("/deployment")
+def get_deployment_status(
+    workspace_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Check what model is deployed to a workspace."""
+    ws = db.query(Workspace).filter(
+        Workspace.id == workspace_id,
+        Workspace.tenant_id == user.tenant_id,
+    ).first()
+    if not ws:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Workspace not found")
+
+    has_custom = bool(ws.inference_model)
+    return {
+        "workspace_id": ws.id,
+        "workspace_name": ws.name,
+        "has_custom_model": has_custom,
+        "inference_provider": ws.inference_provider,
+        "inference_model": ws.inference_model,
+        "default_model": "claude-haiku-4-5-20251001",
+    }
+
+
+# ── Eval comparison: measure improvement after fine-tuning ──
+
+@router.get("/eval-history")
+def get_eval_history(
+    workspace_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get eval score history for a workspace across all runs.
+    Shows whether fine-tuned models are actually improving performance.
+    """
+    envs = db.query(Environment).filter(
+        Environment.workspace_id == workspace_id,
+        Environment.tenant_id == user.tenant_id,
+    ).all()
+
+    if not envs:
+        return {"runs": [], "trend": None}
+
+    runs = db.query(EvalRun).filter(
+        EvalRun.environment_id.in_([e.id for e in envs]),
+        EvalRun.status == "completed",
+    ).order_by(EvalRun.created_at.asc()).all()
+
+    # Get workspace to check current model
+    ws = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+
+    history = []
+    for r in runs:
+        history.append({
+            "run_id": r.id,
+            "score": r.overall_score,
+            "passed": r.passed,
+            "warned": r.warned,
+            "failed": r.failed,
+            "reliability_score": r.reliability_score,
+            "reliability_grade": r.reliability_grade,
+            "latency_p95_ms": r.latency_p95_ms,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        })
+
+    # Compute trend
+    trend = None
+    if len(history) >= 2:
+        scores = [h["score"] for h in history if h["score"] is not None]
+        if len(scores) >= 2:
+            first_half = scores[:len(scores) // 2]
+            second_half = scores[len(scores) // 2:]
+            avg_first = sum(first_half) / len(first_half)
+            avg_second = sum(second_half) / len(second_half)
+            delta = round(avg_second - avg_first, 1)
+            trend = {
+                "direction": "improving" if delta > 0 else "regressing" if delta < 0 else "stable",
+                "delta_pp": delta,
+                "first_half_avg": round(avg_first, 1),
+                "second_half_avg": round(avg_second, 1),
+            }
+
+    return {
+        "workspace_id": workspace_id,
+        "current_model": ws.inference_model if ws else None,
+        "runs": history,
+        "total_runs": len(history),
+        "trend": trend,
+    }
+
+
+@router.post("/sync-job")
+def sync_finetune_job(
+    job_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Sync a fine-tune job status from OpenAI and update lineage.
+    If the job succeeded and auto_deploy is set, deploys the model.
+    """
+    # Get OpenAI status
+    result = _openai_request(f"/fine_tuning/jobs/{job_id}")
+    openai_status = result.get("status", "")
+    ft_model = result.get("fine_tuned_model", "")
+
+    # Update our lineage record
+    try:
+        db.execute(sa_text("""
+            UPDATE finetune_jobs
+            SET status = :status, fine_tuned_model = :ft_model, updated_at = :now
+            WHERE openai_job_id = :job_id AND tenant_id = :tenant_id
+        """), {
+            "status": openai_status,
+            "ft_model": ft_model or "",
+            "now": datetime.utcnow(),
+            "job_id": job_id,
+            "tenant_id": user.tenant_id,
+        })
+        db.commit()
+    except Exception as e:
+        print(f"  [Finetune] Lineage sync failed: {e}")
+
+    # Auto-deploy if job succeeded
+    deployed = False
+    if openai_status == "succeeded" and ft_model:
+        row = db.execute(sa_text("""
+            SELECT auto_deploy, workspace_id FROM finetune_jobs
+            WHERE openai_job_id = :job_id AND tenant_id = :tenant_id
+        """), {"job_id": job_id, "tenant_id": user.tenant_id}).fetchone()
+
+        if row and row[0] and row[1]:
+            ws = db.query(Workspace).filter(
+                Workspace.id == row[1],
+                Workspace.tenant_id == user.tenant_id,
+            ).first()
+            if ws:
+                ws.inference_provider = "openai"
+                ws.inference_model = ft_model
+                db.commit()
+                deployed = True
+                print(f"  [Finetune] Auto-deployed {ft_model} to workspace {ws.name}")
+
+    return {
+        "job_id": job_id,
+        "status": openai_status,
+        "fine_tuned_model": ft_model,
+        "auto_deployed": deployed,
     }

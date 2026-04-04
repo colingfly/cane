@@ -188,7 +188,7 @@ def build_system_prompt(agent_prompt: str = "", memory_context: str = "") -> str
     return base + memory_context + "\n\nAdditional retrieval rules:" + RAG_BASE_RULES
 
 
-def call_claude(user_prompt: str, system: str = "") -> str:
-    """Call Claude API for RAG summarization."""
-    from services.claude import call
-    return call(user_prompt, system=system)
+def call_claude(user_prompt: str, system: str = "", workspace=None) -> str:
+    """Call LLM for RAG summarization. Uses workspace's deployed model if set."""
+    from services.inference import infer
+    return infer(user_prompt, system=system, workspace=workspace)

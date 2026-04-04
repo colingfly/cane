@@ -96,6 +96,11 @@ class Workspace(Base):
     guest_session_id = Column(String(36), nullable=True, index=True)  # anonymous session tracking
     # widget_config added via migration -- access via raw SQL in analytics_routes
 
+    # Fine-tuned model override (set via /api/finetune/deploy)
+    inference_provider = Column(String(30), nullable=True)    # "openai", "anthropic", "openai-compatible", etc.
+    inference_model = Column(String(255), nullable=True)      # e.g. "ft:gpt-4o-mini:cane:abc123"
+    inference_config = Column(Text, nullable=True)            # JSON: {"api_key": "..."}
+
     # Relationships
     tenant = relationship("Tenant", back_populates="workspaces")
     documents = relationship("Document", back_populates="workspace", cascade="all, delete-orphan")

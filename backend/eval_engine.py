@@ -229,7 +229,22 @@ def _get_agent_answer(question: str, workspace_id: str, tenant_id: str, system_p
 
     user_prompt = f"Question: {question}\n\nDocument Excerpts:\n{context}\n\nProvide a clear answer based on the above."
 
-    answer = _call_claude(user_prompt, system=sys, model=CLAUDE_MODEL)
+    # Use workspace's deployed model if available, otherwise default
+    from db_models import Workspace
+    from database import SessionLocal
+    ws = None
+    try:
+        _db = SessionLocal()
+        ws = _db.query(Workspace).filter(Workspace.id == workspace_id).first() if workspace_id else None
+        _db.close()
+    except Exception:
+        pass
+
+    if ws and ws.inference_model:
+        from services.inference import infer
+        answer = infer(user_prompt, system=sys, workspace=ws)
+    else:
+        answer = _call_claude(user_prompt, system=sys, model=CLAUDE_MODEL)
 
     elapsed = int((time.time() - start) * 1000)
     return {
