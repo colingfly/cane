@@ -1,6 +1,6 @@
 # Cane
 
-Agentic RAG platform with hybrid retrieval, multi-stage reranking, LLM-as-a-Judge evaluation, and a closed-loop fine-tuning pipeline. Started as a university lecture search system at the Frost Institute for Data Science and Computing (University of Miami), now a multi-tenant SaaS at [cane.fyi](https://cane.fyi).
+Agentic RAG platform with hybrid retrieval, multi-stage reranking, LLM-as-a-Judge evaluation, and a closed-loop fine-tuning pipeline. 
 
 Also home to **Softmax Gulch**, a multi-agent social simulation where AI agents with persistent hierarchical memory live in a Western frontier town.
 
