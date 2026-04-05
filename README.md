@@ -6,8 +6,6 @@ Open-source agentic infrastructure. Build, eval, fine-tune, and deploy AI agents
 pip install cane-ai
 ```
 
-Started as a university lecture search system at the Frost Institute for Data Science and Computing (University of Miami), now a pip-installable platform powering [cane.fyi](https://cane.fyi). Also home to **Softmax Gulch**, a multi-agent social simulation where AI agents with persistent hierarchical memory live in a Western frontier town.
-
 ## Quickstart
 
 ```python
@@ -199,11 +197,6 @@ Task-based routing across models via OpenRouter:
 | Claude Sonnet | Eval judging (default) | $3.00 / $15.00 |
 | Claude Haiku | Fast classification | $0.80 / $4.00 |
 
-## Research
-
-- First author ICLR workshop paper diagnosing retrieval failures in multimodal RAG systems
-- Two ablation studies (3,000 queries across 10 conditions): cross-encoder reranking is +4-6pp, LLM adds +1-2pp, enrichment contributes nothing
-- Prior work: Claude on AWS Bedrock for automated claims validation (CSAA Insurance), active learning with GroundingDINO/CLIP/YOLOv8 at 97.1% recall (RoboCanes lab)
 
 ## License
 
